@@ -1,8 +1,10 @@
-# N-GOOS - Never Go Out Of Stock
+# MVP3.0 - 1000 Bananas 🍌
 
 A modern inventory forecasting and shipment management platform for Amazon FBA sellers.
 
-## Features
+> **Live Demo**: [https://github.com/alexuswingz/MVP3.0](https://github.com/alexuswingz/MVP3.0)
+
+## ✨ Features
 
 - **Dashboard Overview**: Real-time inventory metrics and KPIs
 - **Product Management**: Track inventory levels, DOI (Days of Inventory), and product details
@@ -10,21 +12,24 @@ A modern inventory forecasting and shipment management platform for Amazon FBA s
 - **Shipment Management**: Plan, track, and manage AWD and FBA shipments
 - **Settings**: Configure DOI goals, lead times, and forecast parameters
 
-## Tech Stack
+## 🚀 Tech Stack
 
 - **Framework**: Next.js 14+ (App Router)
 - **Language**: TypeScript (Strict Mode)
 - **Styling**: Tailwind CSS + Custom Design System
 - **State Management**: Zustand
+- **Data Fetching**: TanStack Query (React Query)
 - **Charts**: Recharts
 - **Animations**: Framer Motion
 - **Icons**: Lucide React
+- **UI Components**: Radix UI
+- **Forms**: React Hook Form + Zod validation
 
-## Design System
+## 🎨 Design System
 
 ### Color Palette (Dark Theme)
 
-- **Primary**: #3B82F6 (Blue)
+- **Primary**: #3B82F6 (Blue) → Vibrant indigo-purple-pink gradient
 - **Background Primary**: #0F172A (Dark Navy)
 - **Background Secondary**: #1E293B (Slate)
 - **Background Tertiary**: #334155 (Light Slate)
@@ -34,7 +39,7 @@ A modern inventory forecasting and shipment management platform for Amazon FBA s
 - **Warning**: #F59E0B (Orange)
 - **Danger**: #EF4444 (Red)
 
-## Getting Started
+## 📦 Getting Started
 
 ### Prerequisites
 
@@ -45,8 +50,8 @@ A modern inventory forecasting and shipment management platform for Amazon FBA s
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd n-goos
+git clone https://github.com/alexuswingz/MVP3.0.git
+cd MVP3.0
 ```
 
 2. Install dependencies:
@@ -65,13 +70,19 @@ npm run dev
 
 For development purposes, you can use any email and password to log in (mock authentication).
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-my-app/
+MVP3.0/
 ├── app/                    # Next.js App Router
-│   ├── (auth)/            # Auth group
-│   ├── (dashboard)/       # Dashboard group
+│   ├── (auth)/            # Authentication routes
+│   │   └── login/         # Login page
+│   ├── dashboard/         # Dashboard routes
+│   │   ├── page.tsx      # Dashboard home
+│   │   ├── products/     # Product management
+│   │   ├── forecast/     # Forecasting
+│   │   ├── shipments/    # Shipment tracking
+│   │   └── settings/     # Settings
 │   ├── layout.tsx         # Root layout
 │   └── globals.css        # Global styles
 ├── components/            # React components
@@ -81,68 +92,112 @@ my-app/
 │   ├── forecast/         # Forecast components
 │   └── shared/           # Shared components
 ├── stores/               # Zustand stores
-├── lib/                   # Utilities
-├── types/                 # TypeScript types
-└── public/               # Static assets
+│   ├── auth-store.ts    # Authentication state
+│   ├── product-store.ts # Product state
+│   └── ui-store.ts      # UI state
+├── lib/                  # Utilities
+│   ├── constants.ts     # App constants
+│   ├── formatters.ts    # Formatting utilities
+│   └── utils.ts         # Helper functions
+├── types/                # TypeScript types
+└── public/              # Static assets
 ```
 
-## Key Features
+## 🎯 Key Features
 
-### Dashboard
-- Real-time inventory metrics
-- Quick action buttons
+### 🏠 Dashboard
+- Real-time inventory metrics with trend indicators
+- Quick action buttons for common tasks
 - Recent activity feed
-- Alert notifications
+- Alert notifications for low stock items
+- Beautiful animated UI with smooth transitions
 
-### Products
+### 📦 Products
 - Grid and list view modes
-- Search and filter functionality
-- Inventory status indicators
+- Advanced search and filter functionality
+- Real-time inventory status indicators
 - Quick add to shipment
+- Product images and detailed information
 
-### Forecast
+### 📈 Forecast
 - Interactive charts with historical and predicted data
 - Time range selection (1Y, 2Y, 3Y)
+- Multiple forecast models (New, Growing, Established products)
 - Seasonality curve visualization
-- CSV upload for custom seasonality
+- CSV upload for custom seasonality data
 
-### Shipments
-- Status tracking (Planning, Ready, Shipped, Received)
-- AWD and FBA shipment types
-- Filter by status and type
-- Quick actions
+### 🚚 Shipments
+- Complete status tracking (Planning, Ready, Shipped, Received)
+- Support for AWD and FBA shipment types
+- Advanced filtering by status and type
+- Quick actions and details view
+- Timeline tracking
 
-### Settings
-- DOI configuration
-- Forecast model selection
-- Lead time settings
-- Notification preferences
+### ⚙️ Settings
+- DOI (Days of Inventory) configuration
+- Forecast model selection and tuning
+- Lead time settings (inbound & manufacturing)
+- Market adjustment parameters
+- Notification preferences (coming soon)
 
-## Development
+## 🛠️ Development
 
 ### Available Scripts
 
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
-- `npm run start` - Start production server
+- `npm start` - Start production server
 - `npm run lint` - Run ESLint
 - `npm run type-check` - Run TypeScript compiler
 
-### Code Style
+### Code Quality
 
-- TypeScript strict mode enabled
-- ESLint for code quality
-- Prettier for formatting
-- Tailwind CSS for styling
+- ✅ TypeScript strict mode enabled
+- ✅ ESLint for code quality
+- ✅ Tailwind CSS for styling
+- ✅ Component-based architecture
+- ✅ Responsive design (mobile-first)
 
-## License
+## 🐛 Known Issues & Fixes
+
+All critical bugs have been fixed:
+- ✅ Fixed missing Package icon import
+- ✅ Removed duplicate formatting functions
+- ✅ Fixed Tailwind config duplicate property
+- ✅ Fixed TypeScript type errors
+- ✅ Fixed dashboard routing (moved from route group to real folder)
+- ✅ Updated to new Next.js image configuration
+
+## 🚀 Deployment
+
+The app is ready to be deployed on Vercel, Netlify, or any platform that supports Next.js.
+
+### Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new).
+
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 License
 
 MIT License - see LICENSE file for details.
 
-## Support
+## 💬 Support
 
-For support, email support@n-goos.com or join our Discord community.
+For support, email support@1000bananas.com or open an issue on GitHub.
 
 ---
 
-Built with ❤️ for Amazon FBA sellers who never want to go out of stock.
+**Built with ❤️ by [alexuswingz](https://github.com/alexuswingz)**
+
+🍌 *"Manage your products with peel"* - 1000 Bananas
