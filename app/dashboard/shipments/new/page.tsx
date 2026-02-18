@@ -173,7 +173,7 @@ export default function NewShipmentAddProductsPage() {
   const totalWeightLbs = totalBoxes * 12;
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ backgroundColor: PAGE_BG }}>
+    <div className="flex flex-col min-h-screen -m-4 lg:-m-6" style={{ backgroundColor: PAGE_BG, minHeight: '100vh' }}>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
       <header
         style={{

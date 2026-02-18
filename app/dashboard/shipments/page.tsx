@@ -199,8 +199,8 @@ export default function ShipmentsPage() {
 
   return (
     <div
-      className="flex flex-col overflow-hidden"
-      style={{ height: '100vh', backgroundColor: PAGE_BG }}
+      className="flex flex-col overflow-hidden -m-4 lg:-m-6"
+      style={{ height: '100vh', minHeight: '100vh', backgroundColor: PAGE_BG }}
     >
       {/* Header — match 1000bananas2.0 PlanningHeader */}
       <header
