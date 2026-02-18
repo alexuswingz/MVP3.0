@@ -1,8 +1,86 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import {
+  ComposedChart,
+  Line,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceArea,
+  ReferenceLine,
+} from 'recharts';
 
 const isDarkMode = true;
+
+// Generate synthetic Unit Forecast chart data from product (no API)
+function buildChartDataFromProduct(product: {
+  daysOfInventory?: number;
+  unitsToMake?: number;
+  inventory?: number;
+}) {
+  const weeksHistorical = 52;
+  const weeksForecast = 26;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayTs = today.getTime();
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+
+  const fbaDays = Math.floor((product.daysOfInventory || 0) * 0.8);
+  const totalDays = product.daysOfInventory || 130;
+  const unitsToMake = product.unitsToMake || 0;
+  const dailyVelocity = totalDays > 0 ? Math.max(1, (product.inventory || 0) / totalDays) : 10;
+  const forecastEndDays = totalDays + (dailyVelocity > 0 ? Math.ceil(unitsToMake / dailyVelocity) : 0);
+
+  const baseWeekly = 80 + Math.floor((product.inventory || 0) / 20);
+  const data: Array<{
+    date: string;
+    timestamp: number;
+    unitsSold?: number;
+    forecastBase?: number;
+    forecastAdjusted?: number;
+    isForecast: boolean;
+  }> = [];
+
+  for (let i = -weeksHistorical; i <= 0; i++) {
+    const d = new Date(todayTs + i * msPerWeek);
+    const weekEnd = new Date(d);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const ts = weekEnd.getTime();
+    const trend = baseWeekly * (1 + (i + weeksHistorical) * 0.002);
+    const noise = Math.sin(i * 0.3) * 12 + (Math.sin((i + 1) * 0.7) * 0.5 - 0.5) * 15;
+    const unitsSold = Math.max(0, Math.round(trend + noise));
+    const smooth = Math.max(0, Math.round(trend));
+    data.push({
+      date: weekEnd.toISOString().slice(0, 10),
+      timestamp: ts,
+      unitsSold,
+      forecastBase: smooth,
+      isForecast: false,
+    });
+  }
+
+  const lastHist = data[data.length - 1];
+  const smoothBase = lastHist?.forecastBase ?? baseWeekly;
+  for (let i = 1; i <= weeksForecast; i++) {
+    const d = new Date(todayTs + i * msPerWeek);
+    const weekEnd = new Date(d);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const ts = weekEnd.getTime();
+    const forecastVal = Math.round(smoothBase * (1 - i * 0.005) + (unitsToMake / weeksForecast) * (i / weeksForecast));
+    data.push({
+      date: weekEnd.toISOString().slice(0, 10),
+      timestamp: ts,
+      forecastAdjusted: Math.max(0, forecastVal),
+      isForecast: true,
+    });
+  }
+
+  return { data, todayTs, fbaDays, totalDays, forecastEndDays };
+}
 
 interface NgoosModalProps {
   isOpen: boolean;
@@ -17,6 +95,15 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [displayUnits, setDisplayUnits] = useState(selectedProduct?.unitsToMake || 0);
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
+  const [hoveredSegment, setHoveredSegment] = useState<'fba' | 'total' | 'forecast' | null>(null);
+  const [zoomDomain, setZoomDomain] = useState<{ left: string | null; right: string | null }>({ left: null, right: null });
+  const [zoomHistory, setZoomHistory] = useState<Array<{ left: string | null; right: string | null }>>([]);
+  const [zoomToolActive, setZoomToolActive] = useState(false);
+  const [zoomFirstClickTimestamp, setZoomFirstClickTimestamp] = useState<number | null>(null);
+  const [zoomPreviewTimestamp, setZoomPreviewTimestamp] = useState<number | null>(null);
+  const [zoomBox, setZoomBox] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const zoomBoxDragRef = useRef<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
 
   React.useEffect(() => {
     if (isOpen && selectedProduct) {
@@ -24,6 +111,17 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
       setIsAdded(false);
     }
   }, [isOpen, selectedProduct]);
+
+  React.useEffect(() => {
+    if (!isOpen || !selectedProduct) return;
+    setZoomDomain({ left: null, right: null });
+    setZoomHistory([]);
+    setZoomToolActive(false);
+    setZoomFirstClickTimestamp(null);
+    setZoomPreviewTimestamp(null);
+    setZoomBox({ startTimestamp: null, endTimestamp: null });
+    zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+  }, [isOpen, selectedProduct?.asin]);
 
   // Add CSS for hiding scrollbar
   React.useEffect(() => {
@@ -42,6 +140,292 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
       document.head.removeChild(style);
     };
   }, []);
+
+  const chartBuild = useMemo(() => {
+    if (!selectedProduct) return null;
+    return buildChartDataFromProduct(selectedProduct);
+  }, [selectedProduct]);
+
+  const chartDisplayMinMax = useMemo(() => {
+    if (!chartBuild?.data?.length) return { minValue: 0, maxValue: 0 };
+    let minV = Infinity;
+    let maxV = 0;
+    chartBuild.data.forEach((item) => {
+      [item.unitsSold, item.forecastBase, item.forecastAdjusted].forEach((v) => {
+        if (v != null && !Number.isNaN(v)) {
+          minV = Math.min(minV, v);
+          maxV = Math.max(maxV, v);
+        }
+      });
+    });
+    if (minV === Infinity) minV = 0;
+    return { minValue: minV, maxValue: maxV };
+  }, [chartBuild]);
+
+  const unitForecastYTicks = useMemo(() => {
+    const min = chartDisplayMinMax.minValue ?? 0;
+    const max = chartDisplayMinMax.maxValue || 0;
+    if (max <= 0) return [0];
+    const range = Math.max(max - min, max * 0.01 || 1);
+    const tickCount = 5;
+    const rawStep = range / (tickCount - 1);
+    const pow10 = Math.pow(10, Math.floor(Math.log10(rawStep || 1)));
+    const normalized = rawStep / pow10;
+    let nice = 10;
+    if (normalized <= 1) nice = 1;
+    else if (normalized <= 2) nice = 2;
+    else if (normalized <= 5) nice = 5;
+    const step = Math.max(nice * pow10, range / (tickCount - 1));
+    const ticks: number[] = [];
+    const start = Math.floor(min / step) * step;
+    for (let v = start; v <= max + step * 0.01; v += step) {
+      const rounded = Math.round(v);
+      if (rounded >= min - step * 0.01 && rounded <= max + step * 0.01) ticks.push(rounded);
+      if (ticks.length >= tickCount) break;
+    }
+    if (ticks.length === 0) ticks.push(min, max);
+    return [...new Set(ticks.sort((a, b) => a - b))];
+  }, [chartDisplayMinMax.minValue, chartDisplayMinMax.maxValue]);
+
+  const chartSegments = useMemo(() => {
+    if (!chartBuild?.data?.length) return null;
+    const data = chartBuild.data;
+    const todayTs = chartBuild.todayTs;
+    const { fbaDays, totalDays, forecastEndDays } = chartBuild;
+    let todayDataPoint = data[0];
+    let todayIndex = 0;
+    let minDiff = Infinity;
+    data.forEach((p, idx) => {
+      const pointDay = new Date(p.timestamp).setHours(0, 0, 0, 0);
+      const diff = Math.abs(pointDay - todayTs);
+      if (diff < minDiff) {
+        minDiff = diff;
+        todayDataPoint = p;
+        todayIndex = idx;
+      }
+    });
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const findClosest = (targetDays: number) => {
+      const targetTs = todayTs + targetDays * msPerDay;
+      let closest = null;
+      let minD = Infinity;
+      for (let i = todayIndex; i < data.length; i++) {
+        const d = Math.abs(data[i].timestamp - targetTs);
+        if (d < minD) {
+          minD = d;
+          closest = data[i];
+        }
+      }
+      return closest;
+    };
+    const fbaPoint = fbaDays > 0 ? findClosest(fbaDays) : todayDataPoint;
+    const totalPoint = totalDays > 0 ? findClosest(totalDays) : fbaPoint || todayDataPoint;
+    const forecastPoint = forecastEndDays > 0 ? findClosest(forecastEndDays) : data[data.length - 1] || null;
+    let greenEndTs = totalPoint?.timestamp;
+    if (fbaPoint && totalPoint && totalPoint.timestamp <= (fbaPoint?.timestamp ?? 0)) {
+      const nextIdx = data.findIndex((p) => p.timestamp === fbaPoint?.timestamp) + 1;
+      greenEndTs = data[nextIdx]?.timestamp ?? (fbaPoint.timestamp + msPerDay);
+    }
+    const hasViolet = todayDataPoint && fbaPoint && fbaPoint.timestamp > todayDataPoint.timestamp;
+    const hasGreen = fbaPoint && greenEndTs != null && greenEndTs > (fbaPoint?.timestamp ?? 0);
+    const blueStart = hasGreen ? greenEndTs : totalPoint?.timestamp;
+    const hasBlue = forecastPoint && blueStart != null && forecastPoint.timestamp > blueStart;
+    return {
+      todayDataPoint,
+      fbaPoint,
+      totalPoint,
+      forecastPoint,
+      greenEndTs,
+      hasViolet,
+      hasGreen,
+      hasBlue,
+      blueStart,
+      segmentOpacity: 0.2,
+    };
+  }, [chartBuild]);
+
+  const parseZoomDateToLocal = useCallback((dateStr: string, endOfDay: boolean): number => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (endOfDay) return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+    return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+  }, []);
+
+  const chartXDomainWhenZoomed = useMemo(() => {
+    if (zoomDomain.left == null || zoomDomain.right == null) return null;
+    const zoomMin = parseZoomDateToLocal(zoomDomain.left, false);
+    const zoomMax = parseZoomDateToLocal(zoomDomain.right, true);
+    return [zoomMin, zoomMax] as [number, number];
+  }, [zoomDomain.left, zoomDomain.right, parseZoomDateToLocal]);
+
+  const chartXDomainTimestamps = useMemo(() => {
+    if (!chartBuild?.data?.length) return null;
+    const data = chartBuild.data;
+    const ts = data.map((d) => d.timestamp);
+    return [Math.min(...ts), Math.max(...ts)] as [number, number];
+  }, [chartBuild?.data]);
+
+  const chartDataForDisplay = useMemo(() => {
+    const data = chartBuild?.data;
+    if (!data?.length) return [];
+    if (zoomDomain.left != null && zoomDomain.right != null) {
+      const zoomMin = parseZoomDateToLocal(zoomDomain.left, false);
+      const zoomMax = parseZoomDateToLocal(zoomDomain.right, true);
+      return data.filter((d) => {
+        const t = d.timestamp;
+        return t >= zoomMin && t <= zoomMax;
+      });
+    }
+    return data;
+  }, [chartBuild?.data, zoomDomain.left, zoomDomain.right, parseZoomDateToLocal]);
+
+  const getTimestampFromClientX = useCallback(
+    (clientX: number): number | null => {
+      const data = chartBuild?.data;
+      if (!chartContainerRef.current || !data?.length) return null;
+      const dataMin = data[0].timestamp;
+      const dataMax = data[data.length - 1].timestamp;
+      let visibleMin = dataMin;
+      let visibleMax = dataMax;
+      if (zoomDomain.left != null && zoomDomain.right != null) {
+        visibleMin = parseZoomDateToLocal(zoomDomain.left, false);
+        visibleMax = parseZoomDateToLocal(zoomDomain.right, true);
+      }
+      const container = chartContainerRef.current;
+      let plotEl = container.querySelector('.recharts-cartesian-grid') as HTMLElement | null;
+      let rect = plotEl?.getBoundingClientRect();
+      if (!plotEl || !rect || rect.width <= 0) {
+        const layers = container.querySelectorAll('.recharts-layer');
+        let maxW = 0;
+        layers.forEach((el) => {
+          const r = (el as HTMLElement).getBoundingClientRect();
+          if (r.width > maxW && r.width <= container.getBoundingClientRect().width) {
+            maxW = r.width;
+            plotEl = el as HTMLElement;
+            rect = r;
+          }
+        });
+      }
+      if (!plotEl) {
+        plotEl = container.querySelector('svg') as HTMLElement | null;
+        rect = plotEl?.getBoundingClientRect();
+      }
+      if (!rect) rect = container.getBoundingClientRect();
+      const xInPlot = clientX - rect.left;
+      const plotWidth = rect.width;
+      if (plotWidth <= 0) return null;
+      const t = visibleMin + (xInPlot / plotWidth) * (visibleMax - visibleMin);
+      return Math.max(dataMin, Math.min(dataMax, t));
+    },
+    [chartBuild?.data, zoomDomain.left, zoomDomain.right, parseZoomDateToLocal]
+  );
+
+  const handleZoomReset = useCallback(() => {
+    setZoomToolActive(false);
+    setZoomFirstClickTimestamp(null);
+    setZoomPreviewTimestamp(null);
+    setZoomBox({ startTimestamp: null, endTimestamp: null });
+    zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+    if (zoomHistory.length === 0) {
+      setZoomDomain({ left: null, right: null });
+      return;
+    }
+    const next = [...zoomHistory];
+    const previous = next.pop() ?? { left: null, right: null };
+    setZoomHistory(next);
+    setZoomDomain(previous);
+  }, [zoomHistory]);
+
+  const toLocalDateStr = useCallback((ts: number) => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const handleChartZoomMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (!chartBuild?.data?.length) return;
+      const t = getTimestampFromClientX(e.clientX);
+      if (t == null) return;
+      e.preventDefault();
+      if (zoomToolActive) {
+        if (zoomFirstClickTimestamp == null) {
+          setZoomFirstClickTimestamp(t);
+          zoomBoxDragRef.current = { startTimestamp: t, endTimestamp: t };
+          setZoomBox({ startTimestamp: t, endTimestamp: t });
+          return;
+        }
+        const lo = Math.min(zoomFirstClickTimestamp, t);
+        const hi = Math.max(zoomFirstClickTimestamp, t);
+        if (hi > lo) {
+          setZoomHistory((hist) => [...hist, zoomDomain]);
+          setZoomDomain({ left: toLocalDateStr(lo), right: toLocalDateStr(hi) });
+        }
+        setZoomToolActive(false);
+        setZoomFirstClickTimestamp(null);
+        setZoomPreviewTimestamp(null);
+        zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+        setZoomBox({ startTimestamp: null, endTimestamp: null });
+        return;
+      }
+      zoomBoxDragRef.current = { startTimestamp: t, endTimestamp: t };
+      setZoomBox({ startTimestamp: t, endTimestamp: t });
+    },
+    [chartBuild?.data?.length, zoomToolActive, zoomFirstClickTimestamp, zoomDomain, getTimestampFromClientX, toLocalDateStr]
+  );
+
+  const handleChartZoomMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (zoomToolActive && zoomFirstClickTimestamp != null) {
+        const t = getTimestampFromClientX(e.clientX);
+        setZoomPreviewTimestamp(t ?? null);
+      }
+      if (zoomBoxDragRef.current.startTimestamp != null) {
+        const t = getTimestampFromClientX(e.clientX);
+        if (t != null) {
+          zoomBoxDragRef.current.endTimestamp = t;
+          setZoomBox((prev) =>
+            prev.startTimestamp == null ? prev : { ...prev, endTimestamp: t }
+          );
+        }
+      }
+    },
+    [zoomToolActive, zoomFirstClickTimestamp, getTimestampFromClientX]
+  );
+
+  const handleChartZoomMouseUp = useCallback(() => {
+    if (zoomBoxDragRef.current.startTimestamp != null) {
+      const { startTimestamp: s, endTimestamp: endTs } = zoomBoxDragRef.current;
+      const data = chartBuild?.data;
+      if (data?.length && s != null && endTs != null) {
+        const lo = Math.min(s, endTs);
+        const hi = Math.max(s, endTs);
+        if (hi > lo) {
+          setZoomHistory((hist) => [...hist, zoomDomain]);
+          setZoomDomain({ left: toLocalDateStr(lo), right: toLocalDateStr(hi) });
+          if (zoomToolActive) {
+            setZoomToolActive(false);
+            setZoomFirstClickTimestamp(null);
+            setZoomPreviewTimestamp(null);
+          }
+        }
+      }
+      zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+      setZoomBox({ startTimestamp: null, endTimestamp: null });
+    }
+  }, [chartBuild?.data, zoomDomain, zoomToolActive, toLocalDateStr]);
+
+  useEffect(() => {
+    const onUp = () => {
+      if (zoomBoxDragRef.current.startTimestamp != null) {
+        zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+        setZoomBox({ startTimestamp: null, endTimestamp: null });
+      }
+    };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, []);
+
+  const chartContainerCursor =
+    zoomToolActive || zoomBox.startTimestamp != null ? 'zoom-in' : 'crosshair';
 
   if (!isOpen || !selectedProduct) return null;
 
@@ -621,6 +1005,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
             >
               {/* FBA Available Card */}
               <div
+                onMouseEnter={() => setHoveredSegment('fba')}
+                onMouseLeave={() => setHoveredSegment(null)}
                 style={{
                   borderRadius: '0.5rem',
                   padding: '0.75rem 1rem',
@@ -655,6 +1041,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
               {/* Total Inventory Card */}
               <div
+                onMouseEnter={() => setHoveredSegment('total')}
+                onMouseLeave={() => setHoveredSegment(null)}
                 style={{
                   borderRadius: '0.5rem',
                   padding: '0.75rem 1rem',
@@ -689,6 +1077,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
               {/* Forecast Card */}
               <div
+                onMouseEnter={() => setHoveredSegment('forecast')}
+                onMouseLeave={() => setHoveredSegment(null)}
                 style={{
                   borderRadius: '0.5rem',
                   padding: '0.75rem 1rem',
@@ -720,10 +1110,431 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               </div>
             </div>
 
-            {/* Tab Content */}
-            {activeTab === 'inventory' && (
+            {/* Tab Content - Unit Forecast Chart (Inventory tab) - matches 1000bananas2.0 Ngoos */}
+            {activeTab === 'inventory' && chartBuild && chartBuild.data.length > 0 && (
+              <div
+                style={{
+                  marginTop: '0.25rem',
+                  borderRadius: '0.75rem',
+                  padding: '1rem',
+                  border: '1px solid #334155',
+                  backgroundColor: '#0f172a',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>
+                    Unit Forecast
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {(zoomDomain.left != null || zoomDomain.right != null) && (
+                      <button
+                        type="button"
+                        onClick={handleZoomReset}
+                        style={{
+                          width: 57,
+                          height: 23,
+                          padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          color: '#3B82F6',
+                          backgroundColor: '#0f172a',
+                          border: '1px solid #3B82F6',
+                          borderRadius: 4,
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                          boxSizing: 'border-box',
+                        }}
+                        title={zoomHistory.length > 0 ? 'Return to previous zoom level' : 'Return to full view'}
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      title={zoomToolActive ? 'Click two points to zoom, or click and drag then release' : 'Zoom: click to enable, then click two points or click-drag-release to zoom'}
+                      onClick={() => {
+                        if (zoomToolActive) {
+                          setZoomFirstClickTimestamp(null);
+                          setZoomPreviewTimestamp(null);
+                        }
+                        setZoomToolActive((prev) => !prev);
+                      }}
+                      style={{
+                        padding: '0.5rem',
+                        color: zoomToolActive ? '#007AFF' : '#94a3b8',
+                        backgroundColor: zoomToolActive ? 'rgba(0, 122, 255, 0.15)' : 'transparent',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                        <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M10 7V13M7 10H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  ref={chartContainerRef}
+                  tabIndex={-1}
+                  style={{
+                    width: '100%',
+                    height: 212,
+                    minHeight: 212,
+                    position: 'relative',
+                    marginTop: '0.25rem',
+                    cursor: chartContainerCursor,
+                    userSelect: 'none',
+                    outline: 'none',
+                  }}
+                  onMouseDown={handleChartZoomMouseDown}
+                  onMouseMove={handleChartZoomMouseMove}
+                  onMouseUp={handleChartZoomMouseUp}
+                  onMouseLeave={() => {
+                    if (zoomToolActive && zoomFirstClickTimestamp != null) setZoomPreviewTimestamp(null);
+                    handleChartZoomMouseUp();
+                  }}
+                >
+                  {zoomToolActive && zoomFirstClickTimestamp != null && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 8,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 10,
+                        padding: '6px 12px',
+                        borderRadius: 6,
+                        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                        border: '1px solid #334155',
+                        color: '#e2e8f0',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <span style={{ color: '#94a3b8' }}>Zoom: </span>
+                      <span style={{ color: '#007AFF' }}>
+                        {new Date(zoomFirstClickTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                      <span style={{ color: '#94a3b8', margin: '0 4px' }}>→</span>
+                      {zoomPreviewTimestamp != null ? (
+                        <span style={{ color: '#007AFF' }}>
+                          {new Date(zoomPreviewTimestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#64748b' }}>drag or click to set end</span>
+                      )}
+                    </div>
+                  )}
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                      data={chartDataForDisplay}
+                      margin={{ top: 44, right: 20, left: 0, bottom: 20 }}
+                      style={{ outline: 'none' }}
+                    >
+                      <defs>
+                        <linearGradient id="ngoosUnitsSoldGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6b7280" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#6b7280" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="ngoosForecastGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#111827" vertical={false} horizontal={false} strokeWidth={1} />
+                      <XAxis
+                        dataKey="timestamp"
+                        type="number"
+                        scale="time"
+                        domain={
+                          chartXDomainWhenZoomed
+                            ? [chartXDomainWhenZoomed[0], chartXDomainWhenZoomed[1]]
+                            : chartXDomainTimestamps
+                              ? [chartXDomainTimestamps[0], chartXDomainTimestamps[1]]
+                              : ['dataMin', 'dataMax']
+                        }
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#e5e7eb', fontSize: 10 }}
+                        tickMargin={8}
+                        minTickGap={20}
+                        tickFormatter={(v: number) => {
+                          const d = new Date(v);
+                          const isJan1 = d.getMonth() === 0 && d.getDate() === 1;
+                          if (isJan1) return String(d.getFullYear());
+                          return d.toLocaleDateString('en-US', { month: 'short' });
+                        }}
+                      />
+                      <YAxis
+                        yAxisId="left"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#6b7280', fontSize: 11 }}
+                        ticks={unitForecastYTicks}
+                        tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v)))}
+                        domain={
+                          unitForecastYTicks.length >= 2
+                            ? [unitForecastYTicks[0], unitForecastYTicks[unitForecastYTicks.length - 1]]
+                            : unitForecastYTicks.length === 1
+                              ? [unitForecastYTicks[0], unitForecastYTicks[0] * 1.1]
+                              : chartDisplayMinMax.maxValue
+                                ? [0, Math.ceil(chartDisplayMinMax.maxValue * 1.1)]
+                                : 'auto'
+                        }
+                      />
+                      {unitForecastYTicks.map((v) => (
+                        <ReferenceLine
+                          key={`y-tick-${v}`}
+                          y={v}
+                          yAxisId="left"
+                          stroke="rgba(148, 163, 184, 0.55)"
+                          strokeDasharray="3 3"
+                          strokeWidth={0.75}
+                        />
+                      ))}
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (zoomToolActive) return null;
+                          if (!active || !payload?.length) return null;
+                          const point = payload[0]?.payload;
+                          const date = new Date(point?.timestamp ?? 0);
+                          const isForecast = point?.isForecast === true;
+                          const formatVal = (x: unknown) => (x == null ? '—' : (typeof x === 'number' ? Math.round(x).toLocaleString() : String(x)));
+                          return (
+                            <div
+                              style={{
+                                backgroundColor: '#1e293b',
+                                padding: '12px',
+                                borderRadius: '8px',
+                                border: '1px solid #334155',
+                                fontSize: '0.875rem',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                width: 'fit-content',
+                              }}
+                            >
+                              <p style={{ color: '#fff', fontWeight: 600, margin: 0, fontSize: '0.875rem' }}>
+                                {date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                              </p>
+                              {isForecast ? (
+                                <p style={{ color: '#22c55e', margin: 0, fontSize: '0.75rem', fontWeight: 500 }}>
+                                  Forecasted Units: <span style={{ color: '#fff', fontWeight: 600 }}>{formatVal(point?.forecastAdjusted)}</span>
+                                </p>
+                              ) : (
+                                <>
+                                  <p style={{ color: '#6b7280', margin: 0, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    Units Sold: <span style={{ color: '#fff', fontWeight: 600 }}>{formatVal(point?.unitsSold)}</span>
+                                  </p>
+                                  <p style={{ color: '#f97316', margin: 0, fontSize: '0.75rem', fontWeight: 500 }}>
+                                    Potential Units Sold: <span style={{ color: '#fff', fontWeight: 600 }}>{formatVal(point?.forecastBase)}</span>
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          );
+                        }}
+                        contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px', color: '#fff' }}
+                        wrapperStyle={{ zIndex: 10 }}
+                      />
+                      {chartSegments && (
+                        <>
+                          {chartSegments.hasViolet && chartSegments.todayDataPoint && chartSegments.fbaPoint && (
+                            <ReferenceArea
+                              x1={chartSegments.todayDataPoint.timestamp}
+                              x2={chartSegments.fbaPoint.timestamp}
+                              fill="#a855f7"
+                              fillOpacity={hoveredSegment === 'fba' || hoveredSegment === 'total' || hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
+                              yAxisId="left"
+                            />
+                          )}
+                          {chartSegments.hasGreen && chartSegments.fbaPoint && chartSegments.greenEndTs != null && (
+                            <ReferenceArea
+                              x1={chartSegments.fbaPoint.timestamp}
+                              x2={chartSegments.greenEndTs}
+                              fill="#10b981"
+                              fillOpacity={hoveredSegment === 'total' || hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
+                              yAxisId="left"
+                            />
+                          )}
+                          {chartSegments.hasBlue && chartSegments.blueStart != null && chartSegments.forecastPoint && (
+                            <ReferenceArea
+                              x1={chartSegments.blueStart}
+                              x2={chartSegments.forecastPoint.timestamp}
+                              fill="#3b82f6"
+                              fillOpacity={hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
+                              yAxisId="left"
+                            />
+                          )}
+                          {chartSegments.todayDataPoint && (
+                            <ReferenceLine
+                              x={chartSegments.todayDataPoint.timestamp}
+                              stroke="#ffffff"
+                              strokeDasharray="4 4"
+                              strokeWidth={2}
+                              strokeOpacity={0.9}
+                              yAxisId="left"
+                              label={{ value: 'Today', position: 'top', fill: '#ffffff', fontSize: 12, fontWeight: '600', offset: 8 }}
+                            />
+                          )}
+                          {chartSegments.hasViolet && chartSegments.fbaPoint && (
+                            <ReferenceLine x={chartSegments.fbaPoint.timestamp} stroke="#a855f7" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          )}
+                          {chartSegments.hasGreen && chartSegments.greenEndTs != null && (
+                            <ReferenceLine x={chartSegments.greenEndTs} stroke="#10b981" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          )}
+                          {chartSegments.hasBlue && chartSegments.forecastPoint && (
+                            <ReferenceLine x={chartSegments.forecastPoint.timestamp} stroke="#3b82f6" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          )}
+                        </>
+                      )}
+                      {zoomBox.startTimestamp != null && zoomBox.endTimestamp != null && (
+                        <ReferenceArea
+                          x1={Math.min(zoomBox.startTimestamp, zoomBox.endTimestamp)}
+                          x2={Math.max(zoomBox.startTimestamp, zoomBox.endTimestamp)}
+                          fill="#94a3b8"
+                          fillOpacity={0.25}
+                          yAxisId="left"
+                          stroke="#e2e8f0"
+                          strokeOpacity={0.8}
+                          strokeDasharray="4 2"
+                        />
+                      )}
+                      {zoomFirstClickTimestamp != null && zoomPreviewTimestamp != null &&
+                        (zoomBox.startTimestamp == null || zoomBox.startTimestamp === zoomBox.endTimestamp) && (
+                        <ReferenceArea
+                          x1={Math.min(zoomFirstClickTimestamp, zoomPreviewTimestamp)}
+                          x2={Math.max(zoomFirstClickTimestamp, zoomPreviewTimestamp)}
+                          fill="#007AFF"
+                          fillOpacity={0.2}
+                          yAxisId="left"
+                          stroke="#007AFF"
+                          strokeWidth={2}
+                          strokeOpacity={0.8}
+                          strokeDasharray="4 2"
+                        />
+                      )}
+                      <Area
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="unitsSold"
+                        stroke="#6b7280"
+                        strokeWidth={1}
+                        fill="url(#ngoosUnitsSoldGradient)"
+                        name="Units Sold"
+                        connectNulls={false}
+                      />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="forecastBase"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Potential Units Sold"
+                        connectNulls={false}
+                      />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="forecastAdjusted"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="Forecast"
+                        connectNulls={false}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+                {/* Legend - matches 1000bananas2.0 Ngoos */}
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: '1rem',
+                    marginTop: '0.75rem',
+                    paddingTop: '0.75rem',
+                    borderTop: '1px solid #1f2937',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.375rem 0.75rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: 'rgba(17, 24, 39, 0.5)',
+                        transition: 'background-color 0.2s',
+                      }}
+                    >
+                      <div style={{ width: 24, height: 3, backgroundColor: 'rgba(107, 114, 128, 0.5)', borderRadius: 2, boxShadow: '0 1px 2px rgba(0,0,0,0.1)' }} />
+                      <span style={{ color: '#d1d5db', fontWeight: 500 }}>Units Sold</span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.375rem 0.75rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: 'rgba(17, 24, 39, 0.5)',
+                        transition: 'background-color 0.2s',
+                      }}
+                    >
+                      <div style={{ width: 24, height: 2, backgroundColor: '#f97316', borderRadius: 1, boxShadow: '0 1px 2px rgba(249, 115, 22, 0.3)' }} />
+                      <span style={{ color: '#d1d5db', fontWeight: 500 }}>Potential Units Sold</span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.375rem 0.75rem',
+                        borderRadius: '0.5rem',
+                        backgroundColor: 'rgba(17, 24, 39, 0.5)',
+                        transition: 'background-color 0.2s',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 24,
+                          height: 2,
+                          backgroundImage: 'repeating-linear-gradient(90deg, #f97316 0, #f97316 3px, transparent 3px, transparent 6px)',
+                          borderRadius: 1,
+                        }}
+                      />
+                      <span style={{ color: '#d1d5db', fontWeight: 500 }}>Forecast</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeTab === 'inventory' && (!chartBuild || chartBuild.data.length === 0) && (
               <div style={{ marginTop: '2rem', textAlign: 'center', color: '#9CA3AF' }}>
-                <p>Inventory chart would appear here</p>
+                <p>No chart data available</p>
               </div>
             )}
             {activeTab === 'sales' && (

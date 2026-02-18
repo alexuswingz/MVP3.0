@@ -82,6 +82,19 @@ export function AddProductsNonTable({
 
   const allSelected = rows.length > 0 && selectedIndices.size === rows.length;
 
+  // Footer totals: compute from added rows only (same formulas as page: boxes = units/24, weight = boxes*12, palettes = products*0.5)
+  const addedEntries = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => addedIds.has(row.id));
+  const addedProductCount = addedEntries.length;
+  const totalUnitsAdded = addedEntries.reduce(
+    (acc, { row, index }) => acc + (Number(qtyValues[index]) || Number(row.unitsToMake) || 0),
+    0
+  );
+  const addedTotalBoxes = totalUnitsAdded / 24;
+  const addedTotalWeightLbs = addedTotalBoxes * 12;
+  const addedTotalPalettes = addedProductCount * 0.5;
+
   return (
     <>
       {/* CSS for row hover effects */}
@@ -502,7 +515,7 @@ export function AddProductsNonTable({
                           <div
                             style={{
                               position: 'absolute',
-                              left: -50,
+                              left: -30,
                               top: '50%',
                               transform: 'translateY(-50%)',
                               width: fbaBarWidth,
@@ -525,7 +538,7 @@ export function AddProductsNonTable({
                             </div>
                           </div>
                           <div style={{ width: fbaBarWidth, flexShrink: 0, marginLeft: -20 }} aria-hidden />
-                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -29 }}>
+                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -9 }}>
                             {Math.round(fbaDays)}
                           </span>
                           <div style={{ width: 26, flexShrink: 0 }} aria-hidden />
@@ -544,7 +557,7 @@ export function AddProductsNonTable({
                         <div
                           style={{
                             position: 'absolute',
-                            left: -50,
+                            left: -30,
                             top: '50%',
                             transform: 'translateY(-50%)',
                             width: 333,
@@ -568,7 +581,7 @@ export function AddProductsNonTable({
                           </div>
                         </div>
                         <div style={{ width: 333, flexShrink: 0, marginLeft: -127 }} aria-hidden />
-                        <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', gap: 2, minWidth: 'fit-content', marginLeft: -25 }}>
+                        <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', gap: 2, minWidth: 'fit-content', marginLeft: -5 }}>
                           {row.daysOfInventory}
                         </span>
                         <div style={{ width: 16, flexShrink: 0 }} aria-hidden />
@@ -659,7 +672,7 @@ export function AddProductsNonTable({
           left: '50%',
           transform: 'translateX(-50%)',
           width: 'fit-content',
-          minWidth: 1014,
+          minWidth: 'min-content',
           height: 65,
           backgroundColor: 'rgba(31, 41, 55, 0.85)',
           backdropFilter: 'blur(12px)',
@@ -676,22 +689,30 @@ export function AddProductsNonTable({
           boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flex: 1, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PRODUCTS</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{totalProducts}</span>
+            {addedIds.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedProductCount}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PALETTES</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{totalPalettes.toFixed(2)}</span>
+            {addedIds.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedTotalPalettes.toFixed(2)}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>BOXES</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(totalBoxes).toLocaleString()}</span>
+            {addedIds.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(addedTotalBoxes).toLocaleString()}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(totalWeightLbs).toLocaleString()}</span>
+            {addedIds.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(addedTotalWeightLbs).toLocaleString()}</span>
+            )}
           </div>
         </div>
         {(onClear != null || onExport != null) && (
@@ -722,20 +743,22 @@ export function AddProductsNonTable({
               <>
                 <button
                   type="button"
-                  onClick={onExport}
+                  disabled={addedIds.size === 0}
+                  onClick={() => addedIds.size > 0 && onExport()}
                   style={{
                     height: 31,
                     padding: '0 10px',
                     borderRadius: 6,
                     border: 'none',
-                    backgroundColor: selectedIndices.size > 0 ? '#3B82F6' : '#9CA3AF',
+                    backgroundColor: addedIds.size > 0 ? '#3B82F6' : '#9CA3AF',
                     color: '#FFFFFF',
                     fontSize: 14,
                     fontWeight: 500,
-                    cursor: selectedIndices.size > 0 ? 'pointer' : 'not-allowed',
+                    cursor: addedIds.size > 0 ? 'pointer' : 'not-allowed',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    opacity: addedIds.size > 0 ? 1 : 0.7,
                   }}
                 >
                   Export for Upload

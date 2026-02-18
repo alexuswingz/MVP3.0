@@ -110,6 +110,8 @@ export default function NewShipmentAddProductsPage() {
   const [showDoiModal, setShowDoiModal] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<'add-products' | 'book-shipment'>('add-products');
   const [showNgoosModal, setShowNgoosModal] = useState(false);
+  const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
+  const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
@@ -472,7 +474,8 @@ export default function NewShipmentAddProductsPage() {
         </button>
       </div>
 
-      {/* My Products bar — match 1000bananas2.0 */}
+      {/* My Products bar — only on Add Products tab, not on Book Shipment */}
+      {activeWorkflowTab === 'add-products' && (
       <div
         style={{
           padding: '12px 16px',
@@ -648,6 +651,7 @@ export default function NewShipmentAddProductsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content Area */}
       {activeView === 'all-products' && (
@@ -661,7 +665,7 @@ export default function NewShipmentAddProductsPage() {
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
-                onExport={() => {}}
+                onExport={() => setShowExportCompleteModal(true)}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -675,7 +679,7 @@ export default function NewShipmentAddProductsPage() {
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
-                onExport={() => {}}
+                onExport={() => setShowExportCompleteModal(true)}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -683,7 +687,7 @@ export default function NewShipmentAddProductsPage() {
               />
             )
           ) : (
-            <BookShipmentForm onComplete={() => console.log('Shipment booked!')} />
+            <BookShipmentForm onComplete={() => setShowShipmentBookedModal(true)} />
           )}
         </main>
       )}
@@ -706,6 +710,229 @@ export default function NewShipmentAddProductsPage() {
           console.log(`Adding ${units} units of ${product.name || product.product}`);
         }}
       />
+
+      {/* Shipment Booked modal — shown after clicking Complete Shipment */}
+      {showShipmentBookedModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowShipmentBookedModal(false)}
+        >
+          <div
+            style={{
+              width: 264,
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+              position: 'relative',
+              boxSizing: 'border-box',
+              boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowShipmentBookedModal(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                width: 28,
+                height: 28,
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 3L3 11M3 3l8 8" />
+              </svg>
+            </button>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 32,
+                padding: 8,
+                backgroundColor: '#22C55E',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                flexShrink: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>
+              Shipment Booked!
+            </h2>
+            <Link
+              href="/dashboard/shipments"
+              style={{
+                width: '100%',
+                maxWidth: 216,
+                height: 31,
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: '#374151',
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textDecoration: 'none',
+              }}
+            >
+              Go to Shipments
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Export Complete modal */}
+      {showExportCompleteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowExportCompleteModal(false)}
+        >
+          <div
+            style={{
+              width: 264,
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+              position: 'relative',
+              boxSizing: 'border-box',
+              boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowExportCompleteModal(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                width: 28,
+                height: 28,
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 3L3 11M3 3l8 8" />
+              </svg>
+            </button>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 32,
+                padding: 8,
+                backgroundColor: '#22C55E',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                flexShrink: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 700,
+                color: '#FFFFFF',
+                textAlign: 'center',
+              }}
+            >
+              Export Complete!
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setShowExportCompleteModal(false);
+                setActiveWorkflowTab('book-shipment');
+              }}
+              style={{
+                width: '100%',
+                maxWidth: 216,
+                height: 31,
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: '#3B82F6',
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Begin Book Shipment
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

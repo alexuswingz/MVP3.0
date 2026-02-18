@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 
 const ROW_BORDER = '1px solid #334155';
 const HEADER_BG = '#1A2235';
-const ROW_BG = '#1A2235';
+const ROW_BG = '#334155';
 
 export interface AddProductRow {
   id: string;
@@ -98,6 +98,19 @@ export function AddProductsTable({
 }: AddProductsTableProps) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
+
+  // Footer totals: compute from selected rows only (same formulas: boxes = units/24, weight = boxes*12, palettes = products*0.5)
+  const selectedEntries = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => selectedRows.has(row.id));
+  const selectedProductCount = selectedEntries.length;
+  const totalUnitsSelected = selectedEntries.reduce(
+    (acc, { row, index }) => acc + (Number(qtyValues[index]) || Number(row.unitsToMake) || 0),
+    0
+  );
+  const selectedTotalBoxes = totalUnitsSelected / 24;
+  const selectedTotalWeightLbs = selectedTotalBoxes * 12;
+  const selectedTotalPalettes = selectedProductCount * 0.5;
 
   const toggleRow = (id: string) => {
     setSelectedRows((prev) => {
@@ -437,7 +450,7 @@ export function AddProductsTable({
           left: '50%',
           transform: 'translateX(-50%)',
           width: 'fit-content',
-          minWidth: 1014,
+          minWidth: 'min-content',
           height: 65,
           backgroundColor: 'rgba(31, 41, 55, 0.85)',
           backdropFilter: 'blur(12px)',
@@ -454,22 +467,30 @@ export function AddProductsTable({
           boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flex: 1, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PRODUCTS</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{totalProducts}</span>
+            {selectedRows.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{selectedProductCount}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PALETTES</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{totalPalettes.toFixed(2)}</span>
+            {selectedRows.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{selectedTotalPalettes.toFixed(2)}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>BOXES</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(totalBoxes).toLocaleString()}</span>
+            {selectedRows.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(selectedTotalBoxes).toLocaleString()}</span>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(totalWeightLbs).toLocaleString()}</span>
+            {selectedRows.size > 0 && (
+              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(selectedTotalWeightLbs).toLocaleString()}</span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -496,7 +517,8 @@ export function AddProductsTable({
             <>
               <button
                 type="button"
-                onClick={onExport}
+                disabled={selectedRows.size === 0}
+                onClick={() => selectedRows.size > 0 && onExport()}
                 style={{
                   height: 31,
                   padding: '0 10px',
@@ -507,6 +529,7 @@ export function AddProductsTable({
                   fontSize: 14,
                   fontWeight: 500,
                   cursor: selectedRows.size > 0 ? 'pointer' : 'not-allowed',
+                  opacity: selectedRows.size > 0 ? 1 : 0.7,
                 }}
               >
                 Export for Upload
