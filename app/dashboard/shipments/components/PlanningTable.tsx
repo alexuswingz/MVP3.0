@@ -22,13 +22,14 @@ interface PlanningTableProps {
   onMenuClick?: (row: PlanningTableRow, e: React.MouseEvent) => void;
 }
 
-const HEADER_BG = '#111827';
-const ROW_BG = '#111827';
+const TABLE_BG = '#1A2235';
+const HEADER_BG = TABLE_BG;
+const ROW_BG = TABLE_BG;
 const BORDER_COLOR = '#374151';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_ACTIVE = '#3B82F6';
 const TEXT_WHITE = '#FFFFFF';
-const ROW_HOVER_BG = '#1F2937';
+const ROW_HOVER_BG = TABLE_BG;
 const STATUS_BUTTON_BG = '#374151'; // match 1000bananas2.0 PlanningTable
 
 function StatusCircle({
@@ -149,8 +150,8 @@ export function PlanningTable({ rows, onRowClick, onMenuClick }: PlanningTablePr
     <div
       className="rounded-xl overflow-hidden"
       style={{
-        border: '1px solid #111827',
-        backgroundColor: HEADER_BG,
+        border: '1px solid #1A2235',
+        backgroundColor: TABLE_BG,
         maxHeight: 'calc(100vh - 380px)',
         overflow: 'auto',
       }}

@@ -41,6 +41,28 @@ function getFbaBarColor(fbaDays: number): string {
   return '#EF4444';
 }
 
+function getCheckboxStyle(checked: boolean): React.CSSProperties {
+  return {
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    width: 16,
+    height: 16,
+    cursor: 'pointer',
+    border: checked ? 'none' : '2px solid #64748B',
+    borderRadius: 6,
+    background: checked ? '#3B82F6' : '#1A2235',
+    boxShadow: 'none',
+    boxSizing: 'border-box',
+    ...(checked
+      ? {
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3 8 l3 3 6-6'/%3E%3C/svg%3E")`,
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+        }
+      : {}),
+  };
+}
+
 export function AddProductsNonTable({
   rows,
   onProductClick,
@@ -167,14 +189,7 @@ export function AddProductsNonTable({
                 type="checkbox"
                 checked={allSelected}
                 onChange={selectAll}
-                style={{
-                  cursor: 'pointer',
-                  width: 16,
-                  height: 16,
-                  border: `1px solid #94A3B8`,
-                  borderRadius: 4,
-                  accentColor: '#3B82F6',
-                }}
+                style={getCheckboxStyle(allSelected)}
               />
             </label>
             <span>PRODUCTS</span>
@@ -339,7 +354,7 @@ export function AddProductsNonTable({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(index)}
-                      style={{ width: 16, height: 16, accentColor: '#3B82F6', border: '1px solid #94A3B8', borderRadius: 4, cursor: 'pointer' }}
+                      style={getCheckboxStyle(isSelected)}
                     />
                   </label>
                   <div

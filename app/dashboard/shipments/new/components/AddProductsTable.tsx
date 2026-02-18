@@ -1,10 +1,34 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
 const ROW_BORDER = '1px solid #334155';
-const HEADER_BG = '#1A2235';
-const ROW_BG = '#334155';
+const TABLE_BG = '#1A2235';
+const HEADER_BG = TABLE_BG;
+const ROW_BG = TABLE_BG;
+
+const CHECKBOX_UNCHECKED = {
+  appearance: 'none' as const,
+  WebkitAppearance: 'none' as const,
+  width: 16,
+  height: 16,
+  cursor: 'pointer' as const,
+  border: '2px solid #64748B',
+  borderRadius: 6,
+  background: '#1A2235',
+  boxSizing: 'border-box' as const,
+};
+const CHECKBOX_CHECKED = {
+  border: 'none',
+  background: '#3B82F6',
+  boxShadow: 'none',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' d='M3 8 l3 3 6-6'/%3E%3C/svg%3E")`,
+  backgroundSize: 'contain',
+  backgroundPosition: 'center',
+};
+function getCheckboxStyle(checked: boolean): React.CSSProperties {
+  return { ...CHECKBOX_UNCHECKED, ...(checked ? CHECKBOX_CHECKED : {}) };
+}
 
 export interface AddProductRow {
   id: string;
@@ -30,8 +54,12 @@ export interface AddProductRow {
   unitsToMake?: number;
 }
 
+export type TableColumnKey = (typeof COLUMNS)[number]['key'];
+
 interface AddProductsTableProps {
   rows: AddProductRow[];
+  /** When set, only these columns are shown (checkbox always shown). Unchecking in Customize Columns hides the column. */
+  visibleColumnKeys?: string[];
   onProductClick?: (row: AddProductRow) => void;
   onClear?: () => void;
   onExport?: () => void;
@@ -64,7 +92,9 @@ const COLUMNS = [
   { key: 'awdTotal', width: 100, label: 'AWD TOTAL' },
 ];
 
-const thStyle = (col: (typeof COLUMNS)[0]) => ({
+type ColDef = (typeof COLUMNS)[0];
+
+const thStyle = (col: ColDef) => ({
   borderBottom: ROW_BORDER,
   padding: '0 0.75rem',
   width: col.width,
@@ -75,7 +105,7 @@ const thStyle = (col: (typeof COLUMNS)[0]) => ({
   boxSizing: 'border-box' as const,
   textAlign: (col.key === 'checkbox' ? 'center' : col.key === 'brand' || col.key === 'product' ? 'left' : 'center') as const,
   position: col.sticky ? ('sticky' as const) : undefined,
-  left: col.sticky ? col.left : undefined,
+  left: col.sticky ? (col as ColDef & { left?: number }).left : undefined,
   top: 0,
   zIndex: col.sticky ? 1020 : 1010,
   backgroundColor: HEADER_BG,
@@ -88,6 +118,7 @@ const thStyle = (col: (typeof COLUMNS)[0]) => ({
 
 export function AddProductsTable({
   rows,
+  visibleColumnKeys,
   onProductClick,
   onClear,
   onExport,
@@ -98,6 +129,18 @@ export function AddProductsTable({
 }: AddProductsTableProps) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
+
+  const visibleColumns = useMemo((): (ColDef & { left?: number })[] => {
+    if (!visibleColumnKeys || visibleColumnKeys.length === 0) return COLUMNS as (ColDef & { left?: number })[];
+    const set = new Set(visibleColumnKeys);
+    let left = 0;
+    return COLUMNS.filter((c) => c.key === 'checkbox' || set.has(c.key)).map((c) => {
+      const width = typeof c.width === 'number' ? c.width : parseInt(String(c.width), 10) || 0;
+      const col = { ...c, left: c.sticky ? left : undefined } as ColDef & { left?: number };
+      left += width;
+      return col;
+    });
+  }, [visibleColumnKeys]);
 
   // Footer totals: compute from selected rows only (same formulas: boxes = units/24, weight = boxes*12, palettes = products*0.5)
   const selectedEntries = rows
@@ -131,17 +174,146 @@ export function AddProductsTable({
     return typeof v === 'number' ? v.toLocaleString() : String(v);
   };
 
+  const getTdStyle = (col: ColDef & { left?: number }): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      borderBottom: ROW_BORDER,
+      padding: col.key === 'checkbox' ? '0 0.75rem' : '0.5rem 0.75rem',
+      width: col.width,
+      minWidth: col.width,
+      maxWidth: col.width,
+      height: 58,
+      verticalAlign: 'middle',
+      backgroundColor: ROW_BG,
+      boxSizing: 'border-box',
+      textAlign: col.key === 'checkbox' ? 'center' : col.key === 'brand' || col.key === 'product' ? 'left' : 'center',
+      fontSize: col.key === 'checkbox' ? undefined : '0.875rem',
+    };
+    if (col.sticky && col.left !== undefined) {
+      base.position = 'sticky';
+      base.left = col.left;
+      base.zIndex = 5;
+    }
+    if (col.key === 'totalDoi') {
+      base.color = '#3B82F6';
+      base.fontWeight = 500;
+    }
+    if (col.key === 'fbaAvailableDoi') {
+      base.color = '#A78BFA';
+      base.fontWeight = 500;
+    }
+    if (col.key !== 'checkbox' && col.key !== 'totalDoi' && col.key !== 'fbaAvailableDoi') base.color = '#FFFFFF';
+    return base;
+  };
+
+  const renderCellContent = (col: ColDef, row: AddProductRow, index: number) => {
+    switch (col.key) {
+      case 'checkbox':
+        return (
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '100%', height: '100%', minHeight: 58, margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={selectedRows.has(row.id)}
+              onChange={() => toggleRow(row.id)}
+              style={getCheckboxStyle(selectedRows.has(row.id))}
+            />
+          </label>
+        );
+      case 'brand':
+        return row.brand;
+      case 'product':
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => onProductClick?.(row)}
+              style={{
+                color: '#3B82F6',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                fontSize: '0.875rem',
+                textAlign: 'left',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {row.product.length > 80 ? `${row.product.substring(0, 80)}...` : row.product}
+            </button>
+          </div>
+        );
+      case 'unitsToMake':
+        return (
+          <div style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', justifyContent: 'center' }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '')}
+              onChange={(e) => {
+                const v = e.target.value.replace(/,/g, '');
+                if (v === '' || /^\d+$/.test(v)) setQtyValues((prev) => ({ ...prev, [index]: v }));
+              }}
+              style={{
+                width: 107,
+                minWidth: 107,
+                height: 34,
+                padding: '8px 6px',
+                borderRadius: 8,
+                border: '1px solid #334155',
+                outline: 'none',
+                backgroundColor: HEADER_BG,
+                color: '#FFFFFF',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                textAlign: 'center',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                width: 64,
+                minWidth: 64,
+                height: 24,
+                padding: '0 10px',
+                borderRadius: 6,
+                border: 'none',
+                backgroundColor: '#3B82F6',
+                color: '#FFFFFF',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxSizing: 'border-box',
+              }}
+            >
+              <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Add
+            </button>
+          </div>
+        );
+      default:
+        return formatCell((row as Record<string, unknown>)[col.key] as string | number | undefined | null);
+    }
+  };
+
   return (
     <>
       {/* CSS for table row hover effects */}
       <style>{`
         /* Table row hover effect */
         .table-row:hover {
-          background-color: #1A2636 !important;
+          background-color: #1A2235 !important;
         }
         /* Sticky cells need background color update on hover */
         .table-row:hover td[style*="position: sticky"] {
-          background-color: #1A2636 !important;
+          background-color: #1A2235 !important;
         }
       `}</style>
       <div
@@ -191,7 +363,7 @@ export function AddProductsTable({
               }}
             >
               <tr style={{ height: 58, maxHeight: 58, backgroundColor: HEADER_BG }}>
-                {COLUMNS.map((col) => (
+                {visibleColumns.map((col) => (
                   <th key={col.key} style={thStyle(col)}>
                     {col.key === 'checkbox' ? (
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '100%', height: '100%', minHeight: 58, margin: 0 }}>
@@ -199,14 +371,7 @@ export function AddProductsTable({
                           type="checkbox"
                           checked={rows.length > 0 && selectedRows.size === rows.length}
                           onChange={selectAll}
-                          style={{
-                            cursor: 'pointer',
-                            width: 16,
-                            height: 16,
-                            accentColor: '#3B82F6',
-                            border: '1px solid #94A3B8',
-                            borderRadius: 4,
-                          }}
+                          style={getCheckboxStyle(rows.length > 0 && selectedRows.size === rows.length)}
                         />
                       </label>
                     ) : (
@@ -227,214 +392,11 @@ export function AddProductsTable({
                     backgroundColor: ROW_BG,
                   }}
                 >
-                  <td
-                    style={{
-                      borderBottom: ROW_BORDER,
-                      padding: '0 0.75rem',
-                      textAlign: 'center',
-                      position: 'sticky',
-                      left: 0,
-                      zIndex: 5,
-                      backgroundColor: ROW_BG,
-                      width: 40,
-                      minWidth: 40,
-                      maxWidth: 40,
-                      height: 58,
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '100%', height: '100%', minHeight: 58, margin: 0 }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedRows.has(row.id)}
-                        onChange={() => toggleRow(row.id)}
-                        style={{
-                          cursor: 'pointer',
-                          width: 16,
-                          height: 16,
-                          accentColor: '#3B82F6',
-                          border: '1px solid #94A3B8',
-                          borderRadius: 4,
-                        }}
-                      />
-                    </label>
-                  </td>
-                  <td
-                    style={{
-                      borderBottom: ROW_BORDER,
-                      padding: '0.5rem 0.75rem',
-                      fontSize: '0.875rem',
-                      textAlign: 'left',
-                      position: 'sticky',
-                      left: 40,
-                      zIndex: 5,
-                      backgroundColor: ROW_BG,
-                      width: 150,
-                      minWidth: 150,
-                      maxWidth: 150,
-                      height: 58,
-                      verticalAlign: 'middle',
-                      color: '#FFFFFF',
-                    }}
-                  >
-                    {row.brand}
-                  </td>
-                  <td
-                    style={{
-                      borderBottom: ROW_BORDER,
-                      padding: '0.5rem 0.75rem',
-                      fontSize: '0.875rem',
-                      textAlign: 'left',
-                      position: 'sticky',
-                      left: 190,
-                      zIndex: 5,
-                      backgroundColor: ROW_BG,
-                      width: 320,
-                      minWidth: 320,
-                      maxWidth: 320,
-                      height: 58,
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => onProductClick?.(row)}
-                        style={{
-                          color: '#3B82F6',
-                          textDecoration: 'underline',
-                          cursor: 'pointer',
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          fontSize: '0.875rem',
-                          textAlign: 'left',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          flex: 1,
-                          minWidth: 0,
-                        }}
-                      >
-                        {row.product.length > 80 ? `${row.product.substring(0, 80)}...` : row.product}
-                      </button>
-                    </div>
-                  </td>
-                  <td
-                    style={{
-                      borderBottom: ROW_BORDER,
-                      padding: '0.5rem 0.75rem',
-                      textAlign: 'center',
-                      width: 180,
-                      minWidth: 180,
-                      height: 58,
-                      verticalAlign: 'middle',
-                      position: 'sticky',
-                      left: 510,
-                      zIndex: 5,
-                      backgroundColor: ROW_BG,
-                    }}
-                  >
-                    <div style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', justifyContent: 'center' }}>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '')}
-                        onChange={(e) => {
-                          const v = e.target.value.replace(/,/g, '');
-                          if (v === '' || /^\d+$/.test(v)) {
-                            setQtyValues((prev) => ({ ...prev, [index]: v }));
-                          }
-                        }}
-                        style={{
-                          width: 107,
-                          minWidth: 107,
-                          height: 34,
-                          padding: '8px 6px',
-                          borderRadius: 8,
-                          border: '1px solid #334155',
-                          outline: 'none',
-                          backgroundColor: HEADER_BG,
-                          color: '#FFFFFF',
-                          fontSize: '0.875rem',
-                          fontWeight: 500,
-                          textAlign: 'center',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                      <button
-                        type="button"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 10,
-                          width: 64,
-                          minWidth: 64,
-                          height: 24,
-                          padding: '0 10px',
-                          borderRadius: 6,
-                          border: 'none',
-                          backgroundColor: '#3B82F6',
-                          color: '#FFFFFF',
-                          fontSize: '0.8125rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          boxSizing: 'border-box',
-                        }}
-                      >
-                        <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Add
-                      </button>
-                    </div>
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 120, minWidth: 120, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.variation1)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 120, minWidth: 120, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.variation2)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 130, minWidth: 130, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.parentAsin)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 130, minWidth: 130, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.childAsin ?? row.asin)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 100, minWidth: 100, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.in)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 110, minWidth: 110, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.inventory)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 100, minWidth: 100, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#3B82F6', fontWeight: 500 }}>
-                    {formatCell(row.totalDoi)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 130, minWidth: 130, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#A78BFA', fontWeight: 500 }}>
-                    {formatCell(row.fbaAvailableDoi)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 120, minWidth: 120, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.velocityTrend)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 143, minWidth: 143, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.boxInventory ?? 0)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 150, minWidth: 150, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.unitsOrdered7)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 150, minWidth: 150, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.unitsOrdered30)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 150, minWidth: 150, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.unitsOrdered90)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 100, minWidth: 100, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.fbaTotal)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 120, minWidth: 120, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.fbaAvailable)}
-                  </td>
-                  <td style={{ borderBottom: ROW_BORDER, padding: '0.5rem 0.75rem', fontSize: '0.875rem', textAlign: 'center', width: 100, minWidth: 100, height: 58, verticalAlign: 'middle', boxSizing: 'border-box', color: '#FFFFFF' }}>
-                    {formatCell(row.awdTotal)}
-                  </td>
+                  {visibleColumns.map((col) => (
+                    <td key={col.key} style={getTdStyle(col)}>
+                      {renderCellContent(col, row, index)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

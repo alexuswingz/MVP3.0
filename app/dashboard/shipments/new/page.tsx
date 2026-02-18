@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 import type { NewShipmentForm } from '../components/NewShipmentModal';
 import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
 import { AddProductsNonTable, type NonTableProductRow } from './components/AddProductsNonTable';
+import { CustomizeColumnsModal, DEFAULT_VISIBLE_COLUMN_KEYS } from './components/CustomizeColumnsModal';
 import { DOISettingsModal } from './components/DOISettingsModal';
 import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
@@ -112,6 +113,8 @@ export default function NewShipmentAddProductsPage() {
   const [showNgoosModal, setShowNgoosModal] = useState(false);
   const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
+  const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
@@ -589,7 +592,7 @@ export default function NewShipmentAddProductsPage() {
               buttonRef={doiButtonRef}
             />
           </div>
-          <div style={{ position: 'relative', width: 336, height: 32 }}>
+          <div style={{ position: 'relative', width: 204, height: 32 }}>
             <Search
               style={{
                 position: 'absolute',
@@ -610,11 +613,12 @@ export default function NewShipmentAddProductsPage() {
               style={{
                 width: '100%',
                 height: 32,
-                padding: '6px 12px 6px 32px',
-                paddingRight: searchTerm ? 32 : 12,
+                padding: 8,
+                paddingLeft: 32,
+                paddingRight: searchTerm ? 32 : 8,
                 borderRadius: 6,
-                border: `1px solid ${BORDER}`,
-                backgroundColor: CARD_BG,
+                border: '1px solid #334155',
+                backgroundColor: '#4B5563',
                 color: '#F9FAFB',
                 fontSize: 13,
                 outline: 'none',
@@ -649,6 +653,36 @@ export default function NewShipmentAddProductsPage() {
               </button>
             )}
           </div>
+          {tableMode && (
+            <button
+              type="button"
+              onClick={() => setShowCustomizeColumnsModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '6px 12px',
+                height: 32,
+                width: 'fit-content',
+                borderRadius: 6,
+                border: 'none',
+                backgroundColor: '#4B5563',
+                color: '#9CA3AF',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                boxSizing: 'border-box',
+              }}
+              aria-label="Columns"
+            >
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                <rect x="4" y="10" width="3" height="8" rx="1" />
+                <rect x="10.5" y="6" width="3" height="12" rx="1" />
+                <rect x="17" y="12" width="3" height="6" rx="1" />
+              </svg>
+              <span>Columns</span>
+            </button>
+          )}
         </div>
       </div>
       )}
@@ -660,6 +694,7 @@ export default function NewShipmentAddProductsPage() {
             tableMode ? (
               <AddProductsTable
                 rows={tableRows}
+                visibleColumnKeys={visibleColumnKeys}
                 onProductClick={(row) => {
                   setSelectedProduct(row);
                   setShowNgoosModal(true);
@@ -709,6 +744,13 @@ export default function NewShipmentAddProductsPage() {
         onAddUnits={(product, units) => {
           console.log(`Adding ${units} units of ${product.name || product.product}`);
         }}
+      />
+
+      <CustomizeColumnsModal
+        isOpen={showCustomizeColumnsModal}
+        onClose={() => setShowCustomizeColumnsModal(false)}
+        visibleColumnKeys={visibleColumnKeys}
+        onApply={(visibleKeys) => setVisibleColumnKeys(visibleKeys)}
       />
 
       {/* Shipment Booked modal — shown after clicking Complete Shipment */}
