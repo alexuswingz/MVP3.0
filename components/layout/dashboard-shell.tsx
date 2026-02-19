@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion';
 import { Sidebar } from './sidebar';
-import { Header } from './header';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 
@@ -14,7 +13,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const { sidebarCollapsed, sidebarOpen } = useUIStore();
 
   return (
-    <div className="min-h-screen bg-background-primary">
+    <div className="h-screen overflow-hidden" style={{ height: '100dvh' }}>
       {/* Sidebar */}
       <Sidebar />
 
@@ -26,10 +25,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         />
       )}
 
-      {/* Header */}
-      <Header />
-
-      {/* Main Content */}
+      {/* Main Content - full height, sidebar only */}
       <motion.main
         initial={false}
         animate={{
@@ -37,11 +33,12 @@ export function DashboardShell({ children }: DashboardShellProps) {
         }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
         className={cn(
-          'pt-16 min-h-screen',
+          'overflow-hidden flex flex-col min-h-0',
           'transition-all duration-300'
         )}
+        style={{ height: '100dvh', maxHeight: '100dvh' }}
       >
-        <div className="p-4 lg:p-6">
+        <div className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 flex flex-col overflow-hidden">
           {children}
         </div>
       </motion.main>

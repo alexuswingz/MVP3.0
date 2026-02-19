@@ -97,7 +97,9 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
         {NAV_ITEMS.map((item) => {
           const Icon = iconMap[item.icon];
-          const isActive = pathname.startsWith(item.path);
+          const isActive = item.path === '/dashboard'
+            ? pathname === '/dashboard' || pathname === '/dashboard/'
+            : pathname.startsWith(item.path);
           const itemWithBadge = item as NavItem;
           const hasBadge = itemWithBadge.badge && itemWithBadge.badge > 0;
 

@@ -68,9 +68,17 @@ export default function ForecastPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
+  const [tableRows, setTableRows] = useState<ShipmentTableRow[]>(() => getMockTableRows());
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
-  const tableRows = getMockTableRows();
+
+  const handleQtyChange = useCallback((productId: string, value: number) => {
+    setTableRows((prev) =>
+      prev.map((r) =>
+        r.product.id === productId ? { ...r, unitsToMake: Math.max(0, value) } : r
+      )
+    );
+  }, []);
 
   const handleNgoosNavigate = useCallback((dir: 'prev' | 'next') => {
     if (!selectedNgoosRow) return;
@@ -95,12 +103,14 @@ export default function ForecastPage() {
   const cardValue = isDarkMode ? '#F9FAFB' : '#111827';
 
   return (
-    <div className="space-y-6 min-h-full bg-black -m-4 p-4 lg:-m-6 lg:p-6">
+    <div
+      className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden"
+    >
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+        className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 flex-shrink-0"
       >
         <div className="flex items-center gap-3">
           <div
@@ -170,7 +180,7 @@ export default function ForecastPage() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0"
       >
         <div
           style={{
@@ -250,7 +260,8 @@ export default function ForecastPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="space-y-4"
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        style={{ flex: 1, minHeight: 0 }}
       >
         <NewShipmentTable
           rows={tableRows}
@@ -259,7 +270,7 @@ export default function ForecastPage() {
             setSelectedNgoosRow(row);
             setNgoosModalOpen(true);
           }}
-          onQtyChange={(id, value) => console.log('Qty change', id, value)}
+          onQtyChange={handleQtyChange}
           onClear={() => console.log('Clear')}
           onExport={() => console.log('Export')}
           totalProducts={tableRows.length}

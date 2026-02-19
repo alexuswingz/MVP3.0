@@ -333,6 +333,7 @@ function NgoosContent({
   const inventoryData = MOCK_INVENTORY_DATA;
   const timeline = MOCK_TIMELINE;
   const displayedUnits = displayUnitsOverride ?? overrideUnitsToMake ?? timeline.unitsToMake ?? 0;
+  const increment = 60;
 
   return (
     <div
@@ -348,6 +349,8 @@ function NgoosContent({
         minHeight: inventoryOnly ? '662px' : 0,
         outline: 'none',
         paddingBottom: '1rem',
+        paddingLeft: '1.5rem',
+        paddingRight: '1.5rem',
       }}
     >
       {inventoryOnly && (
@@ -417,44 +420,25 @@ function NgoosContent({
                 onMouseEnter={() => setHoveredUnitsContainer(true)}
                 onMouseLeave={() => setHoveredUnitsContainer(false)}
               >
-                <span
+                <div
                   style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     color: isDarkMode ? '#E5E7EB' : '#111827',
                     fontSize: '15px',
                     fontWeight: 500,
+                    padding: '0 28px',
+                    boxSizing: 'border-box',
                   }}
                 >
                   {Number(displayedUnits).toLocaleString()}
-                </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setDisplayUnitsOverride(Math.max(0, displayedUnits - 25))}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    bottom: '2px',
-                    width: '20px',
-                    height: '10px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                    cursor: 'pointer',
-                    display: hoveredUnitsContainer ? 'flex' : 'none',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 0,
-                    zIndex: 1,
-                  }}
-                  aria-label="Decrease units"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDisplayUnitsOverride(displayedUnits + 25)}
+                  onClick={() => setDisplayUnitsOverride(displayedUnits + increment)}
                   style={{
                     position: 'absolute',
                     right: '4px',
@@ -470,12 +454,46 @@ function NgoosContent({
                     alignItems: 'center',
                     justifyContent: 'center',
                     padding: 0,
+                    outline: 'none',
                     zIndex: 1,
+                    transition: 'color 0.2s',
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
                   aria-label="Increase units"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M3 4L6 1L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDisplayUnitsOverride(Math.max(0, displayedUnits - increment))}
+                  style={{
+                    position: 'absolute',
+                    right: '4px',
+                    bottom: '2px',
+                    width: '20px',
+                    height: '10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: isDarkMode ? '#9CA3AF' : '#6B7280',
+                    cursor: 'pointer',
+                    display: hoveredUnitsContainer ? 'flex' : 'none',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    outline: 'none',
+                    zIndex: 1,
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
+                  aria-label="Decrease units"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
               </div>
@@ -513,7 +531,7 @@ function NgoosContent({
           <div
             className="scrollbar-hide"
             style={{
-              padding: '0.5rem clamp(0.75rem, 2vw, 1.5rem)',
+              padding: '0.5rem 0',
               backgroundColor: '#1A2235',
               overflow: 'auto',
               flex: 1,
@@ -652,7 +670,7 @@ export default function NGOOSmodal({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '0.65rem 1rem',
+            padding: '0.65rem 1.5rem',
             borderBottom: `1px solid ${isDarkMode ? '#1F2937' : '#E5E7EB'}`,
             backgroundColor: isDarkMode ? '#1A2235' : '#FFFFFF',
             flexShrink: 0,

@@ -134,13 +134,13 @@ export function ActionItems() {
   }, [selectedDetailId]);
 
   return (
-    <div className="min-h-screen text-foreground-primary" style={{ background: isDarkMode ? '#0B111E' : undefined }}>
-      <div className="p-6 space-y-6">
+    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary">
+      <div className="flex flex-col flex-1 min-h-0 gap-6 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 min-w-0">
           <div className="flex items-center gap-4 min-w-0">
             <div
               className="flex items-center justify-center flex-shrink-0 rounded-lg overflow-hidden"
-              style={{ width: 36, height: 36, background: '#2b323c' }}
+              style={{ width: 36, height: 36, background: '#1a1a1a' }}
             >
               <Image src="/rocket.png" alt="" width={20} height={20} className="object-contain" />
             </div>
@@ -148,8 +148,8 @@ export function ActionItems() {
             <div
               className="flex flex-shrink-0 flex-row items-center box-border"
               style={{
-                background: '#0B111E',
-                border: '1px solid #334155',
+                background: '#1A2235',
+                border: '1px solid #404040',
                 borderRadius: 8,
                 width: 192,
                 height: 35,
@@ -164,7 +164,7 @@ export function ActionItems() {
                   padding: '0 14px',
                   borderRadius: 6,
                   ...(filter === 'my'
-                    ? { background: '#3B424C', color: '#FFFFFF' }
+                    ? { background: '#1a1a1a', color: '#FFFFFF' }
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
@@ -177,7 +177,7 @@ export function ActionItems() {
                   padding: '0 14px',
                   borderRadius: 6,
                   ...(filter === 'all'
-                    ? { background: '#3B424C', color: '#FFFFFF' }
+                    ? { background: '#1a1a1a', color: '#FFFFFF' }
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
@@ -254,12 +254,12 @@ export function ActionItems() {
           </div>
         </div>
 
-        <div className="rounded-lg overflow-hidden p-4">
+        <div className="rounded-lg overflow-hidden pt-2 pb-4 px-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-separate" style={{ borderSpacing: '0 16px' }}>
+            <table className="w-full min-w-[900px] border-separate" style={{ borderSpacing: '0 6px' }}>
               <thead>
-                <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">
+                <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-400" style={{ background: '#0B111E' }}>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>
                     <span className="inline-flex items-center gap-1 cursor-pointer hover:text-white">
                       STATUS
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -267,7 +267,7 @@ export function ActionItems() {
                       </svg>
                     </span>
                   </th>
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>
                     <span className="inline-flex items-center gap-1 cursor-pointer hover:text-white">
                       PRODUCTS
                       <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,17 +275,17 @@ export function ActionItems() {
                       </svg>
                     </span>
                   </th>
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">CATEGORY</th>
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">SUBJECT</th>
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">ASSIGNEE</th>
-                  <th className="py-3.5 px-4 font-normal border-0 bg-transparent">DUE DATE</th>
-                  <th className="w-12 py-3.5 px-4 font-normal border-0 bg-transparent"></th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>CATEGORY</th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>SUBJECT</th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>ASSIGNEE</th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>DUE DATE</th>
+                  <th className="w-12 py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}></th>
                 </tr>
-                <tr>
+                <tr style={{ background: '#0B111E' }}>
                   <td
                     colSpan={7}
-                    className="p-0 border-0 bg-transparent"
-                    style={{ padding: 0, height: 0, lineHeight: 0, overflow: 'hidden', borderBottom: '1px solid #334155' }}
+                    className="p-0 border-0"
+                    style={{ padding: 0, height: 0, lineHeight: 0, overflow: 'hidden', borderBottom: '1px solid #404040', background: '#0B111E' }}
                   />
                 </tr>
               </thead>
@@ -298,14 +298,14 @@ export function ActionItems() {
                       background: '#1A2235',
                       boxShadow: '0 1px 0 0 rgba(255,255,255,0.04)',
                       height: 66,
-                      border: '1px solid #334155',
+                      border: '1px solid #404040',
                     }}
                   >
                     <td className="px-4 align-middle rounded-l-xl" style={{ paddingLeft: 20, paddingTop: 4, paddingBottom: 4 }}>
                       <div
                         className="inline-flex items-center cursor-pointer box-border"
                         style={{
-                          background: '#3C4450',
+                          background: '#4B5563',
                           boxShadow: '0 1px 3px 0 rgba(0,0,0,0.2), 0 1px 2px -1px rgba(0,0,0,0.2)',
                           width: 132,
                           height: 24,
@@ -389,12 +389,13 @@ export function ActionItems() {
                     </td>
                     <td className="px-4 align-middle" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
                       <div
-                        className="inline-flex items-center text-xs font-medium box-border overflow-hidden"
+                        className="inline-flex items-center text-xs font-medium box-border"
                         style={{
                           background: '#1A2235',
-                          border: '1px solid #334155',
+                          border: '1px solid #404040',
                           borderRadius: 4,
-                          width: 124,
+                          minWidth: 124,
+                          width: 'auto',
                           height: 27,
                           padding: '6px 12px',
                           gap: 8,
@@ -404,7 +405,7 @@ export function ActionItems() {
                         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="truncate whitespace-nowrap flex-1 min-w-0">{row.dueDate}</span>
+                        <span className="whitespace-nowrap">{row.dueDate}</span>
                       </div>
                     </td>
                     <td className="px-4 align-middle rounded-r-xl" style={{ paddingRight: 20, paddingTop: 4, paddingBottom: 4 }}>
@@ -446,8 +447,8 @@ export function ActionItems() {
                 width: 800,
                 height: 535,
                 borderRadius: 12,
-                border: '1px solid #475569',
-                background: '#1E293B',
+                border: '1px solid #404040',
+                background: '#111111',
                 opacity: 1,
               }}
               onClick={(e) => e.stopPropagation()}
@@ -455,7 +456,7 @@ export function ActionItems() {
               {/* Modal header */}
               <div
                 className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                style={{ background: '#1E293B', borderBottom: '1px solid #334155' }}
+                style={{ background: '#111111', borderBottom: '1px solid #404040' }}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <button
@@ -497,9 +498,9 @@ export function ActionItems() {
               </div>
 
               {/* Modal body - no scroll, all visible */}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-row" style={{ background: '#1A202C' }}>
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-row" style={{ background: '#111111' }}>
                 {/* Left panel */}
-                <div className="flex-1 min-w-0 flex flex-col gap-3 p-4 overflow-hidden" style={{ background: '#1A202C' }}>
+                <div className="flex-1 min-w-0 flex flex-col gap-3 p-4 overflow-hidden" style={{ background: '#111111' }}>
                     <div
                       className="flex items-center gap-2 flex-shrink-0 items-start"
                       style={{
@@ -508,8 +509,8 @@ export function ActionItems() {
                         gap: 8,
                         padding: '8px 12px',
                         borderRadius: 8,
-                        border: '1px solid #475569',
-                        background: '#2C323E',
+                        border: '1px solid #404040',
+                        background: '#1a1a1a',
                         opacity: 1,
                       }}
                     >
@@ -567,7 +568,7 @@ export function ActionItems() {
                 {/* Separator - full height line */}
                 <div
                   className="w-px flex-shrink-0 self-stretch"
-                  style={{ background: '#475569' }}
+                  style={{ background: '#404040' }}
                   aria-hidden
                 />
 
@@ -578,12 +579,12 @@ export function ActionItems() {
                     width: 280,
                     gap: 12,
                     padding: '16px',
-                    background: '#141C2D',
+                    background: '#111111',
                     opacity: 1,
                   }}
                 >
                     <h3 className="text-sm font-medium text-white flex-shrink-0" style={{ textAlign: 'left' }}>Additional Details</h3>
-                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#475569', marginTop: 8, marginBottom: 12 }} />
+                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 8, marginBottom: 12 }} />
                     <div className="flex flex-col flex-shrink-0" style={{ gap: 12 }}>
                       <DetailModalRow label="Status" vertical>
                         <div
@@ -595,8 +596,8 @@ export function ActionItems() {
                             gap: 8,
                             padding: '6px 12px',
                             borderRadius: 4,
-                            border: '1px solid #475569',
-                            background: '#2B394F',
+                            border: '1px solid #404040',
+                            background: '#1a1a1a',
                             opacity: 1,
                           }}
                         >
@@ -634,8 +635,8 @@ export function ActionItems() {
                             gap: 8,
                             padding: '6px 12px',
                             borderRadius: 6,
-                            border: '1px solid #475569',
-                            background: '#2B394F',
+                            border: '1px solid #404040',
+                            background: '#1a1a1a',
                             opacity: 1,
                           }}
                         >
@@ -652,8 +653,8 @@ export function ActionItems() {
                             gap: 8,
                             padding: '6px 12px',
                             borderRadius: 4,
-                            border: '1px solid #475569',
-                            background: '#2B394F',
+                            border: '1px solid #404040',
+                            background: '#1A2235',
                             opacity: 1,
                           }}
                         >
@@ -664,7 +665,7 @@ export function ActionItems() {
                         </div>
                       </DetailModalRow>
                     </div>
-                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#475569', marginTop: 12, marginBottom: 12 }} />
+                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
                     <div className="flex flex-col flex-shrink-0" style={{ gap: 10 }}>
                       <DetailModalRow label="Created By" footer>
                         <div className="flex items-center gap-1 justify-end">
@@ -693,19 +694,18 @@ export function ActionItems() {
           onClick={() => setShowNewActionModal(false)}
         >
           <div
-            className="flex flex-col shadow-xl overflow-hidden box-border"
+            className="flex flex-col shadow-xl box-border"
             style={{
               width: 600,
               maxWidth: '100%',
-              height: 606,
               maxHeight: '90vh',
               borderRadius: 12,
-              border: '1px solid #334155',
+              border: '1px solid #404040',
               background: '#1A2235',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #334155' }}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #404040' }}>
               <h2 className="text-lg font-semibold text-white">New Action Item</h2>
               <button
                 onClick={() => setShowNewActionModal(false)}
@@ -718,9 +718,9 @@ export function ActionItems() {
               </button>
             </div>
 
-            <div className="action-items-modal-body-scroll flex-1 min-h-0 px-6 py-5 space-y-5 overflow-y-auto">
+            <div className="flex-shrink-0 px-6 py-5 space-y-5 overflow-visible">
               <div>
-                <label className="block text-sm font-medium text-white mb-1.5">Select Product*</label>
+                <label className="block text-sm font-medium text-white mb-1.5">Select Product<span className="text-red-500">*</span></label>
                 <div
                   className="flex flex-row items-center box-border"
                   style={{
@@ -730,8 +730,8 @@ export function ActionItems() {
                     padding: '12px 16px 12px 16px',
                     gap: 8,
                     borderRadius: 8,
-                    border: '1px solid #334155',
-                    background: '#0B111E',
+                    border: '1px solid #404040',
+                    background: '#4B5563',
                   }}
                 >
                   <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -748,7 +748,7 @@ export function ActionItems() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white mb-2">Category*</label>
+                <label className="block text-sm font-medium text-white mb-2">Category<span className="text-red-500">*</span></label>
                 <div className="flex flex-row flex-wrap" style={{ gap: 8 }}>
                   {CATEGORIES.map((cat) => {
                     const selected = newItem.category === cat.id;
@@ -762,10 +762,10 @@ export function ActionItems() {
                           width: 126,
                           height: 63,
                           borderRadius: 8,
-                          border: `1px solid ${selected ? '#3b82f6' : '#334155'}`,
+                          border: `1px solid ${selected ? '#3b82f6' : '#404040'}`,
                           padding: 12,
                           gap: 4,
-                          background: selected ? '#3b82f6' : '#0B111E',
+                          background: selected ? '#1A2235' : '#334155',
                         }}
                       >
                         {cat.icon === 'cube' && (
@@ -782,9 +782,14 @@ export function ActionItems() {
                         )}
                         <span className="truncate">{cat.label}</span>
                         {selected && (
-                          <svg className="w-4 h-4 flex-shrink-0 absolute text-white" fill="currentColor" viewBox="0 0 20 20" style={{ top: 12, right: 12 }}>
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
+                          <Image
+                            src="/assets/Check.png"
+                            alt=""
+                            width={8}
+                            height={8}
+                            className="absolute flex-shrink-0"
+                            style={{ top: 12, right: 12, width: 7.78, height: 7.78, opacity: 1, borderRadius: 7.78 }}
+                          />
                         )}
                       </button>
                     );
@@ -793,70 +798,71 @@ export function ActionItems() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white mb-1.5">Subject*</label>
+                <label className="block text-sm font-medium text-white mb-1.5">Subject<span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   placeholder="Enter Subject..."
                   value={newItem.subject}
                   onChange={(e) => setNewItem((p) => ({ ...p, subject: e.target.value }))}
                   className="w-full px-3 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                  style={{ background: '#0B111E', borderColor: '#334155', height: 40 }}
+                  style={{ background: '#4B5563', borderColor: '#404040', height: 40 }}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white mb-1.5">Description*</label>
+                <label className="block text-sm font-medium text-white mb-1.5">Description<span className="text-red-500">*</span></label>
                 <textarea
                   placeholder="Enter Description..."
                   value={newItem.description}
                   onChange={(e) => setNewItem((p) => ({ ...p, description: e.target.value }))}
                   rows={3}
                   className="w-full px-3 py-2.5 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                  style={{ background: '#0B111E', borderColor: '#334155' }}
+                  style={{ background: '#4B5563', borderColor: '#404040' }}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white mb-1.5">Assignee*</label>
-                <div className="relative">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Select Assignee"
-                    value={newItem.assignee}
-                    onChange={(e) => setNewItem((p) => ({ ...p, assignee: e.target.value }))}
-                    className="w-full pl-9 pr-3 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    style={{ background: '#0B111E', borderColor: '#334155', height: 40 }}
-                  />
+              <div className="flex flex-row gap-4">
+                <div className="flex-1 min-w-0">
+                  <label className="block text-sm font-medium text-white mb-1.5">Assignee<span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Select Assignee"
+                      value={newItem.assignee}
+                      onChange={(e) => setNewItem((p) => ({ ...p, assignee: e.target.value }))}
+                      className="w-full pl-9 pr-3 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      style={{ background: '#4B5563', borderColor: '#404040', height: 40 }}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-1.5">Due Date*</label>
-                <div className="relative">
-                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Select Due Date"
-                    value={newItem.dueDate}
-                    onChange={(e) => setNewItem((p) => ({ ...p, dueDate: e.target.value }))}
-                    className="w-full pl-9 pr-3 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    style={{ background: '#0B111E', borderColor: '#334155', height: 40 }}
-                  />
+                <div className="flex-1 min-w-0">
+                  <label className="block text-sm font-medium text-white mb-1.5">Due Date<span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Select Due Date"
+                      value={newItem.dueDate}
+                      onChange={(e) => setNewItem((p) => ({ ...p, dueDate: e.target.value }))}
+                      className="w-full pl-9 pr-3 text-sm text-white placeholder-gray-500 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      style={{ background: '#4B5563', borderColor: '#404040', height: 40 }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 py-4" style={{ borderTop: '1px solid #334155' }}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderTop: '1px solid #404040' }}>
               <button
                 type="button"
                 onClick={() => setShowNewActionModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-300 rounded-md hover:opacity-90 transition-opacity"
-                style={{ background: '#334155' }}
+                style={{ background: '#404040' }}
               >
                 Cancel
               </button>

@@ -40,7 +40,7 @@ export function Header() {
   };
 
   return (
-    <header className="fixed top-0 right-0 left-0 z-30 h-16 bg-background-secondary/80 backdrop-blur-xl border-b border-border">
+    <header className="fixed top-0 right-0 left-0 z-30 h-16 bg-background-secondary/80 backdrop-blur-xl">
       <div className="flex items-center justify-between h-full px-4 lg:px-6">
         {/* Left Section */}
         <div className="flex items-center gap-4">

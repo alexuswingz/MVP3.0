@@ -49,7 +49,7 @@ export default function ProductDetailPage() {
   }
   if (!product) {
     return (
-      <div className="min-h-full bg-[#0a0a0a] -m-4 p-4 lg:-m-6 lg:p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0B111E] -m-4 p-4 lg:-m-6 lg:p-6 flex items-center justify-center">
         <div className="text-foreground-muted">Product not found.</div>
         <Link href="/dashboard/products" className="text-primary ml-2 underline">
           Back to products
@@ -70,7 +70,7 @@ export default function ProductDetailPage() {
   const fieldLabelColor = isDarkMode ? '#9CA3AF' : '#6B7280';
 
   return (
-    <div className="min-h-full bg-[#0a0a0a] -m-4 lg:-m-6">
+    <div className="min-h-screen bg-[#0B111E] -m-4 lg:-m-6">
       {/* Top bar: back, logo, product title, actions */}
       <div
         className="flex items-center justify-between gap-4 h-14 px-4 lg:px-6 border-b border-[#374151]"
