@@ -318,7 +318,7 @@ export default function DoiSettingsPopover({
 
   return (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '12px' }}>
-      <span style={{ fontSize: '14px', fontWeight: 400, color: theme.textSecondary }}>Required DOI</span>
+      <span style={{ fontSize: '14px', fontWeight: 400, color: theme.totalText }}>Required DOI</span>
 
       <div style={{ position: 'relative', display: 'inline-flex' }}>
         <button
@@ -339,7 +339,7 @@ export default function DoiSettingsPopover({
             padding: '6px 12px',
             borderRadius: '6px',
             border: `1px solid ${isOpen ? theme.inputBorderFocus : theme.inputBorder}`,
-            backgroundColor: theme.inputBg,
+            backgroundColor: '#4B5563',
             color: theme.inputText,
             fontSize: '14px',
             fontWeight: 500,

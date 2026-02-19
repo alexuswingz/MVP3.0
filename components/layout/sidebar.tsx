@@ -9,6 +9,7 @@ import {
   Package,
   TrendingUp,
   Truck,
+  ClipboardList,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Package,
   TrendingUp,
   Truck,
+  ClipboardList,
   Settings,
 };
 

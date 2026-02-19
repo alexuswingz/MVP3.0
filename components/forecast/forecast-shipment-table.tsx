@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Copy } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import type { Product } from '@/types';
 import { IconGroupOpenNgoos } from './banana-icon-open-ngoos';
@@ -87,7 +88,7 @@ export function NewShipmentTable({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 140px 220px minmax(260px, 1fr)',
+          gridTemplateColumns: 'minmax(0, 1fr) 140px 220px minmax(260px, 1fr)',
           gap: '32px',
           padding: '12px 16px',
           backgroundColor: isDarkMode ? '#111827' : '#F9FAFB',
@@ -96,15 +97,15 @@ export function NewShipmentTable({
           minWidth: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, overflow: 'hidden' }}>
           <span style={{ fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: isDarkMode ? '#FFFFFF' : '#111827' }}>
             PRODUCTS
           </span>
         </div>
-        <div style={{ fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: isDarkMode ? '#FFFFFF' : '#111827', textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', minWidth: 0, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: isDarkMode ? '#FFFFFF' : '#111827' }}>
           INVENTORY
         </div>
-        <div style={{ fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: isDarkMode ? '#FFFFFF' : '#111827', textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', minWidth: 0, fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', color: isDarkMode ? '#FFFFFF' : '#111827' }}>
           UNITS TO MAKE
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', minWidth: 0 }}>
@@ -181,7 +182,7 @@ export function NewShipmentTable({
               style={{
                 position: 'relative',
                 display: 'grid',
-                gridTemplateColumns: '1fr 140px 220px minmax(260px, 1fr)',
+                gridTemplateColumns: 'minmax(0, 1fr) 140px 220px minmax(260px, 1fr)',
                 height: '66px',
                 minHeight: '66px',
                 maxHeight: '66px',
@@ -191,10 +192,11 @@ export function NewShipmentTable({
                 gap: '32px',
                 boxSizing: 'border-box',
                 borderBottom: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
+                minWidth: 0,
               }}
             >
               {/* PRODUCTS Column */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, overflow: 'hidden' }}>
                 <input type="checkbox" style={{ width: '16px', height: '16px', borderRadius: '4px', marginLeft: '20px', cursor: 'pointer' }} />
                 <div
                   style={{
@@ -236,21 +238,45 @@ export function NewShipmentTable({
                   >
                     {productName}
                   </button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '12px', color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>{asin}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', fontSize: '12px', color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>
+                    <span>{asin}</span>
+                    {asin && asin !== 'N/A' && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(asin).catch(() => {});
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'inherit',
+                        }}
+                        aria-label="Copy ASIN"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {(brand || size) && (
-                      <span style={{ fontSize: '12px', color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>
-                        {brand}
-                        {brand && size ? ' • ' : ''}
-                        {size}
-                      </span>
+                      <>
+                        <span> • </span>
+                        <span>
+                          {brand}
+                          {brand && size ? ' • ' : ''}
+                          {size}
+                        </span>
+                      </>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* INVENTORY Column */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 500, color: isDarkMode ? '#FFFFFF' : '#111827' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minWidth: 0, gap: '6px', fontSize: '14px', fontWeight: 500, color: isDarkMode ? '#FFFFFF' : '#111827' }}>
                 {totalInv === 0 && (
                   <span
                     style={{
@@ -273,7 +299,7 @@ export function NewShipmentTable({
               </div>
 
               {/* UNITS TO MAKE Column */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', minWidth: 0 }}>
                 <input
                   type="text"
                   readOnly
@@ -295,20 +321,23 @@ export function NewShipmentTable({
               </div>
 
               {/* DAYS OF INVENTORY Column: progress bar, number, banana icon (right after number) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <div
                   style={{
-                    flex: 1,
-                    height: '8px',
-                    borderRadius: '4px',
-                    backgroundColor: isDarkMode ? '#374151' : '#E5E7EB',
+                    flex: '0 1 431px',
+                    width: 431,
+                    maxWidth: '100%',
+                    height: 19,
+                    borderRadius: 4,
+                    opacity: 1,
+                    backgroundColor: '#ADD8E6',
                     overflow: 'hidden',
-                    minWidth: '60px',
+                    minWidth: 60,
                   }}
                 >
                   <BarFill
                     widthPct={Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}
-                    backgroundColor={doiColor}
+                    backgroundColor="#0275FC"
                     durationSec={0.6}
                   />
                 </div>

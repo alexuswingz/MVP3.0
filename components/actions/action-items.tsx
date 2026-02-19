@@ -543,13 +543,15 @@ export function ActionItems() {
                       </div>
                     </div>
                     <div
-                      className={`flex-1 min-h-0 pl-4 mt-4 flex flex-col rounded-lg py-1.5 px-2 -mx-2 transition-colors duration-150 ${descriptionHovered && !descriptionFocused ? 'bg-white/[0.08]' : ''}`}
+                      className="flex-1 min-h-0 pl-4 mt-4 flex flex-col rounded-lg py-1.5 px-2 -mx-2"
                       style={{ textAlign: 'left' }}
-                      onMouseEnter={() => setDescriptionHovered(true)}
-                      onMouseLeave={() => setDescriptionHovered(false)}
                     >
-                      <p className={`text-xs font-medium uppercase tracking-wider mb-1.5 transition-colors duration-150 ${descriptionHovered && !descriptionFocused ? 'text-gray-300' : 'text-gray-400'}`}>DESCRIPTION</p>
-                      <div className="flex-1 min-h-0 overflow-hidden">
+                      <p className="text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-400">DESCRIPTION</p>
+                      <div
+                        className={`flex-1 min-h-0 overflow-hidden rounded-lg -mx-2 px-4 py-3 transition-colors duration-150 ${descriptionHovered && !descriptionFocused ? 'bg-white/[0.08]' : ''}`}
+                        onMouseEnter={() => setDescriptionHovered(true)}
+                        onMouseLeave={() => setDescriptionHovered(false)}
+                      >
                         <RichTextEditor
                           value={descriptionHtml}
                           onChange={setDescriptionHtml}
