@@ -1,77 +1,980 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
-import type { Product } from '@/types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import Link from 'next/link';
+import { Search } from 'lucide-react';
+import type { NewShipmentForm } from '../components/NewShipmentModal';
+import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
+import { AddProductsNonTable, type NonTableProductRow } from './components/AddProductsNonTable';
+import { CustomizeColumnsModal, DEFAULT_VISIBLE_COLUMN_KEYS } from './components/CustomizeColumnsModal';
+import { DOISettingsModal } from './components/DOISettingsModal';
+import { BookShipmentForm } from './components/BookShipmentForm';
+import { NgoosModal } from './components/NgoosModal';
 
-// Mock product rows for the table (replace with API data)
-function getMockRows(): ShipmentTableRow[] {
-  const mockProducts: Product[] = [
-    { id: '1', asin: 'B0C73T7JMQ', sku: 'SKU-001', name: 'Lawn Fertilizer', brand: 'TPS Plant Foods', size: '8oz', category: 'Fertilizer', accountId: 'a1', createdAt: new Date(), updatedAt: new Date() },
-    { id: '2', asin: 'B0DPH4JCVQ', sku: 'SKU-002', name: 'Ammonium Nitrate Fertilizer', brand: 'Bloom City', size: 'Quart', category: 'Fertilizer', accountId: 'a1', createdAt: new Date(), updatedAt: new Date() },
-    { id: '3', asin: 'B0EXAMPLE', sku: 'SKU-003', name: 'Lawn Starter', brand: 'TPS Plant Foods', size: 'Gallon', category: 'Fertilizer', accountId: 'a1', createdAt: new Date(), updatedAt: new Date() },
-  ];
-  return mockProducts.map((product, i) => ({
-    product,
-    inventory: 0,
-    unitsToMake: [1020, 852, 795][i] ?? 0,
-    daysOfInventory: [156, 151, 0][i] ?? 0,
-    added: i < 2,
-  }));
+const STORAGE_KEY = 'mvp_new_shipment_data';
+const isDarkMode = true;
+
+function getShipmentFromStorage(): NewShipmentForm | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as NewShipmentForm;
+  } catch {
+    return null;
+  }
 }
 
-export default function NewShipmentPage() {
-  const router = useRouter();
-  const rows = getMockRows();
+function formatShipmentDate(form: NewShipmentForm | null): string {
+  if (!form?.shipmentName) {
+    const d = new Date();
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const match = form.shipmentName.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}.${match[2]}.${match[3]}`;
+  const d = new Date();
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const PAGE_BG = '#0a0a0a';
+const HEADER_ROW_BG = '#1A2235';
+const HEADER_BORDER = '#334155';
+const CARD_BG = '#1F2937';
+const BORDER = '#4B5563';
+
+const MOCK_PRODUCTS_RAW = [
+  { id: '1', name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 9720, daysOfInventory: 9 },
+  { id: '2', name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 8460, daysOfInventory: 9 },
+  { id: '3', name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 4608, daysOfInventory: 15 },
+  { id: '4', name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 4260, daysOfInventory: 37 },
+  { id: '5', name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3780, daysOfInventory: 56 },
+  { id: '6', name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3060, daysOfInventory: 59 },
+  { id: '7', name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3360, daysOfInventory: 68 },
+  { id: '8', name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 1320, daysOfInventory: 97 },
+  { id: '9', name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 180, daysOfInventory: 132 },
+  { id: '10', name: 'TPS NUTRIENTS Air Plant Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 360, daysOfInventory: 134 },
+  { id: '11', name: 'African Violet Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 240, daysOfInventory: 139 },
+];
+
+/** Compute suggested units to make so inventory reaches target DOI (match 1000bananas2.0 logic). */
+function suggestedUnitsToMake(
+  inventory: number,
+  daysOfInventory: number,
+  requiredDoiDays: number
+): number {
+  if (requiredDoiDays <= 0 || daysOfInventory <= 0) return 0;
+  const dailyDemand = inventory / daysOfInventory;
+  const targetInventory = requiredDoiDays * dailyDemand;
+  return Math.max(0, Math.round(targetInventory - inventory));
+}
+
+function toAddProductRows(
+  list: typeof MOCK_PRODUCTS_RAW,
+  requiredDoiDays: number
+): AddProductRow[] {
+  return list.map((p) => {
+    const units = suggestedUnitsToMake(p.inventory, p.daysOfInventory, requiredDoiDays);
+    return {
+      id: p.id,
+      brand: p.brand,
+      product: p.name,
+      asin: p.asin,
+      variation1: '-',
+      variation2: '-',
+      parentAsin: p.asin,
+      childAsin: p.asin,
+      in: p.inventory,
+      inventory: p.inventory,
+      totalDoi: p.daysOfInventory,
+      fbaAvailableDoi: Math.floor(p.daysOfInventory * 0.8),
+      velocityTrend: 'Up',
+      boxInventory: Math.floor(p.inventory / 24),
+      unitsOrdered7: 120,
+      unitsOrdered30: 480,
+      unitsOrdered90: 1440,
+      fbaTotal: p.inventory,
+      fbaAvailable: Math.floor(p.inventory * 0.6),
+      awdTotal: 0,
+      unitsToMake: units,
+    };
+  });
+}
+
+export default function NewShipmentAddProductsPage() {
+  const [shipmentData, setShipmentData] = useState<NewShipmentForm | null>(null);
+  const [tableMode, setTableMode] = useState(false);
+  const [activeView, setActiveView] = useState<'all-products' | 'floor-inventory'>('all-products');
+  const [requiredDoi, setRequiredDoi] = useState('150');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
+  const [showDoiModal, setShowDoiModal] = useState(false);
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<'add-products' | 'book-shipment'>('add-products');
+  const [showNgoosModal, setShowNgoosModal] = useState(false);
+  const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
+  const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
+  const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+  const headerDropdownRef = useRef<HTMLDivElement>(null);
+  const doiButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setShipmentData(getShipmentFromStorage());
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
+      if (headerDropdownRef.current && !headerDropdownRef.current.contains(e.target as Node)) setShowHeaderDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const dateStr = formatShipmentDate(shipmentData);
+  const typeStr = shipmentData?.shipmentType || 'AWD';
+
+  const filteredRawProducts = useMemo(
+    () =>
+      MOCK_PRODUCTS_RAW.filter(
+        (p) =>
+          !searchTerm ||
+          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.asin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.size.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [searchTerm]
+  );
+  const requiredDoiNum = Math.max(0, parseInt(String(requiredDoi).replace(/\D/g, '') || '150', 10) || 150);
+  const tableRows = useMemo(
+    () => toAddProductRows(filteredRawProducts, requiredDoiNum),
+    [filteredRawProducts, requiredDoiNum]
+  );
+  const nonTableRows: NonTableProductRow[] = useMemo(
+    () =>
+      filteredRawProducts.map((p) => ({
+        id: p.id,
+        brand: p.brand,
+        product: p.name,
+        asin: p.asin,
+        size: p.size,
+        inventory: p.inventory,
+        unitsToMake: suggestedUnitsToMake(p.inventory, p.daysOfInventory, requiredDoiNum),
+        daysOfInventory: p.daysOfInventory,
+        fbaAvailableDoi: Math.floor(p.daysOfInventory * 0.8),
+      })),
+    [filteredRawProducts, requiredDoiNum]
+  );
+  const totalProducts = filteredRawProducts.length;
+  const totalPalettes = totalProducts * 0.5;
+  const totalBoxes = tableRows.reduce((acc, r) => acc + (Number(r.unitsToMake) ?? 0), 0) / 24;
+  const totalWeightLbs = totalBoxes * 12;
 
   return (
-    <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+    <div className="flex flex-col min-h-screen -m-4 lg:-m-6" style={{ backgroundColor: PAGE_BG, minHeight: '100vh' }}>
+      {/* Header — match 1000bananas2.0 NewShipmentHeader */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 24px',
+          borderBottom: `1px solid ${HEADER_BORDER}`,
+          backgroundColor: PAGE_BG,
+        }}
       >
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/dashboard/shipments')}
-            className="shrink-0"
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Link
+            href="/dashboard/shipments"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 30,
+              height: 30,
+              minWidth: 30,
+              minHeight: 30,
+              backgroundColor: isDarkMode ? '#252F42' : '#FFFFFF',
+              border: isDarkMode ? '1px solid #334155' : '1px solid #E5E7EB',
+              borderRadius: 8,
+              cursor: 'pointer',
+              padding: 6,
+            }}
           >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground-primary">New Shipment</h1>
-            <p className="text-foreground-secondary mt-1">
-              Add products and set units to make
-            </p>
+            <svg style={{ width: 16, height: 16, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </Link>
+          {dateStr && (
+            <div style={{ fontSize: 16, fontWeight: 400, color: isDarkMode ? '#FFFFFF' : '#111827', fontFamily: 'Inter, system-ui, sans-serif' }}>
+              {dateStr}
+            </div>
+          )}
+          {typeStr && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px 8px',
+                  minHeight: 23,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#60A5FA',
+                  backgroundColor: isDarkMode ? '#1E3A5F' : '#1E40AF',
+                  border: '2px solid #334155',
+                  borderRadius: 4,
+                  letterSpacing: '0.02em',
+                  textTransform: 'uppercase',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {typeStr}
+              </span>
+              <div ref={typeDropdownRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTypeDropdown((v) => !v)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 24,
+                    height: 24,
+                    padding: 0,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#9CA3AF',
+                  }}
+                >
+                  <svg width={24} height={24} viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="1.5" />
+                    <circle cx="12" cy="12" r="1.5" />
+                    <circle cx="12" cy="19" r="1.5" />
+                  </svg>
+                </button>
+                {showTypeDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: 8,
+                      backgroundColor: '#1A2235',
+                      border: '1px solid #334155',
+                      borderRadius: 8,
+                      boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                      minWidth: 160,
+                      zIndex: 1000,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      style={{
+                        width: '100%',
+                        padding: '10px 16px',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#E5E7EB',
+                        fontSize: 14,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Shipment Details
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFF' }}>Table Mode</span>
+            <button
+              type="button"
+              onClick={() => setTableMode((v) => !v)}
+              style={{
+                width: 33.33,
+                height: 20,
+                borderRadius: 10,
+                backgroundColor: tableMode ? '#3B82F6' : 'rgba(255,255,255,0.3)',
+                border: 'none',
+                cursor: 'pointer',
+                position: 'relative',
+                padding: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  backgroundColor: '#FFFFFF',
+                  position: 'absolute',
+                  top: 2,
+                  left: tableMode ? 15.33 : 2,
+                  transition: 'left 0.2s',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                }}
+              />
+            </button>
+          </div>
+          <button
+            type="button"
+            style={{
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#9CA3AF',
+            }}
+            aria-label="Settings"
+          >
+            <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+          </button>
+          <div ref={headerDropdownRef} style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setShowHeaderDropdown((v) => !v)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 4,
+                color: '#9CA3AF',
+              }}
+            >
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="5" r="1" fill="currentColor" />
+                <circle cx="12" cy="12" r="1" fill="currentColor" />
+                <circle cx="12" cy="19" r="1" fill="currentColor" />
+              </svg>
+            </button>
+            {showHeaderDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 8,
+                  backgroundColor: CARD_BG,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 8,
+                  minWidth: 160,
+                  zIndex: 1000,
+                  overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#E5E7EB',
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Export for Upload
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </motion.div>
+      </header>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
+      {/* Workflow tabs — Add Products / Book Shipment (circle indicator + underline) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '0 24px',
+          borderTop: `1px solid ${HEADER_BORDER}`,
+          borderBottom: `1px solid ${HEADER_BORDER}`,
+          backgroundColor: PAGE_BG,
+        }}
       >
-        <NewShipmentTable
-          rows={rows}
-          onProductClick={(p) => console.log('Product click', p.id)}
-          onQtyChange={(id, value) => console.log('Qty change', id, value)}
-          onClear={() => console.log('Clear')}
-          onExport={() => console.log('Export')}
-          totalProducts={3}
-          totalPalettes={2.1}
-          totalBoxes={92}
-          totalTimeHours={2}
-          totalWeightLbs={3.264}
-          totalFormulas={0}
-          showTotalInventory
-        />
-      </motion.div>
+        <button
+          type="button"
+          onClick={() => setActiveWorkflowTab('add-products')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 16px',
+            fontSize: 14,
+            fontWeight: 500,
+            color: activeWorkflowTab === 'add-products' ? '#3B82F6' : '#9CA3AF',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: `2px solid ${activeWorkflowTab === 'add-products' ? '#3B82F6' : 'transparent'}`,
+            marginBottom: -1,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {activeWorkflowTab === 'add-products' ? (
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
+              <circle cx="12" cy="12" r="6" />
+            </svg>
+          ) : (
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
+              <circle cx="12" cy="12" r="6" />
+            </svg>
+          )}
+          <span>Add Products</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveWorkflowTab('book-shipment')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 16px',
+            fontSize: 14,
+            fontWeight: 500,
+            color: activeWorkflowTab === 'book-shipment' ? '#3B82F6' : '#9CA3AF',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: `2px solid ${activeWorkflowTab === 'book-shipment' ? '#3B82F6' : 'transparent'}`,
+            marginBottom: -1,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {activeWorkflowTab === 'book-shipment' ? (
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
+              <circle cx="12" cy="12" r="6" />
+            </svg>
+          ) : (
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
+              <circle cx="12" cy="12" r="6" />
+            </svg>
+          )}
+          <span>Book Shipment</span>
+        </button>
+      </div>
+
+      {/* My Products bar — only on Add Products tab, not on Book Shipment */}
+      {activeWorkflowTab === 'add-products' && (
+      <div
+        style={{
+          padding: '12px 16px',
+          marginTop: '1.25rem',
+          marginBottom: 12,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ color: isDarkMode ? '#FFFFFF' : '#111827', fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            My Products
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: 4,
+              borderRadius: 8,
+              border: `1px solid ${BORDER}`,
+              backgroundColor: '#0B111E',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveView('all-products')}
+              style={{
+                padding: '4px 8px',
+                height: 23,
+                borderRadius: 4,
+                backgroundColor: activeView === 'all-products' ? '#2E3541' : 'transparent',
+                border: 'none',
+                color: activeView === 'all-products' ? '#FFFFFF' : '#9CA3AF',
+                fontSize: 14,
+                fontWeight: activeView === 'all-products' ? 600 : 500,
+                cursor: 'pointer',
+              }}
+            >
+              All ({MOCK_PRODUCTS_RAW.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('floor-inventory')}
+              style={{
+                padding: '4px 8px',
+                height: 23,
+                borderRadius: 4,
+                backgroundColor: activeView === 'floor-inventory' ? '#2E3541' : 'transparent',
+                border: 'none',
+                color: activeView === 'floor-inventory' ? '#FFFFFF' : '#9CA3AF',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              Floor Inventory
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 400, color: '#9CA3AF' }}>Required DOI</span>
+            <button
+              ref={doiButtonRef}
+              type="button"
+              onClick={() => setShowDoiModal((v) => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 12px',
+                borderRadius: 6,
+                border: `1px solid ${showDoiModal ? '#3B82F6' : BORDER}`,
+                backgroundColor: CARD_BG,
+                color: '#F9FAFB',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                minWidth: 80,
+                justifyContent: 'center',
+                transition: 'border-color 0.15s ease',
+                height: 32,
+                boxSizing: 'border-box',
+              }}
+            >
+              <span>{requiredDoi}</span>
+              <svg
+                width={12}
+                height={12}
+                viewBox="0 0 12 12"
+                fill="none"
+                style={{
+                  transform: showDoiModal ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                <path d="M2.5 4.5L6 8L9.5 4.5" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <span style={{ fontSize: 14, fontWeight: 400, color: '#9CA3AF' }}>days</span>
+            <DOISettingsModal
+              isOpen={showDoiModal}
+              onClose={() => setShowDoiModal(false)}
+              currentDoi={requiredDoi}
+              onApply={(newDoi) => setRequiredDoi(newDoi)}
+              buttonRef={doiButtonRef}
+            />
+          </div>
+          <div style={{ position: 'relative', width: 204, height: 32 }}>
+            <Search
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 16,
+                height: 16,
+                color: '#9CA3AF',
+                pointerEvents: 'none',
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search by name, ASIN, size..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                height: 32,
+                padding: 8,
+                paddingLeft: 32,
+                paddingRight: searchTerm ? 32 : 8,
+                borderRadius: 6,
+                border: '1px solid #334155',
+                backgroundColor: '#4B5563',
+                color: '#F9FAFB',
+                fontSize: 13,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 16,
+                  height: 16,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 4,
+                  backgroundColor: CARD_BG,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                }}
+              >
+                <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2}>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {tableMode && (
+            <button
+              type="button"
+              onClick={() => setShowCustomizeColumnsModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '6px 12px',
+                height: 32,
+                width: 'fit-content',
+                borderRadius: 6,
+                border: 'none',
+                backgroundColor: '#4B5563',
+                color: '#9CA3AF',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                boxSizing: 'border-box',
+              }}
+              aria-label="Columns"
+            >
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                <rect x="4" y="10" width="3" height="8" rx="1" />
+                <rect x="10.5" y="6" width="3" height="12" rx="1" />
+                <rect x="17" y="12" width="3" height="6" rx="1" />
+              </svg>
+              <span>Columns</span>
+            </button>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* Main Content Area */}
+      {activeView === 'all-products' && (
+        <main style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px' }}>
+          {activeWorkflowTab === 'add-products' ? (
+            tableMode ? (
+              <AddProductsTable
+                rows={tableRows}
+                visibleColumnKeys={visibleColumnKeys}
+                onProductClick={(row) => {
+                  setSelectedProduct(row);
+                  setShowNgoosModal(true);
+                }}
+                onClear={() => {}}
+                onExport={() => setShowExportCompleteModal(true)}
+                totalProducts={totalProducts}
+                totalPalettes={totalPalettes}
+                totalBoxes={totalBoxes}
+                totalWeightLbs={totalWeightLbs}
+              />
+            ) : (
+              <AddProductsNonTable
+                rows={nonTableRows}
+                onProductClick={(row) => {
+                  setSelectedProduct(row);
+                  setShowNgoosModal(true);
+                }}
+                onClear={() => {}}
+                onExport={() => setShowExportCompleteModal(true)}
+                totalProducts={totalProducts}
+                totalPalettes={totalPalettes}
+                totalBoxes={totalBoxes}
+                totalWeightLbs={totalWeightLbs}
+              />
+            )
+          ) : (
+            <BookShipmentForm onComplete={() => setShowShipmentBookedModal(true)} />
+          )}
+        </main>
+      )}
+
+      {activeView === 'floor-inventory' && (
+        <main style={{ flex: 1, padding: '0 24px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14 }}>
+          <p>Floor Inventory view — select a category from the dropdown (e.g. Finished Goods, Shiners, Unused Formulas).</p>
+        </main>
+      )}
+
+      <NgoosModal
+        isOpen={showNgoosModal}
+        onClose={() => {
+          setShowNgoosModal(false);
+          setSelectedProduct(null);
+        }}
+        selectedProduct={selectedProduct}
+        currentQty={0}
+        onAddUnits={(product, units) => {
+          console.log(`Adding ${units} units of ${product.name || product.product}`);
+        }}
+      />
+
+      <CustomizeColumnsModal
+        isOpen={showCustomizeColumnsModal}
+        onClose={() => setShowCustomizeColumnsModal(false)}
+        visibleColumnKeys={visibleColumnKeys}
+        onApply={(visibleKeys) => setVisibleColumnKeys(visibleKeys)}
+      />
+
+      {/* Shipment Booked modal — shown after clicking Complete Shipment */}
+      {showShipmentBookedModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowShipmentBookedModal(false)}
+        >
+          <div
+            style={{
+              width: 264,
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+              position: 'relative',
+              boxSizing: 'border-box',
+              boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowShipmentBookedModal(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                width: 28,
+                height: 28,
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 3L3 11M3 3l8 8" />
+              </svg>
+            </button>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 32,
+                padding: 8,
+                backgroundColor: '#22C55E',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                flexShrink: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>
+              Shipment Booked!
+            </h2>
+            <Link
+              href="/dashboard/shipments"
+              style={{
+                width: '100%',
+                maxWidth: 216,
+                height: 31,
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: '#374151',
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                textDecoration: 'none',
+              }}
+            >
+              Go to Shipments
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Export Complete modal */}
+      {showExportCompleteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => setShowExportCompleteModal(false)}
+        >
+          <div
+            style={{
+              width: 264,
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 24,
+              position: 'relative',
+              boxSizing: 'border-box',
+              boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowExportCompleteModal(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                width: 28,
+                height: 28,
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#9CA3AF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Close"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M11 3L3 11M3 3l8 8" />
+              </svg>
+            </button>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 32,
+                padding: 8,
+                backgroundColor: '#22C55E',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                flexShrink: 0,
+                boxSizing: 'border-box',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 700,
+                color: '#FFFFFF',
+                textAlign: 'center',
+              }}
+            >
+              Export Complete!
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                setShowExportCompleteModal(false);
+                setActiveWorkflowTab('book-shipment');
+              }}
+              style={{
+                width: '100%',
+                maxWidth: 216,
+                height: 31,
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 16,
+                borderRadius: 8,
+                border: 'none',
+                backgroundColor: '#3B82F6',
+                color: '#FFFFFF',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Begin Book Shipment
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
