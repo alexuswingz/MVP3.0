@@ -13,6 +13,7 @@ import {
   ReferenceArea,
   ReferenceLine,
 } from 'recharts';
+import ForecastSettingsModal, { type ForecastSettingsPayload } from '@/components/forecast/forecast-settings-modal';
 
 const isDarkMode = true;
 
@@ -102,15 +103,52 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [zoomFirstClickTimestamp, setZoomFirstClickTimestamp] = useState<number | null>(null);
   const [zoomPreviewTimestamp, setZoomPreviewTimestamp] = useState<number | null>(null);
   const [zoomBox, setZoomBox] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
+  const [showForecastSettingsModal, setShowForecastSettingsModal] = useState(false);
+  const [showApplyConfirmModal, setShowApplyConfirmModal] = useState(false);
+  const [applyConfirmPayload, setApplyConfirmPayload] = useState<ForecastSettingsPayload | null>(null);
+  const [showSettingsAppliedBadge, setShowSettingsAppliedBadge] = useState(false);
+  const [showCustomSettingsTooltip, setShowCustomSettingsTooltip] = useState(false);
+  const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
+  const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
+  const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const gearButtonWrapperRef = useRef<HTMLDivElement>(null);
+  const timeRangeDropdownRef = useRef<HTMLDivElement>(null);
   const zoomBoxDragRef = useRef<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
+  const rangeDragRef = useRef<{ startTimestamp: number; endTimestamp: number } | null>(null);
 
   React.useEffect(() => {
     if (isOpen && selectedProduct) {
       setDisplayUnits(selectedProduct?.unitsToMake || 0);
       setIsAdded(false);
     }
+    if (!isOpen) {
+      setShowSettingsAppliedBadge(false);
+      setShowCustomSettingsTooltip(false);
+    }
   }, [isOpen, selectedProduct]);
+
+  React.useEffect(() => {
+    if (!showCustomSettingsTooltip) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (gearButtonWrapperRef.current && !gearButtonWrapperRef.current.contains(e.target as Node)) {
+        setShowCustomSettingsTooltip(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCustomSettingsTooltip]);
+
+  React.useEffect(() => {
+    if (!chartTimeRangeOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (timeRangeDropdownRef.current && !timeRangeDropdownRef.current.contains(e.target as Node)) {
+        setChartTimeRangeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chartTimeRangeOpen]);
 
   React.useEffect(() => {
     if (!isOpen || !selectedProduct) return;
@@ -120,7 +158,9 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     setZoomFirstClickTimestamp(null);
     setZoomPreviewTimestamp(null);
     setZoomBox({ startTimestamp: null, endTimestamp: null });
+    setChartRangeSelection({ startTimestamp: null, endTimestamp: null });
     zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
+    rangeDragRef.current = null;
   }, [isOpen, selectedProduct?.asin]);
 
   // Add CSS for hiding scrollbar
@@ -278,6 +318,35 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     return data;
   }, [chartBuild?.data, zoomDomain.left, zoomDomain.right, parseZoomDateToLocal]);
 
+  const chartRangeSum = useMemo(() => {
+    const data = chartBuild?.data;
+    const { startTimestamp: lo, endTimestamp: hi } = chartRangeSelection;
+    const todayTs = chartBuild?.todayTs ?? 0;
+    if (!data?.length || lo == null || hi == null || hi <= lo) return null;
+    const inRange = data.filter((d) => d.timestamp >= lo && d.timestamp <= hi);
+    if (inRange.length === 0) return null;
+    let sumUnitsSold = 0;
+    let sumForecast = 0;
+    let allForecast = true;
+    for (const d of inRange) {
+      const sold = d.unitsSold ?? 0;
+      const forecast = d.forecastAdjusted ?? d.forecastBase ?? 0;
+      sumUnitsSold += sold;
+      sumForecast += forecast;
+      if (d.timestamp <= todayTs) allForecast = false;
+    }
+    const isForecastOnly = allForecast;
+    const price = selectedProduct && typeof (selectedProduct as { price?: number }).price === 'number' ? (selectedProduct as { price: number }).price : null;
+    const forecastRevenueDisplay =
+      price != null && price > 0 ? `$${(sumForecast * price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—';
+    const gapUnits = Math.max(0, sumForecast - sumUnitsSold);
+    const revenueGapDisplay =
+      price != null && price > 0
+        ? `$${(gapUnits * price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : '—';
+    return { sumUnitsSold, sumForecast, isForecastOnly, startTs: lo, endTs: hi, forecastRevenueDisplay, revenueGapDisplay };
+  }, [chartBuild?.data, chartBuild?.todayTs, chartRangeSelection.startTimestamp, chartRangeSelection.endTimestamp, selectedProduct]);
+
   const getTimestampFromClientX = useCallback(
     (clientX: number): number | null => {
       const data = chartBuild?.data;
@@ -366,8 +435,9 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
         setZoomBox({ startTimestamp: null, endTimestamp: null });
         return;
       }
-      zoomBoxDragRef.current = { startTimestamp: t, endTimestamp: t };
-      setZoomBox({ startTimestamp: t, endTimestamp: t });
+      // Range selection (sum): when zoom tool is off, drag selects range for sum
+      rangeDragRef.current = { startTimestamp: t, endTimestamp: t };
+      setChartRangeSelection({ startTimestamp: t, endTimestamp: t });
     },
     [chartBuild?.data?.length, zoomToolActive, zoomFirstClickTimestamp, zoomDomain, getTimestampFromClientX, toLocalDateStr]
   );
@@ -378,11 +448,20 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
         const t = getTimestampFromClientX(e.clientX);
         setZoomPreviewTimestamp(t ?? null);
       }
-      if (zoomBoxDragRef.current.startTimestamp != null) {
+      if (zoomToolActive && zoomBoxDragRef.current.startTimestamp != null) {
         const t = getTimestampFromClientX(e.clientX);
         if (t != null) {
           zoomBoxDragRef.current.endTimestamp = t;
           setZoomBox((prev) =>
+            prev.startTimestamp == null ? prev : { ...prev, endTimestamp: t }
+          );
+        }
+      }
+      if (rangeDragRef.current != null) {
+        const t = getTimestampFromClientX(e.clientX);
+        if (t != null) {
+          rangeDragRef.current.endTimestamp = t;
+          setChartRangeSelection((prev) =>
             prev.startTimestamp == null ? prev : { ...prev, endTimestamp: t }
           );
         }
@@ -392,6 +471,13 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   );
 
   const handleChartZoomMouseUp = useCallback(() => {
+    if (rangeDragRef.current != null) {
+      const { startTimestamp: s, endTimestamp: endTs } = rangeDragRef.current;
+      const lo = Math.min(s, endTs);
+      const hi = Math.max(s, endTs);
+      setChartRangeSelection(hi > lo ? { startTimestamp: lo, endTimestamp: hi } : { startTimestamp: null, endTimestamp: null });
+      rangeDragRef.current = null;
+    }
     if (zoomBoxDragRef.current.startTimestamp != null) {
       const { startTimestamp: s, endTimestamp: endTs } = zoomBoxDragRef.current;
       const data = chartBuild?.data;
@@ -415,6 +501,13 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
   useEffect(() => {
     const onUp = () => {
+      if (rangeDragRef.current != null) {
+        const { startTimestamp: s, endTimestamp: endTs } = rangeDragRef.current;
+        const lo = Math.min(s, endTs);
+        const hi = Math.max(s, endTs);
+        setChartRangeSelection((prev) => (hi > lo ? { startTimestamp: lo, endTimestamp: hi } : prev));
+        rangeDragRef.current = null;
+      }
       if (zoomBoxDragRef.current.startTimestamp != null) {
         zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
         setZoomBox({ startTimestamp: null, endTimestamp: null });
@@ -847,6 +940,32 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       <div style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '6px', lineHeight: 1.2, minHeight: '16px' }}>
                         <span style={{ fontWeight: 500, color: '#94a3b8' }}>ASIN:</span>
                         <span style={{ color: '#fff' }}>{selectedProduct.asin || 'N/A'}</span>
+                        {selectedProduct.asin && (
+                          <button
+                            type="button"
+                            title="Copy ASIN"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedProduct.asin);
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 2,
+                              margin: 0,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              borderRadius: 4,
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.8125rem', lineHeight: 1.2, minHeight: '16px', display: 'flex', alignItems: 'center' }}>
                         <span style={{ fontWeight: 500, color: '#94a3b8' }}>BRAND:</span>
@@ -1126,11 +1245,70 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                   minHeight: 0,
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>
-                    Unit Forecast
-                  </h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '1rem',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    position: 'relative',
+                    zIndex: 10,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>
+                      Unit Forecast
+                    </h3>
+                    {chartRangeSum && (
+                      <>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            flexFlow: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '4px 8px',
+                            borderRadius: 4,
+                            border: '1px solid #334155',
+                            backgroundColor: '#1A2235',
+                            color: '#94a3b8',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          {new Date(chartRangeSum.startTs).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}
+                          {' - '}
+                          {new Date(chartRangeSum.endTs).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}
+                        </span>
+                        {chartRangeSum.isForecastOnly ? (
+                          <>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                              FORECASTED UNITS: <strong style={{ color: '#e2e8f0', fontWeight: 700 }}>{chartRangeSum.sumForecast.toLocaleString()}</strong>
+                            </span>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                              FORECASTED REVENUE: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.forecastRevenueDisplay}</strong>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                              UNITS SOLD: <strong style={{ color: '#ffffff', fontWeight: 700 }}>{chartRangeSum.sumUnitsSold.toLocaleString()}</strong>
+                            </span>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                              POT. UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.sumForecast.toLocaleString()}</strong>
+                            </span>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                              REVENUE GAP: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.revenueGapDisplay}</strong>
+                            </span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()}>
                     {(zoomDomain.left != null || zoomDomain.right != null) && (
                       <button
                         type="button"
@@ -1184,6 +1362,215 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                         <path d="M10 7V13M7 10H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
+                    <div ref={gearButtonWrapperRef} style={{ position: 'relative', display: 'inline-flex' }}>
+                      <button
+                        type="button"
+                        title="Forecast Settings"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowForecastSettingsModal(true);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{
+                          padding: '0.5rem',
+                          color: '#94a3b8',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73 1.18l-.22.38a2 2 0 0 0 1.72 2.93h.16a2 2 0 0 1 1.73 1v.44a2 2 0 0 1-1.73 1h-.16a2 2 0 0 0-1.72 2.93l.22.38a2 2 0 0 0 2.73 1.18l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-1.18l.22-.38a2 2 0 0 0-1.72-2.93h-.16a2 2 0 0 1-1.73-1v-.44a2 2 0 0 1 1.73-1h.16a2 2 0 0 0 1.72-2.93l-.22-.38a2 2 0 0 0-2.73-1.18l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      </button>
+                      {showSettingsAppliedBadge && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowCustomSettingsTooltip((prev) => !prev);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            top: -4,
+                            right: -4,
+                            width: 16,
+                            height: 16,
+                            borderRadius: '50%',
+                            backgroundColor: '#2563EB',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 10,
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', lineHeight: 1 }}>!</span>
+                        </button>
+                      )}
+                      {showCustomSettingsTooltip && showSettingsAppliedBadge && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            marginBottom: 8,
+                            backgroundColor: '#0F172A',
+                            borderRadius: 8,
+                            padding: 12,
+                            border: '1px solid #334155',
+                            boxShadow: '0 10px 25px rgba(0,0,0,0.4)',
+                            zIndex: 1000,
+                            width: 220,
+                            minHeight: 88,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 10,
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: 0,
+                              width: '100%',
+                              boxSizing: 'border-box',
+                              fontSize: '0.875rem',
+                              color: '#fff',
+                              textAlign: 'center',
+                              lineHeight: 1.4,
+                              display: '-webkit-box',
+                              WebkitBoxOrient: 'vertical',
+                              WebkitLineClamp: 2,
+                              overflow: 'hidden',
+                              wordBreak: 'break-word',
+                            } as React.CSSProperties}
+                          >
+                            This product has custom forecast settings
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowSettingsAppliedBadge(false);
+                              setShowCustomSettingsTooltip(false);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                              width: '100%',
+                              height: 24,
+                              padding: 0,
+                              borderRadius: 4,
+                              border: 'none',
+                              backgroundColor: '#2563EB',
+                              color: '#fff',
+                              fontSize: '0.875rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                              <path d="M3 3v5h5" />
+                            </svg>
+                            Reset
+                          </button>
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: '50%',
+                              bottom: -6,
+                              transform: 'translateX(-50%)',
+                              width: 0,
+                              height: 0,
+                              borderLeft: '6px solid transparent',
+                              borderRight: '6px solid transparent',
+                              borderTop: '6px solid #0F172A',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div ref={timeRangeDropdownRef} style={{ position: 'relative', display: 'inline-flex', marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        onClick={() => setChartTimeRangeOpen((prev) => !prev)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #475569',
+                          backgroundColor: '#1e293b',
+                          color: '#94a3b8',
+                          fontSize: '0.875rem',
+                          fontWeight: 400,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>{chartTimeRange}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </button>
+                      {chartTimeRangeOpen && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: 4,
+                            minWidth: '100%',
+                            borderRadius: 6,
+                            border: '1px solid #475569',
+                            backgroundColor: '#1e293b',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            zIndex: 1000,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {['1 Year', '2 Years', 'All Time'].map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setChartTimeRange(option);
+                                setChartTimeRangeOpen(false);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                border: 'none',
+                                background: chartTimeRange === option ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                                color: '#94a3b8',
+                                fontSize: '0.875rem',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div
@@ -1399,6 +1786,18 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           {chartSegments.hasGreen && chartSegments.greenEndTs != null && (
                             <ReferenceLine x={chartSegments.greenEndTs} stroke="#10b981" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
                           )}
+                          {chartRangeSelection.startTimestamp != null && chartRangeSelection.endTimestamp != null && chartRangeSelection.endTimestamp > chartRangeSelection.startTimestamp && (
+                            <ReferenceArea
+                              x1={chartRangeSelection.startTimestamp}
+                              x2={chartRangeSelection.endTimestamp}
+                              fill="#007AFF"
+                              fillOpacity={0.25}
+                              stroke="#007AFF"
+                              strokeOpacity={0.6}
+                              strokeDasharray="4 2"
+                              yAxisId="left"
+                            />
+                          )}
                           {chartSegments.hasBlue && chartSegments.forecastPoint && (
                             <ReferenceLine x={chartSegments.forecastPoint.timestamp} stroke="#3b82f6" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
                           )}
@@ -1550,6 +1949,146 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
           </div>
         </div>
       </div>
+      <ForecastSettingsModal
+        isOpen={showForecastSettingsModal}
+        onClose={() => setShowForecastSettingsModal(false)}
+        isDarkMode
+        overlayZIndex={2200}
+        onApply={(payload) => {
+          setApplyConfirmPayload(payload);
+          setShowApplyConfirmModal(true);
+        }}
+      />
+      {showApplyConfirmModal && applyConfirmPayload && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2300,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(3px)',
+          }}
+          onClick={() => {
+            setShowApplyConfirmModal(false);
+            setApplyConfirmPayload(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#1A2235',
+              borderRadius: 12,
+              padding: 24,
+              width: 566,
+              maxWidth: '90vw',
+              minHeight: 196,
+              border: '1px solid #334155',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: 24,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                textAlign: 'center',
+                gap: 12,
+                width: 518,
+                maxWidth: '100%',
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  padding: 8,
+                  backgroundColor: '#ea580c',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#fff', lineHeight: 1 }}>!</span>
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', margin: 0 }}>
+                Apply forecast settings?
+              </h3>
+              <p style={{ fontSize: '0.875rem', color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                This will apply your forecast settings (DOI, model, market and sales velocity) for this product.
+              </p>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApplyConfirmModal(false);
+                  setApplyConfirmPayload(null);
+                }}
+                style={{
+                  width: 251,
+                  height: 31,
+                  borderRadius: 6,
+                  border: '1px solid #d1d5db',
+                  backgroundColor: '#ffffff',
+                  color: '#374151',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowApplyConfirmModal(false);
+                  setApplyConfirmPayload(null);
+                  setShowSettingsAppliedBadge(true);
+                }}
+                style={{
+                  width: 251,
+                  height: 31,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: '#2563EB',
+                  color: '#fff',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

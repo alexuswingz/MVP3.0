@@ -712,34 +712,42 @@ export default function NewShipmentAddProductsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
                       <div
                         style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: '50%',
+                          width: 32,
+                          height: 32,
+                          borderRadius: 32,
+                          padding: 8,
                           backgroundColor: '#F59E0B',
                           display: 'flex',
+                          flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <span style={{ color: '#fff', fontSize: 24, fontWeight: 700 }}>!</span>
+                        <span style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>!</span>
                       </div>
                       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#F9FAFB' }}>Are you sure?</h3>
                       <p style={{ margin: 0, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 1.4 }}>
                         This will update global forecasting settings
                       </p>
-                      <div style={{ display: 'flex', gap: 12, width: '100%', justifyContent: 'center', marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', justifyContent: 'center', marginTop: 8 }}>
                         <button
                           type="button"
                           onClick={() => { setShowSaveDefaultConfirm(false); setPendingSaveDefaultDoi(null); }}
                           style={{
-                            padding: '8px 20px',
-                            borderRadius: 8,
+                            width: 133.5,
+                            height: 31,
+                            padding: 0,
+                            borderRadius: 4,
                             border: '1px solid #4B5563',
                             backgroundColor: '#374151',
                             color: '#F9FAFB',
                             fontSize: 14,
                             fontWeight: 500,
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                         >
                           Cancel
@@ -756,14 +764,19 @@ export default function NewShipmentAddProductsPage() {
                             setPendingSaveDefaultDoi(null);
                           }}
                           style={{
-                            padding: '8px 20px',
-                            borderRadius: 8,
+                            width: 133.5,
+                            height: 31,
+                            padding: 0,
+                            borderRadius: 4,
                             border: 'none',
                             backgroundColor: '#3B82F6',
                             color: '#fff',
                             fontSize: 14,
                             fontWeight: 500,
                             cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                         >
                           Save

@@ -23,6 +23,7 @@ interface ForecastSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   isDarkMode?: boolean;
+  overlayZIndex?: number;
   initialDoiSettings?: { amazonDoiGoal: number; inboundLeadTime: number; manufactureLeadTime: number } | null;
   initialForecastModel?: string;
   initialMarketAdjustment?: number;
@@ -35,6 +36,7 @@ export default function ForecastSettingsModal({
   isOpen,
   onClose,
   isDarkMode = true,
+  overlayZIndex = 1000,
   initialDoiSettings = null,
   initialForecastModel = 'Growing',
   initialMarketAdjustment = 5,
@@ -107,7 +109,7 @@ export default function ForecastSettingsModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1000,
+        zIndex: overlayZIndex,
       }}
       onClick={handleCancel}
     >
@@ -575,6 +577,8 @@ export default function ForecastSettingsModal({
           style={{
             display: 'flex',
             justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '10px',
             width: '100%',
             height: '47px',
             padding: '12px 16px',
@@ -586,8 +590,8 @@ export default function ForecastSettingsModal({
             type="button"
             onClick={handleSaveAsDefaultClick}
             style={{
-              minWidth: '113px',
-              height: '23px',
+              width: '133.5px',
+              height: '31px',
               padding: '4px 12px',
               borderRadius: '4px',
               border: '1px solid #3B82F6',
@@ -612,7 +616,7 @@ export default function ForecastSettingsModal({
             onClick={handleApplyClick}
             style={{
               width: '57px',
-              height: '23px',
+              height: '31px',
               padding: '4px 12px',
               borderRadius: '4px',
               border: 'none',

@@ -655,14 +655,14 @@ export default function DoiSettingsPopover({
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
             <button
               type="button"
               onClick={handleSaveAsDefault}
               disabled={loading}
               style={{
-                width: '113px',
-                height: '23px',
+                width: '133.5px',
+                height: '31px',
                 padding: 0,
                 borderRadius: '4px',
                 border: `1px solid ${theme.secondaryBtnBorder}`,
@@ -692,7 +692,7 @@ export default function DoiSettingsPopover({
               disabled={loading}
               style={{
                 width: '57px',
-                height: '23px',
+                height: '31px',
                 padding: 0,
                 borderRadius: '4px',
                 border: 'none',

@@ -100,7 +100,18 @@
   }
 }
 
-/* Custom scrollbar for webkit browsers */
+/* No scroll on main page: hide scrollbar and disable overflow */
+html, body {
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar for webkit browsers (inner elements only) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

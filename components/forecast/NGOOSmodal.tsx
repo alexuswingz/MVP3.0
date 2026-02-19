@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { X, Copy, Settings } from 'lucide-react';
 import ForecastUnit from './forecast-unit';
+import DoiSettingsPopover from '@/components/forecast/doi-settings-popover';
 
 /** Scrollable content area - overflow with invisible scrollbar */
 const SCROLL_CONTENT_STYLE: React.CSSProperties = {
@@ -402,7 +403,8 @@ function NgoosContent({
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <DoiSettingsPopover isDarkMode={isDarkMode} />
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
               <div
                 style={{
