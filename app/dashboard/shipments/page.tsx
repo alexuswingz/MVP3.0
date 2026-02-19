@@ -193,6 +193,21 @@ export default function ShipmentsPage() {
     [filteredShipments]
   );
 
+  const archivePlaceholderRows = useMemo<PlanningTableRow[]>(
+    () =>
+      Array.from({ length: 4 }, (_, i) => ({
+        id: `archive-placeholder-${i + 1}`,
+        status: 'Archived',
+        shipment: '—',
+        type: '—',
+        marketplace: '—',
+        account: '—',
+        addProducts: 'completed' as StepStatus,
+        bookShipment: 'completed' as StepStatus,
+      })),
+    []
+  );
+
   const handleRowClick = (row: PlanningTableRow) => {
     console.log('Shipment row clicked:', row.id);
   };
@@ -450,13 +465,9 @@ export default function ShipmentsPage() {
         )}
 
         {activeTab === 'archive' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-24 text-center text-gray-500"
-          >
-            <p className="text-sm">Archive — no archived shipments</p>
-          </motion.div>
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <PlanningTable rows={archivePlaceholderRows} onRowClick={handleRowClick} />
+          </motion.section>
         )}
         </div>
       </main>

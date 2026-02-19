@@ -6,7 +6,9 @@ interface DOISettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentDoi: string;
-  onApply: (newDoi: string) => void;
+  onApply: (newDoi: string, fromApplyButton?: boolean) => void;
+  /** When provided, "Save as Default" will call this instead of onApply; parent can show confirmation then apply. */
+  onSaveAsDefaultRequest?: (newDoi: string) => void;
   buttonRef?: React.RefObject<HTMLButtonElement>;
 }
 
@@ -16,7 +18,7 @@ const DEFAULT_SETTINGS = {
   manufactureLeadTime: 7,
 };
 
-export function DOISettingsModal({ isOpen, onClose, currentDoi, onApply, buttonRef }: DOISettingsModalProps) {
+export function DOISettingsModal({ isOpen, onClose, currentDoi, onApply, onSaveAsDefaultRequest, buttonRef }: DOISettingsModalProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const [formValues, setFormValues] = useState({
     amazonDoiGoal: String(DEFAULT_SETTINGS.amazonDoiGoal),
@@ -93,15 +95,10 @@ export function DOISettingsModal({ isOpen, onClose, currentDoi, onApply, buttonR
     setFormValues((prev) => ({ ...prev, [field]: numericValue }));
   };
 
-  const handleApply = () => {
+  const handleApply = (fromApplyButton: boolean) => {
     const total = calculateTotal();
-    onApply(String(total));
+    onApply(String(total), fromApplyButton);
     onClose();
-  };
-
-  const handleSaveAsDefault = () => {
-    // For MVP, just apply
-    handleApply();
   };
 
   return (
@@ -272,7 +269,14 @@ export function DOISettingsModal({ isOpen, onClose, currentDoi, onApply, buttonR
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
         {/* Save as Default */}
         <button
-          onClick={handleSaveAsDefault}
+          onClick={() => {
+            const total = calculateTotal();
+            if (onSaveAsDefaultRequest) {
+              onSaveAsDefaultRequest(String(total));
+            } else {
+              handleApply(false);
+            }
+          }}
           style={{
             width: '113px',
             height: '23px',
@@ -301,7 +305,7 @@ export function DOISettingsModal({ isOpen, onClose, currentDoi, onApply, buttonR
 
         {/* Apply */}
         <button
-          onClick={handleApply}
+          onClick={() => handleApply(true)}
           style={{
             width: '57px',
             height: '23px',

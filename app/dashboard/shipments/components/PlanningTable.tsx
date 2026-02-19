@@ -20,6 +20,8 @@ interface PlanningTableProps {
   rows: PlanningTableRow[];
   onRowClick?: (row: PlanningTableRow) => void;
   onMenuClick?: (row: PlanningTableRow, e: React.MouseEvent) => void;
+  /** Custom message when rows are empty (e.g. "No data to show") */
+  emptyMessage?: string;
 }
 
 const TABLE_BG = '#1A2235';
@@ -133,7 +135,7 @@ const COLUMN_CONFIG: { key: keyof PlanningTableRow; width: string; label: string
   { key: 'bookShipment', width: '12%', label: 'BOOK', subLabel: 'SHIPMENT' },
 ];
 
-export function PlanningTable({ rows, onRowClick, onMenuClick }: PlanningTableProps) {
+export function PlanningTable({ rows, onRowClick, onMenuClick, emptyMessage }: PlanningTableProps) {
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
 
   const handleFilterClick = useCallback((key: string, e: React.MouseEvent) => {
@@ -433,7 +435,7 @@ export function PlanningTable({ rows, onRowClick, onMenuClick }: PlanningTablePr
           className="flex items-center justify-center py-16 text-center"
           style={{ color: TEXT_MUTED, backgroundColor: ROW_BG }}
         >
-          <p className="text-sm">No shipments to show</p>
+          <p className="text-sm">{emptyMessage ?? 'No shipments to show'}</p>
         </div>
       )}
     </div>

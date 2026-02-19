@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, RotateCcw } from 'lucide-react';
 import type { NewShipmentForm } from '../components/NewShipmentModal';
 import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
 import { AddProductsNonTable, type NonTableProductRow } from './components/AddProductsNonTable';
@@ -105,10 +105,15 @@ export default function NewShipmentAddProductsPage() {
   const [tableMode, setTableMode] = useState(false);
   const [activeView, setActiveView] = useState<'all-products' | 'floor-inventory'>('all-products');
   const [requiredDoi, setRequiredDoi] = useState('150');
+  const [savedDefaultDoi, setSavedDefaultDoi] = useState('150');
   const [searchTerm, setSearchTerm] = useState('');
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
   const [showDoiModal, setShowDoiModal] = useState(false);
+  const [showRequiredDoiWarning, setShowRequiredDoiWarning] = useState(false);
+  const [showRequiredDoiTooltip, setShowRequiredDoiTooltip] = useState(false);
+  const [showSaveDefaultConfirm, setShowSaveDefaultConfirm] = useState(false);
+  const [pendingSaveDefaultDoi, setPendingSaveDefaultDoi] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<'add-products' | 'book-shipment'>('add-products');
   const [showNgoosModal, setShowNgoosModal] = useState(false);
   const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
@@ -119,6 +124,7 @@ export default function NewShipmentAddProductsPage() {
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
   const doiButtonRef = useRef<HTMLButtonElement>(null);
+  const requiredDoiTooltipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setShipmentData(getShipmentFromStorage());
@@ -128,6 +134,7 @@ export default function NewShipmentAddProductsPage() {
     const handleClickOutside = (e: MouseEvent) => {
       if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
       if (headerDropdownRef.current && !headerDropdownRef.current.contains(e.target as Node)) setShowHeaderDropdown(false);
+      if (requiredDoiTooltipRef.current && !requiredDoiTooltipRef.current.contains(e.target as Node)) setShowRequiredDoiTooltip(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -495,81 +502,133 @@ export default function NewShipmentAddProductsPage() {
           <div style={{ color: isDarkMode ? '#FFFFFF' : '#111827', fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap' }}>
             My Products
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: 4,
-              borderRadius: 8,
-              border: `1px solid ${BORDER}`,
-              backgroundColor: '#0B111E',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setActiveView('all-products')}
-              style={{
-                padding: '4px 8px',
-                height: 23,
-                borderRadius: 4,
-                backgroundColor: activeView === 'all-products' ? '#2E3541' : 'transparent',
-                border: 'none',
-                color: activeView === 'all-products' ? '#FFFFFF' : '#9CA3AF',
-                fontSize: 14,
-                fontWeight: activeView === 'all-products' ? 600 : 500,
-                cursor: 'pointer',
-              }}
-            >
-              All ({MOCK_PRODUCTS_RAW.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('floor-inventory')}
-              style={{
-                padding: '4px 8px',
-                height: 23,
-                borderRadius: 4,
-                backgroundColor: activeView === 'floor-inventory' ? '#2E3541' : 'transparent',
-                border: 'none',
-                color: activeView === 'floor-inventory' ? '#FFFFFF' : '#9CA3AF',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              Floor Inventory
-            </button>
-          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 14, fontWeight: 400, color: '#9CA3AF' }}>Required DOI</span>
-            <button
-              ref={doiButtonRef}
-              type="button"
-              onClick={() => setShowDoiModal((v) => !v)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 12px',
-                borderRadius: 6,
-                border: `1px solid ${showDoiModal ? '#3B82F6' : BORDER}`,
-                backgroundColor: CARD_BG,
-                color: '#F9FAFB',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-                minWidth: 80,
-                justifyContent: 'center',
-                transition: 'border-color 0.15s ease',
-                height: 32,
-                boxSizing: 'border-box',
-              }}
-            >
-              <span>{requiredDoi}</span>
+            <div ref={requiredDoiTooltipRef} style={{ position: 'relative', display: 'inline-flex' }}>
+              {showRequiredDoiWarning && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowRequiredDoiTooltip((v) => !v);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -6,
+                      zIndex: 2,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      backgroundColor: '#38BDF8',
+                      border: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                    title="DOI differs from global"
+                  >
+                    <span style={{ color: '#fff', fontSize: 12, fontWeight: 700, lineHeight: 1 }}>!</span>
+                  </button>
+                  {showRequiredDoiTooltip && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '50%',
+                        transform: 'translate(-50%, -14px)',
+                        marginBottom: 8,
+                        backgroundColor: '#1F2937',
+                        border: '1px solid #374151',
+                        borderRadius: 8,
+                        padding: 12,
+                        width: 200,
+                        minHeight: 88,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+                        zIndex: 10001,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 12, color: '#F9FAFB', lineHeight: 1.4 }}>
+                        This value differs from the global settings for all products.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRequiredDoi(savedDefaultDoi);
+                          setShowRequiredDoiWarning(false);
+                          setShowRequiredDoiTooltip(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 10,
+                          width: '100%',
+                          height: 24,
+                          padding: 0,
+                          borderRadius: 6,
+                          border: 'none',
+                          backgroundColor: '#007AFF',
+                          color: '#fff',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <RotateCcw className="w-4 h-4" style={{ flexShrink: 0 }} />
+                        Revert to Global DOI
+                      </button>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: -6,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: 0,
+                          height: 0,
+                          borderLeft: '6px solid transparent',
+                          borderRight: '6px solid transparent',
+                          borderTop: '6px solid #1F2937',
+                        }}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+              <button
+                ref={doiButtonRef}
+                type="button"
+                onClick={() => setShowDoiModal((v) => !v)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: `1px solid ${showDoiModal ? '#3B82F6' : BORDER}`,
+                  backgroundColor: CARD_BG,
+                  color: '#F9FAFB',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  minWidth: 80,
+                  justifyContent: 'center',
+                  transition: 'border-color 0.15s ease',
+                  height: 32,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <span>{requiredDoi}</span>
               <svg
                 width={12}
                 height={12}
@@ -582,15 +641,140 @@ export default function NewShipmentAddProductsPage() {
               >
                 <path d="M2.5 4.5L6 8L9.5 4.5" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-            </button>
+              </button>
+              <DOISettingsModal
+                isOpen={showDoiModal}
+                onClose={() => setShowDoiModal(false)}
+                currentDoi={requiredDoi}
+                onApply={(newDoi, fromApplyButton) => {
+                  setRequiredDoi(newDoi);
+                  if (fromApplyButton) {
+                    setShowRequiredDoiWarning(true);
+                  } else {
+                    setSavedDefaultDoi(newDoi);
+                  }
+                }}
+                onSaveAsDefaultRequest={(newDoi) => {
+                  setPendingSaveDefaultDoi(newDoi);
+                  setShowSaveDefaultConfirm(true);
+                }}
+                buttonRef={doiButtonRef}
+              />
+              {showSaveDefaultConfirm && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 20000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                  }}
+                  onClick={(e) => e.target === e.currentTarget && (setShowSaveDefaultConfirm(false), setPendingSaveDefaultDoi(null))}
+                >
+                  <div
+                    style={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: 12,
+                      padding: 24,
+                      minWidth: 320,
+                      maxWidth: 400,
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                      position: 'relative',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => { setShowSaveDefaultConfirm(false); setPendingSaveDefaultDoi(null); }}
+                      style={{
+                        position: 'absolute',
+                        top: 16,
+                        right: 16,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 4,
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#9CA3AF',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                      <div
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          backgroundColor: '#F59E0B',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <span style={{ color: '#fff', fontSize: 24, fontWeight: 700 }}>!</span>
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#F9FAFB' }}>Are you sure?</h3>
+                      <p style={{ margin: 0, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 1.4 }}>
+                        This will update global forecasting settings
+                      </p>
+                      <div style={{ display: 'flex', gap: 12, width: '100%', justifyContent: 'center', marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setShowSaveDefaultConfirm(false); setPendingSaveDefaultDoi(null); }}
+                          style={{
+                            padding: '8px 20px',
+                            borderRadius: 8,
+                            border: '1px solid #4B5563',
+                            backgroundColor: '#374151',
+                            color: '#F9FAFB',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (pendingSaveDefaultDoi !== null) {
+                              setRequiredDoi(pendingSaveDefaultDoi);
+                              setSavedDefaultDoi(pendingSaveDefaultDoi);
+                            }
+                            setShowDoiModal(false);
+                            setShowSaveDefaultConfirm(false);
+                            setPendingSaveDefaultDoi(null);
+                          }}
+                          style={{
+                            padding: '8px 20px',
+                            borderRadius: 8,
+                            border: 'none',
+                            backgroundColor: '#3B82F6',
+                            color: '#fff',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <span style={{ fontSize: 14, fontWeight: 400, color: '#9CA3AF' }}>days</span>
-            <DOISettingsModal
-              isOpen={showDoiModal}
-              onClose={() => setShowDoiModal(false)}
-              currentDoi={requiredDoi}
-              onApply={(newDoi) => setRequiredDoi(newDoi)}
-              buttonRef={doiButtonRef}
-            />
           </div>
           <div style={{ position: 'relative', width: 204, height: 32 }}>
             <Search

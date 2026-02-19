@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Settings,
 } from 'lucide-react';
+import { PlanningTable } from '@/app/dashboard/shipments/components/PlanningTable';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -205,6 +206,18 @@ export default function DashboardPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* Data — placeholder table, same look as Shipments */}
+      <motion.div variants={itemVariants}>
+        <div className="bg-background-secondary border border-border rounded-xl overflow-hidden">
+          <h2 className="text-lg font-semibold text-foreground-primary px-6 pt-6 pb-2">
+            Data
+          </h2>
+          <div className="px-6 pb-6">
+            <PlanningTable rows={[]} emptyMessage="No data to show" />
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
