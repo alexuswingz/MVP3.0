@@ -38,6 +38,10 @@ export interface RichTextEditorProps {
   contentClassName?: string;
   editable?: boolean;
   onFocusChange?: (focused: boolean) => void;
+  /** Background color for the editor container (default: #1A202C). Use modal background to match. */
+  background?: string;
+  /** When true, content expands to fit and no scrollbar is shown (for full visibility when editing). */
+  expandToFit?: boolean;
 }
 
 export function RichTextEditor({
@@ -48,6 +52,8 @@ export function RichTextEditor({
   contentClassName = '',
   editable = true,
   onFocusChange,
+  background = '#1A202C',
+  expandToFit = false,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -142,13 +148,27 @@ export function RichTextEditor({
     <div
       ref={wrapperRef}
       className={`overflow-hidden rounded-lg flex flex-col ${className}`}
-      style={{ background: '#1A202C' }}
+      style={{
+        background,
+        ...(isFocused && {
+          border: '1px solid #3B82F6',
+          boxSizing: 'border-box',
+        }),
+      }}
     >
       {/* Toolbar - only visible when editor is focused (clicked) */}
       {isFocused && (
       <div
-        className="flex items-center gap-1 flex-wrap px-2 py-1.5 border-b border-gray-600"
-        style={{ background: '#2C323E' }}
+        className="flex items-center flex-wrap box-border"
+        style={{
+          width: 488,
+          height: 44,
+          padding: '8px 12px 16px',
+          gap: 12,
+          opacity: 1,
+          background: '#141C2D',
+          marginBottom: 8,
+        }}
       >
         <ToolbarButton onClick={handleFormat('bold')} title="Bold">
           <span className="text-sm font-bold">B</span>
@@ -162,7 +182,6 @@ export function RichTextEditor({
         <ToolbarButton onClick={handleFormat('strikeThrough')} title="Strikethrough">
           <span className="text-sm line-through">S</span>
         </ToolbarButton>
-        <ToolbarDivider />
         <ToolbarButton onClick={handleFormat('insertUnorderedList')} title="Bullet List">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -173,7 +192,6 @@ export function RichTextEditor({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m-4 4h10" />
           </svg>
         </ToolbarButton>
-        <ToolbarDivider />
         <ToolbarButton onClick={insertLink} title="Link">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -213,8 +231,8 @@ export function RichTextEditor({
         onFocus={handleContentFocus}
         onBlur={(e) => { handleInput(); handleContentBlur(); }}
         onInput={handleInput}
-        className={`rich-text-editor-content min-h-[120px] px-3 py-2.5 text-sm text-gray-300 focus:outline-none overflow-auto rounded-b-lg transition-colors duration-150 hover:bg-white/[0.08] [&:empty::before]:content-[attr(data-placeholder)] [&:empty::before]:text-gray-500 ${contentClassName}`}
-        style={{ background: '#1A202C' }}
+        className={`rich-text-editor-content min-h-[120px] px-3 py-2 text-sm text-gray-300 focus:outline-none rounded-b-lg transition-colors duration-150 hover:bg-white/[0.08] [&:empty::before]:content-[attr(data-placeholder)] [&:empty::before]:text-gray-500 ${expandToFit ? 'overflow-visible min-h-fit-content' : 'overflow-auto'} ${contentClassName}`}
+        style={{ background }}
         suppressContentEditableWarning
       />
 

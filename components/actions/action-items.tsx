@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useUIStore } from '@/stores/ui-store';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -102,6 +102,242 @@ const CATEGORIES = [
   { id: 'pdp', label: 'PDP', icon: 'monitor' },
 ];
 
+function DetailModal({
+  item,
+  onClose,
+  descriptionHtml,
+  setDescriptionHtml,
+  descriptionHovered,
+  setDescriptionHovered,
+  descriptionFocused,
+  setDescriptionFocused,
+  onDescriptionCancel,
+  onDescriptionSave,
+}: {
+  item: (typeof MOCK_DETAIL)[1];
+  onClose: () => void;
+  descriptionHtml: string;
+  setDescriptionHtml: (html: string) => void;
+  descriptionHovered: boolean;
+  setDescriptionHovered: (v: boolean) => void;
+  descriptionFocused: boolean;
+  setDescriptionFocused: (v: boolean) => void;
+  onDescriptionCancel: () => void;
+  onDescriptionSave: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <div
+        className="flex flex-col overflow-hidden shadow-2xl"
+        style={{
+          width: 800,
+          height: 535,
+          borderRadius: 12,
+          border: '1px solid #404040',
+          background: '#1A2235',
+          opacity: 1,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div
+          className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+          style={{ background: '#1A2235', borderBottom: '1px solid #404040' }}
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <span className="text-sm font-medium text-gray-400">My Tickets</span>
+            <span className="text-sm text-gray-400">&gt;</span>
+            <span className="text-sm font-medium text-white">#{item.ticketId}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="More">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+            </button>
+            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="Close">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Modal body */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-row" style={{ background: '#1A2235' }}>
+          <div className={`flex-1 min-w-0 flex flex-col gap-3 p-4 ${descriptionFocused ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'}`} style={{ background: '#1A2235' }}>
+            <div
+              className="flex items-center gap-2 flex-shrink-0 items-start"
+              style={{
+                width: 488,
+                height: 64,
+                gap: 8,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid #404040',
+                background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)',
+                opacity: 1,
+              }}
+            >
+              <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: '#1e3a2f' }}>
+                <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1 flex flex-col overflow-visible" style={{ minHeight: 39, gap: 6, opacity: 1 }}>
+                <p className="text-sm font-medium text-white break-words" style={{ textAlign: 'left' }}>{item.productName}</p>
+                <p className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap flex-shrink-0" style={{ textAlign: 'left' }}>
+                  <span>{item.productId}</span><span>•</span><span>{item.brand}</span><span>•</span><span>{item.unit}</span>
+                </p>
+              </div>
+            </div>
+            <div className="flex-shrink-0 rounded-lg py-1.5 px-2 -mx-2 transition-colors duration-150 hover:bg-white/10" style={{ textAlign: 'left' }}>
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">SUBJECT</p>
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
+                <p className="text-base font-semibold text-white">{item.subject}</p>
+              </div>
+            </div>
+            <div
+              className="flex-1 min-h-0 pl-4 -mt-1 flex flex-col py-0 px-2 -mx-2"
+              style={{ textAlign: 'left' }}
+              onMouseEnter={() => setDescriptionHovered(true)}
+              onMouseLeave={() => setDescriptionHovered(false)}
+            >
+              <p className="text-xs font-medium uppercase tracking-wider mb-1 text-gray-400">DESCRIPTION</p>
+              <div
+                className={`flex-1 min-h-0 rounded-lg transition-colors duration-150 ${descriptionFocused ? 'overflow-visible pb-2' : 'overflow-hidden'}`}
+                style={descriptionHovered && !descriptionFocused ? { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' } : undefined}
+              >
+                <RichTextEditor
+                  value={descriptionHtml}
+                  onChange={setDescriptionHtml}
+                  placeholder="Add description..."
+                  className={descriptionFocused ? 'flex-shrink-0' : 'flex-1 min-h-0 h-full'}
+                  contentClassName={`!text-xs ${descriptionHovered && !descriptionFocused ? '!text-white' : ''}`}
+                  onFocusChange={setDescriptionFocused}
+                  background="#1A2235"
+                  expandToFit={descriptionFocused}
+                />
+              </div>
+              {descriptionFocused && (
+                <div className="flex items-center justify-end flex-shrink-0 mt-6 pt-2" style={{ gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={onDescriptionCancel}
+                    className="flex items-center justify-center text-sm font-medium text-white transition-colors hover:bg-white/10"
+                    style={{
+                      width: 64,
+                      height: 28,
+                      borderRadius: 4,
+                      border: '1px solid #404040',
+                      background: '#2a2a2a',
+                      opacity: 1,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDescriptionSave}
+                    className="flex items-center justify-center text-sm font-medium text-white transition-colors hover:opacity-90"
+                    style={{
+                      width: 64,
+                      height: 28,
+                      borderRadius: 4,
+                      border: '1px solid transparent',
+                      background: '#3B82F6',
+                      opacity: 1,
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="w-px flex-shrink-0 self-stretch" style={{ background: '#404040' }} aria-hidden />
+          <div
+            className="flex flex-col flex-shrink-0 min-h-0 overflow-hidden"
+            style={{ width: 280, gap: 12, padding: '16px', background: '#0B111E', opacity: 1 }}
+          >
+            <h3 className="text-sm font-medium text-white flex-shrink-0" style={{ textAlign: 'left' }}>Additional Details</h3>
+            <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 8, marginBottom: 12 }} />
+            <div className="flex flex-col flex-shrink-0" style={{ gap: 12 }}>
+              <DetailModalRow label="Status" vertical>
+                <div
+                  className="inline-flex items-center gap-2 box-border"
+                  style={{ width: 232, height: 28, minWidth: 132, gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', opacity: 1 }}
+                >
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
+                  <span className="text-xs font-normal text-white">{item.status}</span>
+                  <svg className="w-3 h-3 ml-auto flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </DetailModalRow>
+              <DetailModalRow label="Category" vertical>
+                <div className="flex flex-col gap-1">
+                  <span className="inline-flex items-center justify-center text-xs font-normal" style={{ width: 72, height: 23, gap: 10, padding: '4px 8px', borderRadius: 4, opacity: 1, color: '#12B981' }}>{item.category}</span>
+                </div>
+              </DetailModalRow>
+              <DetailModalRow label="Assigned To" vertical>
+                <div
+                  className="inline-flex items-center gap-2 box-border"
+                  style={{ width: 232, height: 28, gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', opacity: 1 }}
+                >
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: '#1e40af' }}>{item.assigneeInitials}</span>
+                  <span className="text-xs font-normal text-white">{item.assignee}</span>
+                </div>
+              </DetailModalRow>
+              <DetailModalRow label="Due Date" vertical>
+                <div
+                  className="inline-flex items-center gap-2 box-border"
+                  style={{ width: 232, height: 28, gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', opacity: 1 }}
+                >
+                  <svg className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-xs font-normal text-white">{item.dueDate}</span>
+                </div>
+              </DetailModalRow>
+            </div>
+            <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
+            <div className="flex flex-col flex-shrink-0" style={{ gap: 10 }}>
+              <DetailModalRow label="Created By" footer>
+                <div className="flex items-center gap-1 justify-end">
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: '#3B82F6' }}>{item.createdByInitials}</span>
+                  <span className="text-xs font-normal text-white">{item.createdBy}</span>
+                </div>
+              </DetailModalRow>
+              <DetailModalRow label="Date Created" footer>
+                <span className="text-xs font-normal text-white">{item.dateCreated}</span>
+              </DetailModalRow>
+              <DetailModalRow label="Ticket ID" footer>
+                <span className="text-xs font-normal text-white">#{item.ticketId}</span>
+              </DetailModalRow>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActionItems() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
@@ -120,6 +356,24 @@ export function ActionItems() {
   const [descriptionHtml, setDescriptionHtml] = useState('');
   const [descriptionHovered, setDescriptionHovered] = useState(false);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
+  const descriptionOriginalRef = useRef<string>('');
+  const prevFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (descriptionFocused && !prevFocusedRef.current) {
+      descriptionOriginalRef.current = descriptionHtml;
+    }
+    prevFocusedRef.current = descriptionFocused;
+  }, [descriptionFocused, descriptionHtml]);
+
+  const handleDescriptionCancel = () => {
+    setDescriptionHtml(descriptionOriginalRef.current);
+    setDescriptionFocused(false);
+  };
+
+  const handleDescriptionSave = () => {
+    setDescriptionFocused(false);
+  };
 
   useEffect(() => {
     if (selectedDetailId !== null) {
@@ -134,7 +388,7 @@ export function ActionItems() {
   }, [selectedDetailId]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary">
+    <div className="flex flex-col flex-1 min-h-0 gap-6 -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary" style={{ backgroundColor: '#0B111E' }}>
       <div className="flex flex-col flex-1 min-h-0 gap-6 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 min-w-0">
           <div className="flex items-center gap-4 min-w-0">
@@ -433,259 +687,21 @@ export function ActionItems() {
         }
       `}</style>
 
-      {selectedDetailId !== null && (() => {
-        const item = MOCK_DETAIL[selectedDetailId as number] ?? MOCK_DETAIL[1];
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
-            onClick={() => setSelectedDetailId(null)}
-          >
-            <div
-              className="flex flex-col overflow-hidden shadow-2xl"
-              style={{
-                width: 800,
-                height: 535,
-                borderRadius: 12,
-                border: '1px solid #404040',
-                background: '#111111',
-                opacity: 1,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal header */}
-              <div
-                className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                style={{ background: '#111111', borderBottom: '1px solid #404040' }}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDetailId(null)}
-                    className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                    aria-label="Close"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                  </button>
-                  <span className="text-sm font-medium text-gray-400">My Tickets</span>
-                  <span className="text-sm text-gray-400">&gt;</span>
-                  <span className="text-sm font-medium text-white">#{item.ticketId}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="More">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                    </svg>
-                  </button>
-                  <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="Minimize">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 14H4v-4h16v4z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDetailId(null)}
-                    className="p-2 rounded-lg hover:bg-white/5 text-gray-400"
-                    aria-label="Close"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+      {selectedDetailId != null && (
+        <DetailModal
+          item={MOCK_DETAIL[selectedDetailId] ?? MOCK_DETAIL[1]}
+          onClose={() => setSelectedDetailId(null)}
+          descriptionHtml={descriptionHtml}
+          setDescriptionHtml={setDescriptionHtml}
+          descriptionHovered={descriptionHovered}
+          setDescriptionHovered={setDescriptionHovered}
+          descriptionFocused={descriptionFocused}
+          setDescriptionFocused={setDescriptionFocused}
+          onDescriptionCancel={handleDescriptionCancel}
+          onDescriptionSave={handleDescriptionSave}
+        />
+      )}
 
-              {/* Modal body - no scroll, all visible */}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-row" style={{ background: '#111111' }}>
-                {/* Left panel */}
-                <div className="flex-1 min-w-0 flex flex-col gap-3 p-4 overflow-hidden" style={{ background: '#111111' }}>
-                    <div
-                      className="flex items-center gap-2 flex-shrink-0 items-start"
-                      style={{
-                        width: 488,
-                        height: 64,
-                        gap: 8,
-                        padding: '8px 12px',
-                        borderRadius: 8,
-                        border: '1px solid #404040',
-                        background: '#1a1a1a',
-                        opacity: 1,
-                      }}
-                    >
-                      <div
-                        className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-                        style={{ background: '#1e3a2f' }}
-                      >
-                        <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                        </svg>
-                      </div>
-                      <div
-                        className="min-w-0 flex-1 flex flex-col overflow-visible"
-                        style={{
-                          minHeight: 39,
-                          gap: 6,
-                          opacity: 1,
-                        }}
-                      >
-                        <p className="text-sm font-medium text-white break-words" style={{ textAlign: 'left' }}>{item.productName}</p>
-                        <p className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap flex-shrink-0" style={{ textAlign: 'left' }}>
-                          <span>{item.productId}</span><span>•</span><span>{item.brand}</span><span>•</span><span>{item.unit}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 rounded-lg py-1.5 px-2 -mx-2 transition-colors duration-150 hover:bg-white/[0.08]" style={{ textAlign: 'left' }}>
-                      <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">SUBJECT</p>
-                      <div className="flex items-center gap-2">
-                        <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
-                        <p className="text-base font-semibold text-white">{item.subject}</p>
-                      </div>
-                    </div>
-                    <div
-                      className="flex-1 min-h-0 pl-4 mt-4 flex flex-col rounded-lg py-1.5 px-2 -mx-2"
-                      style={{ textAlign: 'left' }}
-                    >
-                      <p className="text-xs font-medium uppercase tracking-wider mb-1.5 text-gray-400">DESCRIPTION</p>
-                      <div
-                        className={`flex-1 min-h-0 overflow-hidden rounded-lg -mx-2 px-4 py-3 transition-colors duration-150 ${descriptionHovered && !descriptionFocused ? 'bg-white/[0.08]' : ''}`}
-                        onMouseEnter={() => setDescriptionHovered(true)}
-                        onMouseLeave={() => setDescriptionHovered(false)}
-                      >
-                        <RichTextEditor
-                          value={descriptionHtml}
-                          onChange={setDescriptionHtml}
-                          placeholder="Add description..."
-                          className="h-full"
-                          contentClassName={descriptionHovered && !descriptionFocused ? '!text-white' : ''}
-                          onFocusChange={setDescriptionFocused}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                {/* Separator - full height line */}
-                <div
-                  className="w-px flex-shrink-0 self-stretch"
-                  style={{ background: '#404040' }}
-                  aria-hidden
-                />
-
-                {/* Right panel - Additional Details (fills height) */}
-                <div
-                  className="flex flex-col flex-shrink-0 min-h-0 overflow-hidden"
-                  style={{
-                    width: 280,
-                    gap: 12,
-                    padding: '16px',
-                    background: '#111111',
-                    opacity: 1,
-                  }}
-                >
-                    <h3 className="text-sm font-medium text-white flex-shrink-0" style={{ textAlign: 'left' }}>Additional Details</h3>
-                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 8, marginBottom: 12 }} />
-                    <div className="flex flex-col flex-shrink-0" style={{ gap: 12 }}>
-                      <DetailModalRow label="Status" vertical>
-                        <div
-                          className="inline-flex items-center gap-2 box-border"
-                          style={{
-                            width: 232,
-                            height: 28,
-                            minWidth: 132,
-                            gap: 8,
-                            padding: '6px 12px',
-                            borderRadius: 4,
-                            border: '1px solid #404040',
-                            background: '#1a1a1a',
-                            opacity: 1,
-                          }}
-                        >
-                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
-                          <span className="text-xs font-normal text-white">{item.status}</span>
-                          <svg className="w-3 h-3 ml-auto flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </div>
-                      </DetailModalRow>
-                      <DetailModalRow label="Category" vertical>
-                        <div className="flex flex-col gap-1">
-                          <span
-                            className="inline-flex items-center justify-center text-xs font-normal"
-                            style={{
-                              width: 72,
-                              height: 23,
-                              gap: 10,
-                              padding: '4px 8px',
-                              borderRadius: 4,
-                              opacity: 1,
-                              color: '#12B981',
-                            }}
-                          >
-                            {item.category}
-                          </span>
-                        </div>
-                      </DetailModalRow>
-                      <DetailModalRow label="Assigned To" vertical>
-                        <div
-                          className="inline-flex items-center gap-2 box-border"
-                          style={{
-                            width: 232,
-                            height: 28,
-                            gap: 8,
-                            padding: '6px 12px',
-                            borderRadius: 6,
-                            border: '1px solid #404040',
-                            background: '#1a1a1a',
-                            opacity: 1,
-                          }}
-                        >
-                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-medium flex-shrink-0" style={{ background: '#1e40af' }}>{item.assigneeInitials}</span>
-                          <span className="text-xs font-normal text-white">{item.assignee}</span>
-                        </div>
-                      </DetailModalRow>
-                      <DetailModalRow label="Due Date" vertical>
-                        <div
-                          className="inline-flex items-center gap-2 box-border"
-                          style={{
-                            width: 232,
-                            height: 28,
-                            gap: 8,
-                            padding: '6px 12px',
-                            borderRadius: 4,
-                            border: '1px solid #404040',
-                            background: '#1A2235',
-                            opacity: 1,
-                          }}
-                        >
-                          <svg className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span className="text-xs font-normal text-white">{item.dueDate}</span>
-                        </div>
-                      </DetailModalRow>
-                    </div>
-                    <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
-                    <div className="flex flex-col flex-shrink-0" style={{ gap: 10 }}>
-                      <DetailModalRow label="Created By" footer>
-                        <div className="flex items-center gap-1 justify-end">
-                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-medium flex-shrink-0" style={{ background: '#3B82F6' }}>{item.createdByInitials}</span>
-                          <span className="text-xs font-normal text-white">{item.createdBy}</span>
-                        </div>
-                      </DetailModalRow>
-                      <DetailModalRow label="Date Created" footer>
-                        <span className="text-xs font-normal text-white">{item.dateCreated}</span>
-                      </DetailModalRow>
-                      <DetailModalRow label="Ticket ID" footer>
-                        <span className="text-xs font-normal text-white">#{item.ticketId}</span>
-                      </DetailModalRow>
-                    </div>
-                  </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {showNewActionModal && (
         <div
