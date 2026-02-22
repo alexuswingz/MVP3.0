@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Settings } from 'lucide-react';
+import ForecastSettingsModal from '@/components/forecast/forecast-settings-modal';
 import {
   ComposedChart,
   Area,
@@ -81,6 +82,13 @@ export default function ForecastUnit({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const zoomBoxDragRef = useRef<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
 
+  // Range selection (click-drag when zoom is NOT active)
+  const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
+  const rangeSelectingRef = useRef(false);
+  const [forecastSettingsModalOpen, setForecastSettingsModalOpen] = useState(false);
+  const [selectedTimeRangeView, setSelectedTimeRangeView] = useState('All Time');
+  const [timeRangeSelectFocused, setTimeRangeSelectFocused] = useState(false);
+
   const chartData = useMemo((): ChartDataPoint[] => MOCK_CHART_DATA, []);
   const todayTs = useMemo(() => {
     const now = new Date();
@@ -100,6 +108,47 @@ export default function ForecastUnit({
     });
     return closest;
   }, [chartData, todayTs]);
+
+  const todayLineTimestamp = todayDataPoint?.timestamp ?? null;
+
+  // Range selection effective (capped at today for display)
+  const chartRangeSelectionEffective = useMemo(() => {
+    if (chartRangeSelection.startTimestamp == null || chartRangeSelection.endTimestamp == null) return null;
+    const lo = Math.min(chartRangeSelection.startTimestamp, chartRangeSelection.endTimestamp);
+    const hi = Math.max(chartRangeSelection.startTimestamp, chartRangeSelection.endTimestamp);
+    const capTs = todayLineTimestamp ?? todayTs;
+    let displayLo = lo;
+    let displayHi = hi;
+    let sumHi = hi;
+    const isForecastOnly = todayTs != null && lo >= todayTs;
+    if (capTs != null) {
+      if (lo < capTs && hi >= capTs) {
+        displayHi = capTs;
+        sumHi = capTs;
+      } else if (isForecastOnly) {
+        displayLo = capTs;
+      }
+    }
+    return { displayLo, displayHi, sumLo: lo, sumHi, isForecastOnly };
+  }, [chartRangeSelection.startTimestamp, chartRangeSelection.endTimestamp, todayLineTimestamp, todayTs]);
+
+  // Sum units over selected range
+  const chartRangeSum = useMemo(() => {
+    if (!chartData.length || !chartRangeSelectionEffective) return null;
+    const { sumLo, sumHi, isForecastOnly } = chartRangeSelectionEffective;
+    let unitsSold = 0;
+    let unitsSmoothed = 0;
+    chartData.forEach((d) => {
+      const t = d.timestamp;
+      if (t >= sumLo && t <= sumHi) {
+        unitsSold += Number(d.unitsSold) || 0;
+        unitsSmoothed += Number(d.forecastBase ?? d.forecastAdjusted) || 0;
+      }
+    });
+    return { unitsSold, unitsSmoothed, isForecastOnly };
+  }, [chartData, chartRangeSelectionEffective]);
+
+  const unitCost = 0; // For revenue gap display
 
   // Segment boundaries (mock: FBA 45d, Total 65d, Forecast 130d from today)
   const fbaDays = timeline.fbaAvailable ?? 45;
@@ -266,6 +315,7 @@ export default function ForecastUnit({
       if (t == null) return;
       e.preventDefault();
       if (zoomToolActive) {
+        // Zoom mode: click-drag zooms
         if (zoomFirstClickTimestamp == null) {
           setZoomFirstClickTimestamp(t);
           zoomBoxDragRef.current = { startTimestamp: t, endTimestamp: t };
@@ -285,20 +335,20 @@ export default function ForecastUnit({
         setZoomBox({ startTimestamp: null, endTimestamp: null });
         return;
       }
-      zoomBoxDragRef.current = { startTimestamp: t, endTimestamp: t };
-      setZoomBox({ startTimestamp: t, endTimestamp: t });
+      // Range selection mode (default): click-drag selects range
+      rangeSelectingRef.current = true;
+      setChartRangeSelection({ startTimestamp: t, endTimestamp: t });
     },
     [chartData.length, zoomToolActive, zoomFirstClickTimestamp, zoomDomain, getTimestampFromClientX, toLocalDateStr]
   );
 
   const handleChartZoomMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      const t = getTimestampFromClientX(e.clientX);
       if (zoomToolActive && zoomFirstClickTimestamp != null) {
-        const t = getTimestampFromClientX(e.clientX);
         setZoomPreviewTimestamp(t ?? null);
       }
-      if (zoomBoxDragRef.current.startTimestamp != null) {
-        const t = getTimestampFromClientX(e.clientX);
+      if (zoomToolActive && zoomBoxDragRef.current.startTimestamp != null) {
         if (t != null) {
           zoomBoxDragRef.current.endTimestamp = t;
           setZoomBox((prev) =>
@@ -306,12 +356,24 @@ export default function ForecastUnit({
           );
         }
       }
+      if (rangeSelectingRef.current && t != null) {
+        setChartRangeSelection((prev) => (prev.startTimestamp != null ? { ...prev, endTimestamp: t } : prev));
+      }
     },
     [zoomToolActive, zoomFirstClickTimestamp, getTimestampFromClientX]
   );
 
   const handleChartZoomMouseUp = useCallback(() => {
-    if (zoomBoxDragRef.current.startTimestamp != null) {
+    if (rangeSelectingRef.current) {
+      rangeSelectingRef.current = false;
+      setChartRangeSelection((prev) => {
+        if (prev.startTimestamp == null) return prev;
+        const end = prev.endTimestamp ?? prev.startTimestamp;
+        if (prev.startTimestamp === end) return { startTimestamp: null, endTimestamp: null };
+        return prev;
+      });
+    }
+    if (zoomToolActive && zoomBoxDragRef.current.startTimestamp != null) {
       const { startTimestamp: s, endTimestamp: endTs } = zoomBoxDragRef.current;
       if (chartData.length && s != null && endTs != null) {
         const lo = Math.min(s, endTs);
@@ -319,11 +381,9 @@ export default function ForecastUnit({
         if (hi > lo) {
           setZoomHistory((hist) => [...hist, zoomDomain]);
           setZoomDomain({ left: toLocalDateStr(lo), right: toLocalDateStr(hi) });
-          if (zoomToolActive) {
-            setZoomToolActive(false);
-            setZoomFirstClickTimestamp(null);
-            setZoomPreviewTimestamp(null);
-          }
+          setZoomToolActive(false);
+          setZoomFirstClickTimestamp(null);
+          setZoomPreviewTimestamp(null);
         }
       }
       zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
@@ -336,6 +396,15 @@ export default function ForecastUnit({
       if (zoomBoxDragRef.current.startTimestamp != null) {
         zoomBoxDragRef.current = { startTimestamp: null, endTimestamp: null };
         setZoomBox({ startTimestamp: null, endTimestamp: null });
+      }
+      if (rangeSelectingRef.current) {
+        rangeSelectingRef.current = false;
+        setChartRangeSelection((prev) => {
+          if (prev.startTimestamp == null) return prev;
+          const end = prev.endTimestamp ?? prev.startTimestamp;
+          if (prev.startTimestamp === end) return { startTimestamp: null, endTimestamp: null };
+          return prev;
+        });
       }
     };
     window.addEventListener('mouseup', onUp);
@@ -447,34 +516,79 @@ export default function ForecastUnit({
             gap: '0.5rem',
           }}
         >
-          <h3 style={{ fontSize: inventoryOnly ? '0.85rem' : '1rem', fontWeight: '600', color: '#fff', margin: 0 }}>
+          <h3 style={{ fontSize: inventoryOnly ? '0.85rem' : '1rem', fontWeight: '600', color: '#fff', margin: 0, flexShrink: 0 }}>
             Unit Forecast
           </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {(zoomDomain.left != null || zoomDomain.right != null) && (
-              <button
-                type="button"
-                onClick={handleZoomReset}
-                title={zoomHistory.length > 0 ? 'Return to previous zoom level' : 'Return to full view'}
+          {/* Range selection stats bar - on same row as Unit Forecast */}
+          {chartRangeSum && chartRangeSelectionEffective && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1.5rem',
+                flexWrap: 'wrap',
+                fontSize: '0.75rem',
+                flex: 1,
+                justifyContent: 'center',
+                minWidth: 0,
+              }}
+            >
+              <span
                 style={{
-                  width: '57px',
-                  height: '23px',
-                  padding: 0,
-                  display: 'flex',
+                  color: '#e2e8f0',
+                  marginRight: '0.25rem',
+                  padding: '4px 8px',
+                  border: '1px solid #334155',
+                  borderRadius: '4px',
+                  backgroundColor: '#1A2235',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  color: '#3B82F6',
-                  backgroundColor: '#0f172a',
-                  border: '1px solid #3B82F6',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 500,
+                  boxSizing: 'border-box',
+                  fontSize: '0.625rem',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  minWidth: 102,
+                  maxWidth: 102,
+                  height: 20,
+                  flexShrink: 0,
                 }}
+                title="Selected date range"
               >
-                Reset
-              </button>
-            )}
+                {`${new Date(chartRangeSelectionEffective.displayLo).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })} - ${new Date(chartRangeSelectionEffective.displayHi).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}`}
+              </span>
+              {chartRangeSum.isForecastOnly ? (
+                <>
+                  <span style={{ color: '#94a3b8' }}>
+                    FORECASTED UNITS: <strong style={{ color: '#22c55e', fontWeight: 600 }}>{chartRangeSum.unitsSmoothed.toLocaleString()}</strong>
+                  </span>
+                  <span style={{ color: '#94a3b8' }}>
+                    FORECASTED REVENUE: <strong style={{ color: '#22c55e', fontWeight: 600 }}>
+                      {(chartRangeSum.unitsSmoothed * unitCost).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: '#94a3b8' }}>
+                    UNITS SOLD: <strong style={{ color: '#e2e8f0', fontWeight: 600 }}>{chartRangeSum.unitsSold.toLocaleString()}</strong>
+                  </span>
+                  <span style={{ color: '#94a3b8' }}>
+                    POT. UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 600 }}>{chartRangeSum.unitsSmoothed.toLocaleString()}</strong>
+                  </span>
+                  <span style={{ color: '#94a3b8' }}>
+                    REVENUE GAP: <strong style={{ color: '#22c55e', fontWeight: 600 }}>
+                      {((chartRangeSum.unitsSmoothed - chartRangeSum.unitsSold) * unitCost).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </strong>
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
+            {/* Zoom on the left */}
             <button
               type="button"
               title={zoomToolActive ? 'Click two points to zoom, or click and drag then release' : 'Zoom: click to enable, then click two points or click-drag-release to zoom'}
@@ -508,8 +622,35 @@ export default function ForecastUnit({
                 <path d="M10 7V13M7 10H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            {(zoomDomain.left != null || zoomDomain.right != null) && (
+              <button
+                type="button"
+                onClick={handleZoomReset}
+                title={zoomHistory.length > 0 ? 'Return to previous zoom level' : 'Return to full view'}
+                style={{
+                  width: '57px',
+                  height: '23px',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  color: '#3B82F6',
+                  backgroundColor: '#0f172a',
+                  border: '1px solid #3B82F6',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Reset
+              </button>
+            )}
             <button
               type="button"
+              onClick={() => setForecastSettingsModalOpen(true)}
+              aria-label="Forecast Settings"
+              title="Forecast Settings"
               style={{
                 padding: '0.5rem',
                 color: '#94a3b8',
@@ -524,6 +665,41 @@ export default function ForecastUnit({
             >
               <Settings className="w-5 h-5" strokeWidth={1.5} />
             </button>
+            {/* Time range dropdown - right after settings */}
+            <select
+              value={selectedTimeRangeView}
+              onChange={(e) => setSelectedTimeRangeView(e.target.value)}
+              onFocus={() => setTimeRangeSelectFocused(true)}
+              onBlur={() => setTimeRangeSelectFocused(false)}
+              style={{
+                padding: '0 0.625rem',
+                paddingRight: '1.75rem',
+                borderRadius: '0.25rem',
+                backgroundColor: '#1A1F2E',
+                color: '#fff',
+                border: timeRangeSelectFocused ? '1px solid #3B82F6' : '1px solid #2D3748',
+                outline: 'none',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23ffffff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '12px',
+                width: '110px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                boxSizing: 'border-box',
+              }}
+            >
+              <option value="30 Day">30 Day</option>
+              <option value="6 Months">6 Months</option>
+              <option value="1 Year">1 Year</option>
+              <option value="2 Years">2 Years</option>
+              <option value="All Time">All Time</option>
+            </select>
           </div>
         </div>
 
@@ -724,7 +900,19 @@ export default function ForecastUnit({
                 yAxisId="left"
               />
             )}
-            {zoomBox.startTimestamp != null && zoomBox.endTimestamp != null && (
+            {/* Range selection highlight (blue, when not zooming) */}
+            {!zoomToolActive && chartRangeSelectionEffective && (
+              <ReferenceArea
+                x1={chartRangeSelectionEffective.displayLo}
+                x2={chartRangeSelectionEffective.displayHi}
+                fill="#3b82f6"
+                fillOpacity={0.15}
+                yAxisId="left"
+                stroke="#3b82f6"
+                strokeOpacity={0.5}
+              />
+            )}
+            {zoomToolActive && zoomBox.startTimestamp != null && zoomBox.endTimestamp != null && (
               <ReferenceArea
                 x1={Math.min(zoomBox.startTimestamp, zoomBox.endTimestamp)}
                 x2={Math.max(zoomBox.startTimestamp, zoomBox.endTimestamp)}
@@ -889,6 +1077,13 @@ export default function ForecastUnit({
           </div>
         </div>
       </div>
+
+      <ForecastSettingsModal
+        isOpen={forecastSettingsModalOpen}
+        onClose={() => setForecastSettingsModalOpen(false)}
+        isDarkMode={isDarkMode}
+        overlayZIndex={2200}
+      />
     </div>
   );
 }

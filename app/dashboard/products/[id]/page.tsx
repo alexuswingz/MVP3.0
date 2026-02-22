@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   MoreVertical,
   Settings,
-  Check,
   Pencil,
 } from 'lucide-react';
 import { useProductStore } from '@/stores/product-store';
@@ -124,80 +123,39 @@ export default function ProductDetailPage() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="w-full min-h-[444px]"
+          className="w-full min-h-[440px]"
           style={{
             opacity: 1,
             backgroundColor: cardBg,
             borderWidth: 1,
             borderStyle: 'solid',
             borderColor: cardBorder,
-            borderRadius: '8px',
+            borderRadius: 8,
             padding: '24px',
             boxSizing: 'border-box',
           }}
         >
-          {/* Card header: Essential Info + Completed (right beside) */}
-          <div className="flex items-center gap-3 mb-4">
+          {/* Card header: Essential Info + Edit Info */}
+          <div className="flex items-center justify-between gap-4 mb-4">
             <h1 className="text-xl font-semibold" style={{ color: textPrimary }}>
               Essential Info
             </h1>
-            <div
-              className="inline-flex items-center text-sm font-medium flex-shrink-0"
-              style={{
-                width: 103,
-                height: 24,
-                gap: 10,
-                opacity: 1,
-                borderRadius: '16px',
-                paddingTop: 4,
-                paddingRight: 8,
-                paddingBottom: 4,
-                paddingLeft: 8,
-                backgroundColor: '#E2FFE9',
-                color: '#166534',
-                boxSizing: 'border-box',
-                justifyContent: 'center',
-              }}
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline flex-shrink-0"
             >
-              <Check
-                className="flex-shrink-0"
-                style={{ width: 13, height: 9.756789207458496, opacity: 1 }}
-              />
-              <span
-                style={{
-                  width: 63,
-                  height: 15,
-                  opacity: 1,
-                  display: 'inline-block',
-                  fontFamily: 'Inter, sans-serif',
-                  fontWeight: 400,
-                  fontStyle: 'normal',
-                  fontSize: '12px',
-                  lineHeight: '100%',
-                  letterSpacing: 0,
-                  boxSizing: 'border-box',
-                }}
-              >
-                Completed
-              </span>
-            </div>
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Info
+            </button>
           </div>
           <div style={{ height: 1, backgroundColor: dividerColor, marginBottom: 24 }} />
 
           {/* Core Product Info */}
           <section className="mb-6">
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textPrimary }}>
-                Core Product Info
-              </h2>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                Edit Info
-              </button>
-            </div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: textPrimary }}>
+              Core Product Info
+            </h2>
+            <div style={{ height: 1, backgroundColor: dividerColor, marginBottom: 24 }} />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
               <InfoField label="Brand Name" value={product.brand} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
               <InfoField label="Product Title" value={product.name} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} wrap />
@@ -207,18 +165,10 @@ export default function ProductDetailPage() {
 
           {/* Packaging */}
           <section>
-            <div className="flex items-center justify-between gap-4 mb-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: textPrimary }}>
-                Packaging
-              </h2>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                Edit Info
-              </button>
-            </div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: textPrimary }}>
+              Packaging
+            </h2>
+            <div style={{ height: 1, backgroundColor: dividerColor, marginBottom: 24 }} />
             {packaging && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <InfoField label="Parent ASIN" value={packaging.parentAsin} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
@@ -261,7 +211,7 @@ function InfoField({
 }) {
   return (
     <div
-      className="min-w-0"
+      className="min-w-0 overflow-hidden"
       style={{
         width: '100%',
         minHeight: 49,
@@ -270,7 +220,7 @@ function InfoField({
         borderWidth: 1,
         borderStyle: 'solid',
         borderColor: border,
-        borderRadius: '8px',
+        borderRadius: 8,
         paddingTop: 8,
         paddingRight: 16,
         paddingBottom: 8,
@@ -283,12 +233,20 @@ function InfoField({
         boxSizing: 'border-box',
       }}
     >
-      <div className="text-xs font-normal" style={{ color: labelColor }}>
+      <div
+        className="min-w-0 truncate font-normal text-xs"
+        style={{ color: labelColor }}
+      >
         {label}
       </div>
       <div
-        className={`min-w-0 text-left font-semibold ${wrap ? 'break-words' : 'truncate'}`}
-        style={{ color: textColor, fontSize: '14px' }}
+        className="min-w-0 max-w-full text-left font-semibold text-sm"
+        style={{
+          color: textColor,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
         title={value}
       >
         {value}
