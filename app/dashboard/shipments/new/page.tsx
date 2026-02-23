@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, Loader2 } from 'lucide-react';
 import type { NewShipmentForm } from '../components/NewShipmentModal';
 import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
 import { AddProductsNonTable, type NonTableProductRow } from './components/AddProductsNonTable';
@@ -11,6 +11,8 @@ import { DOISettingsModal } from './components/DOISettingsModal';
 import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
 import { ShipmentDetailsModal, type ShipmentDetailsData } from './components/ShipmentDetailsModal';
+import ExportTemplateModal from './components/ExportTemplateModal';
+import { api, type ForecastTableResponse } from '@/lib/api';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
 const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
@@ -103,62 +105,48 @@ const HEADER_BORDER = '#334155';
 const CARD_BG = '#1F2937';
 const BORDER = '#4B5563';
 
-const MOCK_PRODUCTS_RAW = [
-  { id: '1', name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 9720, daysOfInventory: 9 },
-  { id: '2', name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 8460, daysOfInventory: 9 },
-  { id: '3', name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 4608, daysOfInventory: 15 },
-  { id: '4', name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 4260, daysOfInventory: 37 },
-  { id: '5', name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3780, daysOfInventory: 56 },
-  { id: '6', name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3060, daysOfInventory: 59 },
-  { id: '7', name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 3360, daysOfInventory: 68 },
-  { id: '8', name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 1320, daysOfInventory: 97 },
-  { id: '9', name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 180, daysOfInventory: 132 },
-  { id: '10', name: 'TPS NUTRIENTS Air Plant Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 360, daysOfInventory: 134 },
-  { id: '11', name: 'African Violet Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', inventory: 926, unitsToMake: 240, daysOfInventory: 139 },
-];
-
-/** Compute suggested units to make so inventory reaches target DOI (match 1000bananas2.0 logic). */
-function suggestedUnitsToMake(
-  inventory: number,
-  daysOfInventory: number,
-  requiredDoiDays: number
-): number {
-  if (requiredDoiDays <= 0 || daysOfInventory <= 0) return 0;
-  const dailyDemand = inventory / daysOfInventory;
-  const targetInventory = requiredDoiDays * dailyDemand;
-  return Math.max(0, Math.round(targetInventory - inventory));
+// Transform API response to AddProductRow format
+function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]): AddProductRow {
+  const inv = apiRow.inventory;
+  return {
+    id: apiRow.product.id,
+    brand: apiRow.product.brand,
+    product: apiRow.product.name,
+    asin: apiRow.product.asin,
+    variation1: apiRow.product.size || '-',
+    variation2: '-',
+    parentAsin: apiRow.product.asin,
+    childAsin: apiRow.product.asin,
+    in: inv.total,
+    inventory: inv.total,
+    totalDoi: apiRow.daysOfInventory,
+    fbaAvailableDoi: apiRow.doiFba,
+    velocityTrend: 'Up',
+    boxInventory: Math.floor(inv.total / 24),
+    unitsOrdered7: Math.round(apiRow.avgWeeklySales),
+    unitsOrdered30: Math.round(apiRow.avgWeeklySales * 4),
+    unitsOrdered90: Math.round(apiRow.avgWeeklySales * 12),
+    fbaTotal: inv.fbaTotal,
+    fbaAvailable: inv.fbaAvailable,
+    awdTotal: inv.awdTotal,
+    unitsToMake: apiRow.unitsToMake,
+  };
 }
 
-function toAddProductRows(
-  list: typeof MOCK_PRODUCTS_RAW,
-  requiredDoiDays: number
-): AddProductRow[] {
-  return list.map((p) => {
-    const units = suggestedUnitsToMake(p.inventory, p.daysOfInventory, requiredDoiDays);
-    return {
-      id: p.id,
-      brand: p.brand,
-      product: p.name,
-      asin: p.asin,
-      variation1: '-',
-      variation2: '-',
-      parentAsin: p.asin,
-      childAsin: p.asin,
-      in: p.inventory,
-      inventory: p.inventory,
-      totalDoi: p.daysOfInventory,
-      fbaAvailableDoi: Math.floor(p.daysOfInventory * 0.8),
-      velocityTrend: 'Up',
-      boxInventory: Math.floor(p.inventory / 24),
-      unitsOrdered7: 120,
-      unitsOrdered30: 480,
-      unitsOrdered90: 1440,
-      fbaTotal: p.inventory,
-      fbaAvailable: Math.floor(p.inventory * 0.6),
-      awdTotal: 0,
-      unitsToMake: units,
-    };
-  });
+// Transform API response to NonTableProductRow format
+function transformApiRowToNonTableRow(apiRow: ForecastTableResponse['rows'][0]): NonTableProductRow {
+  const inv = apiRow.inventory;
+  return {
+    id: apiRow.product.id,
+    brand: apiRow.product.brand,
+    product: apiRow.product.name,
+    asin: apiRow.product.asin,
+    size: apiRow.product.size || '',
+    inventory: inv.total,
+    unitsToMake: apiRow.unitsToMake,
+    daysOfInventory: apiRow.daysOfInventory,
+    fbaAvailableDoi: apiRow.doiFba,
+  };
 }
 
 export default function NewShipmentAddProductsPage() {
@@ -168,6 +156,11 @@ export default function NewShipmentAddProductsPage() {
   const [requiredDoi, setRequiredDoi] = useState('150');
   const [savedDefaultDoi, setSavedDefaultDoi] = useState('150');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // API data state
+  const [apiData, setApiData] = useState<ForecastTableResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
   const [showDoiModal, setShowDoiModal] = useState(false);
@@ -177,7 +170,7 @@ export default function NewShipmentAddProductsPage() {
   const [pendingSaveDefaultDoi, setPendingSaveDefaultDoi] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<'add-products' | 'book-shipment'>('add-products');
   const [showNgoosModal, setShowNgoosModal] = useState(false);
-  const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
+  const [showExportTemplateModal, setShowExportTemplateModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
   const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
@@ -192,6 +185,25 @@ export default function NewShipmentAddProductsPage() {
     setShipmentData(getShipmentFromStorage());
   }, []);
 
+  // Fetch forecast data from API
+  const fetchForecastData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.getForecastTable();
+      setApiData(data);
+    } catch (err) {
+      console.error('Failed to fetch forecast data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load product data');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchForecastData();
+  }, [fetchForecastData]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
@@ -205,40 +217,37 @@ export default function NewShipmentAddProductsPage() {
   const dateStr = formatShipmentDate(shipmentData);
   const typeStr = shipmentData?.shipmentType || 'AWD';
 
-  const filteredRawProducts = useMemo(
-    () =>
-      MOCK_PRODUCTS_RAW.filter(
-        (p) =>
-          !searchTerm ||
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.asin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.size.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    [searchTerm]
-  );
+  // Filter API data based on search term
+  const filteredApiRows = useMemo(() => {
+    if (!apiData?.rows) return [];
+    return apiData.rows.filter(
+      (r) =>
+        !searchTerm ||
+        r.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.product.asin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.product.size || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.product.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [apiData?.rows, searchTerm]);
+
   const requiredDoiNum = Math.max(0, parseInt(String(requiredDoi).replace(/\D/g, '') || '150', 10) || 150);
+  
+  // Transform API rows to table format
   const tableRows = useMemo(
-    () => toAddProductRows(filteredRawProducts, requiredDoiNum),
-    [filteredRawProducts, requiredDoiNum]
+    () => filteredApiRows.map(transformApiRowToAddProductRow),
+    [filteredApiRows]
   );
+  
+  // Transform API rows to non-table format
   const nonTableRows: NonTableProductRow[] = useMemo(
-    () =>
-      filteredRawProducts.map((p) => ({
-        id: p.id,
-        brand: p.brand,
-        product: p.name,
-        asin: p.asin,
-        size: p.size,
-        inventory: p.inventory,
-        unitsToMake: suggestedUnitsToMake(p.inventory, p.daysOfInventory, requiredDoiNum),
-        daysOfInventory: p.daysOfInventory,
-        fbaAvailableDoi: Math.floor(p.daysOfInventory * 0.8),
-      })),
-    [filteredRawProducts, requiredDoiNum]
+    () => filteredApiRows.map(transformApiRowToNonTableRow),
+    [filteredApiRows]
   );
-  const totalProducts = filteredRawProducts.length;
-  const totalPalettes = totalProducts * 0.5;
-  const totalUnits = tableRows.reduce((acc, r) => acc + (Number(r.unitsToMake) ?? 0), 0);
+  
+  // Use summary data from API or calculate from rows
+  const totalProducts = apiData?.summary?.totalProducts ?? filteredApiRows.length;
+  const totalPalettes = apiData?.summary?.totalPallets ?? (totalProducts * 0.5);
+  const totalUnits = apiData?.summary?.totalUnitsToMake ?? tableRows.reduce((acc, r) => acc + (Number(r.unitsToMake) ?? 0), 0);
   const totalBoxes = totalUnits / 24;
   const totalWeightLbs = totalBoxes * 12;
 
@@ -1007,7 +1016,31 @@ export default function NewShipmentAddProductsPage() {
             }}
           >
           {activeWorkflowTab === 'add-products' ? (
-            tableMode ? (
+            loading ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+                <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3B82F6' }} />
+                <span style={{ color: '#9CA3AF', fontSize: 14 }}>Loading products...</span>
+              </div>
+            ) : error ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+                <span style={{ color: '#EF4444', fontSize: 14 }}>{error}</span>
+                <button
+                  type="button"
+                  onClick={fetchForecastData}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    border: 'none',
+                    backgroundColor: '#3B82F6',
+                    color: '#fff',
+                    fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : tableMode ? (
               <AddProductsTable
                 rows={tableRows}
                 visibleColumnKeys={visibleColumnKeys}
@@ -1016,7 +1049,7 @@ export default function NewShipmentAddProductsPage() {
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
-                onExport={() => setShowExportCompleteModal(true)}
+                onExport={() => setShowExportTemplateModal(true)}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -1031,7 +1064,7 @@ export default function NewShipmentAddProductsPage() {
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
-                onExport={() => setShowExportCompleteModal(true)}
+                onExport={() => setShowExportTemplateModal(true)}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -1041,9 +1074,18 @@ export default function NewShipmentAddProductsPage() {
           ) : (
             <BookShipmentForm
                 initialShipmentType={shipmentData?.shipmentType ?? ''}
-                onComplete={() => {
+                products={tableRows.map((row) => ({
+                  id: row.id,
+                  asin: row.asin,
+                  sku: row.asin,
+                  name: row.product,
+                  quantity: row.unitsToMake || 0,
+                  recommendedQuantity: row.unitsToMake || 0,
+                }))}
+                onComplete={(shipmentId) => {
                   saveCompletedShipmentToStorage(shipmentData, dateStr, typeStr);
                   setShowShipmentBookedModal(true);
+                  console.log('Shipment booked with ID:', shipmentId);
                 }}
               />
           )}
@@ -1195,122 +1237,39 @@ export default function NewShipmentAddProductsPage() {
         </div>
       )}
 
-      {/* Export Complete modal */}
-      {showExportCompleteModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            backdropFilter: 'blur(3px)',
-          }}
-          onClick={() => setShowExportCompleteModal(false)}
-        >
-          <div
-            style={{
-              width: 264,
-              borderRadius: 12,
-              border: '1px solid #334155',
-              backgroundColor: '#1A2235',
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 24,
-              position: 'relative',
-              boxSizing: 'border-box',
-              boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setShowExportCompleteModal(false)}
-              style={{
-                position: 'absolute',
-                top: 16,
-                right: 16,
-                width: 28,
-                height: 28,
-                border: 'none',
-                backgroundColor: 'transparent',
-                color: '#9CA3AF',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Close"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M11 3L3 11M3 3l8 8" />
-              </svg>
-            </button>
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 32,
-                padding: 8,
-                backgroundColor: '#22C55E',
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                flexShrink: 0,
-                boxSizing: 'border-box',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 20,
-                fontWeight: 700,
-                color: '#FFFFFF',
-                textAlign: 'center',
-              }}
-            >
-              Export Complete!
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setShowExportCompleteModal(false);
-                setActiveWorkflowTab('book-shipment');
-              }}
-              style={{
-                width: '100%',
-                maxWidth: 216,
-                height: 31,
-                padding: 0,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 16,
-                borderRadius: 8,
-                border: 'none',
-                backgroundColor: '#3B82F6',
-                color: '#FFFFFF',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Begin Book Shipment
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Export Template Modal */}
+      <ExportTemplateModal
+        isOpen={showExportTemplateModal}
+        onClose={() => setShowExportTemplateModal(false)}
+        onExport={(selectedType) => {
+          // Update shipment data with selected type if needed
+          if (shipmentData) {
+            setShipmentData({
+              ...shipmentData,
+              shipmentType: selectedType.toUpperCase(),
+            });
+          }
+        }}
+        onBeginNextStep={() => {
+          setShowExportTemplateModal(false);
+          setActiveWorkflowTab('book-shipment');
+        }}
+        products={tableRows.map((row) => ({
+          id: row.id,
+          childSku: row.asin,
+          sku: row.asin,
+          qty: row.unitsToMake || 0,
+          size: row.variation1 || '',
+          brand: row.brand,
+          product: row.product,
+        }))}
+        shipmentData={{
+          shipmentNumber: shipmentData?.shipmentName || '',
+          shipmentDate: dateStr,
+          shipmentType: shipmentData?.shipmentType || '',
+          account: shipmentData?.account || 'TPS Nutrients',
+        }}
+      />
     </div>
   );
 }

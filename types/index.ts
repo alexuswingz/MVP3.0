@@ -2,11 +2,18 @@
 
 // User & Auth
 export interface User {
-  id: string;
+  id: string | number;
   email: string;
+  first_name?: string;
+  last_name?: string;
   name?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  amazon_seller_id?: string | null;
+  marketplace_id?: string;
+  subscription_tier?: string;
+  timezone?: string;
+  date_joined?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface Account {

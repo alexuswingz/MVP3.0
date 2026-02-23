@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Copy, Settings } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Copy, Settings, Loader2 } from 'lucide-react';
 import ForecastUnit from './forecast-unit';
 import DoiSettingsPopover from '@/components/forecast/doi-settings-popover';
+import { api, type ProductForecastResponse } from '@/lib/api';
 
 /** Scrollable content area - overflow with invisible scrollbar */
 const SCROLL_CONTENT_STYLE: React.CSSProperties = {
@@ -75,19 +76,61 @@ async function copyAsinToClipboard(
   }
 }
 
-// Mock data for UI display
-const MOCK_INVENTORY_DATA = {
-  fba: { total: 1250, available: 800, inbound: 300, reserved: 150 },
-  awd: { total: 500, available: 450, inbound: 50, reserved: 0, outbound_to_fba: 0, unfulfillable: 0 },
-  fbaAge: {
-    buckets: { '0-90': 600, '91-180': 350, '181-270': 150, '271-365': 100, '365+': 50 },
-  },
+// Transform API response to the format expected by components
+function transformForecastData(data: ProductForecastResponse) {
+  const inv = data.inventory;
+  const activeAlgo = data.active_algorithm as '0-6m' | '6-18m' | '18m+';
+  const algoResult = data.algorithms[activeAlgo];
+  
+  return {
+    inventoryData: {
+      fba: {
+        total: inv.fba_total,
+        available: inv.fba_available,
+        inbound: inv.fba_inbound,
+        reserved: inv.fba_reserved,
+      },
+      awd: {
+        total: inv.awd_total,
+        available: inv.awd_available,
+        inbound: inv.awd_inbound,
+        reserved: inv.awd_reserved,
+        outbound_to_fba: inv.awd_outbound_to_fba,
+        unfulfillable: 0,
+      },
+      fbaAge: {
+        buckets: {
+          '0-90': inv.age_0_to_90,
+          '91-180': inv.age_91_to_180,
+          '181-270': inv.age_181_to_270,
+          '271-365': inv.age_271_to_365,
+          '365+': inv.age_365_plus,
+        },
+      },
+    },
+    timeline: {
+      fbaAvailable: algoResult?.doi_fba_days ?? 0,
+      totalDays: algoResult?.doi_total_days ?? 0,
+      unitsToMake: algoResult?.units_to_make ?? 0,
+    },
+    forecasts: data.forecasts[activeAlgo] ?? [],
+    salesHistory: data.sales_history ?? [],
+    algorithm: activeAlgo,
+    product: data.product,
+  };
+}
+
+// Default empty data
+const EMPTY_INVENTORY_DATA = {
+  fba: { total: 0, available: 0, inbound: 0, reserved: 0 },
+  awd: { total: 0, available: 0, inbound: 0, reserved: 0, outbound_to_fba: 0, unfulfillable: 0 },
+  fbaAge: { buckets: { '0-90': 0, '91-180': 0, '181-270': 0, '271-365': 0, '365+': 0 } },
 };
 
-const MOCK_TIMELINE = {
-  fbaAvailable: 45,
-  totalDays: 65,
-  unitsToMake: 1200,
+const EMPTY_TIMELINE = {
+  fbaAvailable: 0,
+  totalDays: 0,
+  unitsToMake: 0,
 };
 
 interface ProductInfoCardProps {
@@ -96,12 +139,14 @@ interface ProductInfoCardProps {
 }
 
 function ProductInfoCard({ data = {}, onAsinCopy }: ProductInfoCardProps) {
-  const productName = (data?.product as string) || (data?.product_name as string) || 'Product Name';
-  const productSize = (data?.size as string) || (Array.isArray(data?.variations) ? data.variations[0] : null) || 'N/A';
-  const childAsin = (data?.child_asin as string) || (data?.childAsin as string) || (data?.asin as string) || 'N/A';
-  const brand = (data?.brand as string) || 'N/A';
-  const sku = (data?.sku as string) || (data?.childSku as string) || (data?.child_sku as string) || (data?.child_sku_final as string) || (data?.catalog_sku as string) || 'N/A';
-  const productImage = (data?.mainImage as string) || (data?.product_image_url as string) || (data?.productImage as string) || (data?.image as string) || (data?.productImageUrl as string);
+  // Extract product data - check both direct fields and nested 'product' object from table row
+  const productObj = (data?.product as Record<string, unknown>) || {};
+  const productName = (data?.name as string) || (productObj?.name as string) || (data?.product_name as string) || 'Product Name';
+  const productSize = (data?.size as string) || (productObj?.size as string) || (Array.isArray(data?.variations) ? data.variations[0] : null) || 'N/A';
+  const childAsin = (data?.child_asin as string) || (data?.childAsin as string) || (data?.asin as string) || (productObj?.asin as string) || 'N/A';
+  const brand = (data?.brand as string) || (productObj?.brand as string) || (productObj?.brandName as string) || 'N/A';
+  const sku = (data?.sku as string) || (productObj?.sku as string) || (data?.childSku as string) || (data?.child_sku as string) || 'N/A';
+  const productImage = (data?.mainImage as string) || (data?.image_url as string) || (productObj?.imageUrl as string) || (data?.product_image_url as string) || (data?.productImage as string);
 
   const handleCopyAsin = async (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
@@ -312,6 +357,11 @@ interface NgoosContentProps {
   onAddUnits?: (units: number) => void;
   showActionItems?: boolean;
   onActionItemsExpandedChange?: (expanded: boolean) => void;
+  inventoryData?: InventoryCardProps['inventoryData'];
+  timeline?: { fbaAvailable: number; totalDays: number; unitsToMake: number };
+  forecasts?: Array<{ week_end: string; forecast: number; units_needed: number }>;
+  salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;
+  isLoading?: boolean;
 }
 
 function ActionItemCard({ title, tagBgColor = '#10b981', tagText = 'INV' }: { title: string; tagBgColor?: string; tagText?: string }) {
@@ -360,6 +410,11 @@ function NgoosContent({
   onAddUnits = () => {},
   showActionItems = false,
   onActionItemsExpandedChange,
+  inventoryData = EMPTY_INVENTORY_DATA,
+  timeline = EMPTY_TIMELINE,
+  forecasts = [],
+  salesHistory = [],
+  isLoading = false,
 }: NgoosContentProps) {
   const [activeTab, setActiveTab] = useState('forecast');
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -375,8 +430,6 @@ function NgoosContent({
     border: isDarkMode ? 'border-dark-border-primary' : 'border-gray-200',
   };
 
-  const inventoryData = MOCK_INVENTORY_DATA;
-  const timeline = MOCK_TIMELINE;
   const displayedUnits = displayUnitsOverride ?? overrideUnitsToMake ?? timeline.unitsToMake ?? 0;
   const increment = 60;
 
@@ -573,33 +626,44 @@ function NgoosContent({
 
       {activeTab === 'forecast' && (
         <>
-          <div
-            className="scrollbar-hide"
-            style={{
-              padding: '0.5rem 0',
-              backgroundColor: '#1A2235',
-              overflow: 'auto',
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0,
-              ...(showActionItems && actionItemsExpanded && { flexShrink: 0, minHeight: '380px' }),
-            }}
-          >
-            {(!showActionItems || !actionItemsExpanded) && (
-              <div style={{ marginBottom: '0.75rem' }}>
-                <NgoosCard data={data} inventoryData={inventoryData} onAsinCopy={() => {}} />
+          {isLoading ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>Loading forecast data...</p>
               </div>
-            )}
+            </div>
+          ) : (
+            <div
+              className="scrollbar-hide"
+              style={{
+                padding: '0.5rem 0',
+                backgroundColor: '#1A2235',
+                overflow: 'auto',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                ...(showActionItems && actionItemsExpanded && { flexShrink: 0, minHeight: '380px' }),
+              }}
+            >
+              {(!showActionItems || !actionItemsExpanded) && (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <NgoosCard data={data} inventoryData={inventoryData} onAsinCopy={() => {}} />
+                </div>
+              )}
 
-            <ForecastUnit
-              inventoryData={inventoryData}
-              timeline={timeline}
-              inventoryOnly
-              isDarkMode={isDarkMode}
-              showMetricCards={!(showActionItems && actionItemsExpanded)}
-            />
-          </div>
+              <ForecastUnit
+                inventoryData={inventoryData}
+                timeline={timeline}
+                forecasts={forecasts}
+                salesHistory={salesHistory}
+                inventoryOnly
+                isDarkMode={isDarkMode}
+                showMetricCards={!(showActionItems && actionItemsExpanded)}
+              />
+            </div>
+          )}
         </>
       )}
 
@@ -729,12 +793,43 @@ export default function NGOOSmodal({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAddUnits, setPendingAddUnits] = useState<number | null>(null);
   const [actionItemsExpanded, setActionItemsExpanded] = useState(false);
+  
+  // Real data state
+  const [isLoading, setIsLoading] = useState(false);
+  const [forecastData, setForecastData] = useState<ReturnType<typeof transformForecastData> | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
     text: isDarkMode ? 'text-dark-text-primary' : 'text-gray-900',
     textSecondary: isDarkMode ? 'text-dark-text-secondary' : 'text-gray-500',
   };
+
+  // Fetch forecast data when modal opens or product changes
+  const fetchForecastData = useCallback(async (productId: string) => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const data = await api.getProductForecast(productId);
+      const transformed = transformForecastData(data);
+      setForecastData(transformed);
+    } catch (err) {
+      console.error('Failed to fetch forecast data:', err);
+      setFetchError(err instanceof Error ? err.message : 'Failed to load forecast data');
+      setForecastData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && selectedRow?.id) {
+      fetchForecastData(String(selectedRow.id));
+    } else if (!isOpen) {
+      setForecastData(null);
+      setFetchError(null);
+    }
+  }, [isOpen, selectedRow?.id, fetchForecastData]);
 
   if (!isOpen) return null;
 
@@ -745,7 +840,8 @@ export default function NGOOSmodal({
   const currentPosition = currentProductIndex >= 0 ? currentProductIndex + 1 : 0;
   const totalProducts = allProducts.length;
 
-  const forecastUnits = selectedRow?.suggestedQty ?? selectedRow?.units_to_make ?? selectedRow?.unitsToMake ?? 0;
+  // Use real data if available, otherwise fall back to selectedRow values
+  const forecastUnits = forecastData?.timeline.unitsToMake ?? selectedRow?.suggestedQty ?? selectedRow?.units_to_make ?? selectedRow?.unitsToMake ?? 0;
   const unitsForConfirm = pendingAddUnits ?? forecastUnits;
 
   const handleAddUnitsClick = (units: number) => {
@@ -979,6 +1075,37 @@ export default function NGOOSmodal({
                 This product does not have an ASIN.
               </p>
             </div>
+          ) : fetchError ? (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <svg
+                style={{ width: '48px', height: '48px', margin: '0 auto', marginBottom: '0.75rem', color: '#ef4444' }}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className={themeClasses.text} style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '0.25rem' }}>
+                Error Loading Data
+              </p>
+              <p className={themeClasses.textSecondary} style={{ fontSize: '0.8rem', marginBottom: '1rem' }}>
+                {fetchError}
+              </p>
+              <button
+                onClick={() => selectedRow?.id && fetchForecastData(String(selectedRow.id))}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  border: 'none',
+                  backgroundColor: '#2563EB',
+                  color: '#fff',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Retry
+              </button>
+            </div>
           ) : (
             <NgoosContent
               data={selectedRow ?? {}}
@@ -989,6 +1116,11 @@ export default function NGOOSmodal({
               onAddUnits={handleAddUnitsClick}
               showActionItems={showActionItems}
               onActionItemsExpandedChange={setActionItemsExpanded}
+              inventoryData={forecastData?.inventoryData ?? EMPTY_INVENTORY_DATA}
+              timeline={forecastData?.timeline ?? EMPTY_TIMELINE}
+              forecasts={forecastData?.forecasts ?? []}
+              salesHistory={forecastData?.salesHistory ?? []}
+              isLoading={isLoading}
             />
           )}
         </div>

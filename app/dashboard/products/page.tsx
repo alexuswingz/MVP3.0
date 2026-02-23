@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -11,11 +11,11 @@ import {
   Copy,
   MoreVertical,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 import { useProductStore } from '@/stores/product-store';
 import { useUIStore } from '@/stores/ui-store';
 
-// Same card layout as forecast page: borderTop accent, label, value, subtitle
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
     backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
@@ -44,25 +44,24 @@ const cardStyles = (isDarkMode: boolean) => ({
   }),
 });
 
-const CARD_VALUES = {
-  totalActiveChildProducts: 892,
-  inStockRatePct: 92,
-  productsAtRisk: 17,
-  totalRevenue30d: 1342694,
-  revenueTrendPct: 24.8,
-};
-
 const MARKETPLACE = 'Amazon';
 const SELLER_ACCOUNT = 'TPS Nutrients';
 
 export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeIds, setActiveIds] = useState<Set<string>>(() => new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const hasInitializedActive = useRef(false);
-  const { products, isLoading } = useProductStore();
+  const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats } = useProductStore();
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const styles = cardStyles(isDarkMode);
+
+  // Fetch products on mount - only if cache is stale (handled in store)
+  useEffect(() => {
+    fetchProducts();
+    fetchProductStats();
+  }, [fetchProducts, fetchProductStats]);
 
   // Default all product toggles to "on" when products first load (matches design)
   useEffect(() => {
@@ -72,12 +71,27 @@ export default function ProductsPage() {
     }
   }, [products]);
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.asin.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Client-side filtering - no API call needed for search
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const query = searchQuery.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.asin.toLowerCase().includes(query) ||
+        p.sku.toLowerCase().includes(query)
+    );
+  }, [products, searchQuery]);
+
+  // Manual refresh - force fetch
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      fetchProducts(undefined, true),
+      fetchProductStats(true),
+    ]);
+    setIsRefreshing(false);
+  }, [fetchProducts, fetchProductStats]);
 
   const toggleActive = (id: string) => {
     setActiveIds((prev) => {
@@ -119,12 +133,21 @@ export default function ProductsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
             <input
               type="search"
-              placeholder="Q Search..."
+              placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-9 pl-9 pr-4 w-48 rounded-lg border border-border bg-background-secondary text-foreground-primary text-sm placeholder:text-foreground-muted focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background-secondary text-foreground-secondary hover:text-foreground-primary hover:bg-background-tertiary transition-colors disabled:opacity-50"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
           <button
             type="button"
             className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background-secondary text-foreground-secondary hover:text-foreground-primary hover:bg-background-tertiary transition-colors"
@@ -143,30 +166,24 @@ export default function ProductsPage() {
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0"
       >
         <div style={styles.card('#3B82F6')}>
-          <div style={styles.label}>Total Active Child Products</div>
-          <div style={styles.value}>{CARD_VALUES.totalActiveChildProducts.toLocaleString()}</div>
+          <div style={styles.label}>Total Products</div>
+          <div style={styles.value}>{stats?.total_products?.toLocaleString() || totalCount}</div>
           <div style={styles.subtitle('#9CA3AF')}>Across all seller accounts</div>
         </div>
+        <div style={styles.card('#10B981')}>
+          <div style={styles.label}>Launched Products</div>
+          <div style={styles.value}>{stats?.launched_products?.toLocaleString() || 0}</div>
+          <div style={styles.subtitle('#9CA3AF')}>Active on marketplace</div>
+        </div>
         <div style={styles.card('#F59E0B')}>
-          <div style={styles.label}>In Stock Rate %</div>
-          <div style={styles.value}>{CARD_VALUES.inStockRatePct}%</div>
-          <div style={styles.subtitle('#9CA3AF')}>Across all products</div>
+          <div style={styles.label}>Pending Products</div>
+          <div style={styles.value}>{stats?.by_status?.pending?.toLocaleString() || 0}</div>
+          <div style={styles.subtitle('#9CA3AF')}>Awaiting launch</div>
         </div>
         <div style={styles.card('#EF4444')}>
-          <div style={styles.label}>Products at Risk of Stock-out</div>
-          <div style={styles.value}>{CARD_VALUES.productsAtRisk.toLocaleString()}</div>
-          <div style={styles.subtitle('#9CA3AF')}>Across all products</div>
-        </div>
-        <div style={styles.card('#10B981')}>
-          <div style={styles.label}>Total Revenue (30 days)</div>
-          <div className="flex items-center gap-2">
-            <span style={styles.value}>${CARD_VALUES.totalRevenue30d.toLocaleString()}</span>
-            <span className="inline-flex items-center gap-0.5 text-success text-sm font-medium">
-              <TrendingUp className="w-4 h-4" />
-              {CARD_VALUES.revenueTrendPct}%
-            </span>
-          </div>
-          <div style={styles.subtitle('#9CA3AF')}>Across all accounts vs last year</div>
+          <div style={styles.label}>Draft Products</div>
+          <div style={styles.value}>{stats?.by_status?.draft?.toLocaleString() || 0}</div>
+          <div style={styles.subtitle('#9CA3AF')}>In preparation</div>
         </div>
       </motion.div>
 

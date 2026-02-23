@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Shipment, ShipmentStatus, ShipmentType } from '@/types';
 import {
@@ -12,27 +12,7 @@ import {
   type StepStatus,
 } from './components/PlanningTable';
 import NewShipmentModal, { type NewShipmentForm } from './components/NewShipmentModal';
-
-const COMPLETED_SHIPMENTS_STORAGE_KEY = 'mvp_completed_shipments';
-
-function getCompletedShipmentsFromStorage(): Shipment[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((s: { plannedDate?: string; createdAt?: string; updatedAt?: string; [k: string]: unknown }) => ({
-      ...s,
-      plannedDate: s.plannedDate ? new Date(s.plannedDate) : undefined,
-      createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
-      updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
-      items: Array.isArray(s.items) ? s.items : [],
-    })) as Shipment[];
-  } catch {
-    return [];
-  }
-}
+import { api, type ShipmentListItem, type ShipmentStats } from '@/lib/api';
 
 /** Layers icon matching 1000bananas2.0 PlanningHeader (22×22) */
 function LayersIcon() {
@@ -43,83 +23,20 @@ function LayersIcon() {
   );
 }
 
-// Mock shipments data (6 active for "Shipments" tab; archive count shown separately)
-const mockShipments: Shipment[] = [
-  {
-    id: '1',
-    name: '2025.11.18 AWD',
-    status: 'planning',
-    type: 'awd',
+function apiShipmentToInternal(s: ShipmentListItem): Shipment {
+  return {
+    id: String(s.id),
+    name: s.name,
+    status: s.status as ShipmentStatus,
+    type: s.shipment_type as ShipmentType,
     marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-18'),
+    account: s.ship_from_name || 'TPS Nutrients',
+    plannedDate: s.planned_ship_date ? new Date(s.planned_ship_date) : undefined,
     items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-  {
-    id: '2',
-    name: '2025.11.19 FBA',
-    status: 'planning',
-    type: 'fba',
-    marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-19'),
-    items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-  {
-    id: '3',
-    name: '2025.11.20 AWD',
-    status: 'planning',
-    type: 'awd',
-    marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-20'),
-    items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-  {
-    id: '4',
-    name: '2025.11.21 AWD',
-    status: 'planning',
-    type: 'awd',
-    marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-21'),
-    items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-  {
-    id: '5',
-    name: '2025.11.22 FBA',
-    status: 'planning',
-    type: 'fba',
-    marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-22'),
-    items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-  {
-    id: '6',
-    name: '2025.11.23 AWD',
-    status: 'planning',
-    type: 'awd',
-    marketplace: 'Amazon',
-    account: 'TPS Nutrients',
-    plannedDate: new Date('2025-11-23'),
-    items: [],
-    createdAt: new Date('2025-11-01'),
-    updatedAt: new Date('2025-11-01'),
-  },
-];
-
-const ARCHIVE_COUNT = 152;
+    createdAt: new Date(s.created_at),
+    updatedAt: new Date(s.updated_at),
+  };
+}
 
 const statusConfig: Record<ShipmentStatus, { label: string }> = {
   planning: { label: 'Planning' },
@@ -200,81 +117,71 @@ export default function ShipmentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
-  const [completedShipments, setCompletedShipments] = useState<Shipment[]>([]);
-  const [removedMockIds, setRemovedMockIds] = useState<Set<string>>(new Set());
+  
+  // API state
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [stats, setStats] = useState<ShipmentStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  function refreshCompletedShipments() {
-    setCompletedShipments(getCompletedShipmentsFromStorage());
-  }
+  const fetchShipments = useCallback(async (statusFilter?: 'active' | 'archived') => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [shipmentsData, statsData] = await Promise.all([
+        api.getShipments({ 
+          status: statusFilter,
+          search: searchQuery || undefined,
+        }),
+        api.getShipmentStats(),
+      ]);
+      setShipments(shipmentsData.map(apiShipmentToInternal));
+      setStats(statsData);
+    } catch (err) {
+      console.error('Failed to fetch shipments:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load shipments');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
-    refreshCompletedShipments();
-  }, []);
+    fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+  }, [activeTab, fetchShipments]);
 
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') refreshCompletedShipments();
+      if (document.visibilityState === 'visible') {
+        fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, []);
-
-  const allShipments = useMemo(
-    () => [
-      ...completedShipments,
-      ...mockShipments.filter((s) => !removedMockIds.has(s.id)),
-    ],
-    [completedShipments, removedMockIds]
-  );
-
-  const filteredShipments = allShipments.filter((shipment) => {
-    const matchesSearch =
-      !searchQuery ||
-      shipment.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shipment.account.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  }, [activeTab, fetchShipments]);
 
   const planningRows = useMemo<PlanningTableRow[]>(
-    () => filteredShipments.map(shipmentToPlanningRow),
-    [filteredShipments]
+    () => shipments.map(shipmentToPlanningRow),
+    [shipments]
   );
 
-  const shipmentsCount = filteredShipments.length;
-  const archiveCount = allShipments.filter((s) => s.status === 'archived').length;
-
-  const archivePlaceholderRows = useMemo<PlanningTableRow[]>(
-    () =>
-      Array.from({ length: 4 }, (_, i) => ({
-        id: `archive-placeholder-${i + 1}`,
-        status: 'Archived',
-        shipment: '—',
-        type: '—',
-        marketplace: '—',
-        account: '—',
-        addProducts: 'completed' as StepStatus,
-        bookShipment: 'completed' as StepStatus,
-      })).filter((row) => !removedMockIds.has(row.id)),
-    [removedMockIds]
-  );
+  const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
+  const archiveCount = stats?.received ?? 0;
 
   const handleRowClick = (row: PlanningTableRow) => {
     console.log('Shipment row clicked:', row.id);
+    router.push(`/dashboard/shipments/${row.id}`);
   };
 
-  function handleDeleteRow(row: PlanningTableRow) {
-    if (row.id.startsWith('completed-')) {
-      const raw = localStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
-      if (!raw) return;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return;
-        const next = parsed.filter((s: { id?: string }) => s.id !== row.id);
-        localStorage.setItem(COMPLETED_SHIPMENTS_STORAGE_KEY, JSON.stringify(next));
-        refreshCompletedShipments();
-      } catch (_) {}
-    } else {
-      setRemovedMockIds((prev) => new Set(prev).add(row.id));
+  async function handleDeleteRow(row: PlanningTableRow) {
+    const shipmentId = parseInt(row.id, 10);
+    if (isNaN(shipmentId)) return;
+    
+    try {
+      await api.cancelShipment(shipmentId);
+      fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+    } catch (err) {
+      console.error('Failed to cancel shipment:', err);
+      alert('Failed to cancel shipment');
     }
   }
 
@@ -468,9 +375,11 @@ export default function ShipmentsPage() {
               gap: 8,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Total DOI</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>107</div>
-            <div style={{ fontSize: 12, fontWeight: 400, color: '#10B981' }}>Across all products</div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Planning</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>{stats?.planning ?? 0}</div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: '#10B981' }}>
+              {stats?.total_units_planning?.toLocaleString() ?? 0} units
+            </div>
           </div>
           <div
             style={{
@@ -484,9 +393,9 @@ export default function ShipmentsPage() {
               gap: 8,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Units to Make</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>107,699</div>
-            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>Across all products</div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Ready to Ship</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>{stats?.ready ?? 0}</div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>Awaiting shipment</div>
           </div>
           <div
             style={{
@@ -500,9 +409,13 @@ export default function ShipmentsPage() {
               gap: 8,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Pallets to Make</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>849</div>
-            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>With Inventory</div>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>In Transit</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>
+              {(stats?.shipped ?? 0) + (stats?.in_transit ?? 0)}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>
+              {stats?.total_units_in_transit?.toLocaleString() ?? 0} units
+            </div>
           </div>
           <div
             style={{
@@ -516,28 +429,88 @@ export default function ShipmentsPage() {
               gap: 8,
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Products at Risk</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>343</div>
-            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>
-              {343 > 0 ? (
-                <>Below {REQUIRED_DOI} DOI</>
-              ) : (
-                <span style={{ color: '#10B981' }}>All products healthy</span>
-              )}
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#9CA3AF' }}>Shipment Type</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: '#F9FAFB' }}>
+              {stats?.by_type?.fba ?? 0} / {stats?.by_type?.awd ?? 0}
             </div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF' }}>FBA / AWD</div>
           </div>
         </motion.section>
 
+        {/* Loading State */}
+        {loading && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '48px',
+            color: '#9CA3AF',
+          }}>
+            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+            Loading shipments...
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !loading && (
+          <div style={{
+            padding: '24px',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid #EF4444',
+            borderRadius: '8px',
+            color: '#EF4444',
+            marginBottom: '24px',
+          }}>
+            {error}
+            <button
+              onClick={() => fetchShipments(activeTab === 'archive' ? 'archived' : 'active')}
+              style={{
+                marginLeft: '16px',
+                padding: '4px 12px',
+                backgroundColor: '#EF4444',
+                color: 'white',
+                borderRadius: '4px',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Planning Table — same structure as 1000bananas2.0 */}
-        {activeTab === 'shipments' && (
+        {!loading && !error && activeTab === 'shipments' && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+            {planningRows.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px',
+                color: '#9CA3AF',
+                fontSize: '14px',
+              }}>
+                No shipments found. Click "New Shipment" to create one.
+              </div>
+            ) : (
+              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+            )}
           </motion.section>
         )}
 
-        {activeTab === 'archive' && (
+        {!loading && !error && activeTab === 'archive' && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            <PlanningTable rows={archivePlaceholderRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+            {planningRows.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px',
+                color: '#9CA3AF',
+                fontSize: '14px',
+              }}>
+                No archived shipments found.
+              </div>
+            ) : (
+              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+            )}
           </motion.section>
         )}
         </div>

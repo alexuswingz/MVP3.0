@@ -16,60 +16,131 @@ import {
   ReferenceLine,
 } from 'recharts';
 
-// Mock inventory for metric cards
-const MOCK_INVENTORY = {
-  fba: { total: 1250, available: 800, inbound: 300, reserved: 150 },
-  awd: { total: 500, available: 450, inbound: 50, reserved: 0 },
+// Default inventory for metric cards
+const DEFAULT_INVENTORY = {
+  fba: { total: 0, available: 0, inbound: 0, reserved: 0 },
+  awd: { total: 0, available: 0, inbound: 0, reserved: 0 },
 };
 
-// Mock timeline for metric cards
-const MOCK_TIMELINE = {
-  fbaAvailable: 45,
-  totalDays: 65,
-  unitsToMake: 1200,
+// Default timeline for metric cards
+const DEFAULT_TIMELINE = {
+  fbaAvailable: 0,
+  totalDays: 0,
+  unitsToMake: 0,
 };
 
-// Generate mock chart data: ~180 days, realistic-looking curve
+// Chart data point type
 type ChartDataPoint = { timestamp: number; unitsSold: number | null; forecastBase: number; forecastAdjusted: number | null; isForecast: boolean };
-function generateMockChartData(): ChartDataPoint[] {
+
+// Convert weekly sales and forecasts from API to daily chart data
+function generateChartDataFromForecasts(
+  forecasts: Array<{ week_end: string; forecast: number; units_needed: number }> = [],
+  salesHistory: Array<{ week_end: string; units_sold: number; revenue: number }> = []
+): ChartDataPoint[] {
   const data: ChartDataPoint[] = [];
   const now = new Date();
   const dayMs = 86400000;
-  const baseDate = new Date(now.getTime() - 90 * dayMs);
-
-  for (let i = 0; i <= 180; i++) {
-    const d = new Date(baseDate.getTime() + i * dayMs);
-    const t = d.getTime();
-    const isPast = i < 90;
-    const histVal = Math.round(400 + 150 * Math.sin(i * 0.05) + 30);
-    const futureVal = Math.round(450 + 100 * Math.sin((i - 90) * 0.04));
-    const unitsSold = isPast ? Math.max(0, histVal) : null;
-    const forecastBase = isPast ? histVal : futureVal;
-    const forecastAdjusted = isPast ? null : Math.round(470 + 80 * Math.sin((i - 90) * 0.035));
-    data.push({
-      timestamp: t,
-      unitsSold,
-      forecastBase,
-      forecastAdjusted,
-      isForecast: !isPast,
+  const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  
+  // Add historical sales data from API if available
+  if (salesHistory.length > 0) {
+    salesHistory.forEach((week) => {
+      const weekEnd = new Date(week.week_end).getTime();
+      const weekStart = weekEnd - 6 * dayMs;
+      const dailySales = Math.round(week.units_sold / 7);
+      
+      for (let d = 0; d < 7; d++) {
+        const dayTs = weekStart + d * dayMs;
+        if (dayTs < todayTs) {
+          data.push({
+            timestamp: dayTs,
+            unitsSold: dailySales,
+            forecastBase: dailySales,
+            forecastAdjusted: null,
+            isForecast: false,
+          });
+        }
+      }
     });
+  } else {
+    // Generate placeholder historical data if no sales data
+    const baseDate = new Date(todayTs - 90 * dayMs);
+    for (let i = 0; i < 90; i++) {
+      const d = new Date(baseDate.getTime() + i * dayMs);
+      const t = d.getTime();
+      const histVal = Math.round(400 + 150 * Math.sin(i * 0.05) + 30);
+      data.push({
+        timestamp: t,
+        unitsSold: Math.max(0, histVal),
+        forecastBase: histVal,
+        forecastAdjusted: null,
+        isForecast: false,
+      });
+    }
   }
-  return data;
+  
+  // Add forecast data from API
+  if (forecasts.length > 0) {
+    forecasts.forEach((week) => {
+      const weekEnd = new Date(week.week_end).getTime();
+      const weekStart = weekEnd - 6 * dayMs;
+      const dailyForecast = Math.round(week.forecast / 7);
+      
+      for (let d = 0; d < 7; d++) {
+        const dayTs = weekStart + d * dayMs;
+        if (dayTs >= todayTs) {
+          data.push({
+            timestamp: dayTs,
+            unitsSold: null,
+            forecastBase: dailyForecast,
+            forecastAdjusted: dailyForecast,
+            isForecast: true,
+          });
+        }
+      }
+    });
+  } else {
+    // Fallback to generated forecast if no API data
+    for (let i = 0; i < 90; i++) {
+      const t = todayTs + i * dayMs;
+      const futureVal = Math.round(450 + 100 * Math.sin(i * 0.04));
+      data.push({
+        timestamp: t,
+        unitsSold: null,
+        forecastBase: futureVal,
+        forecastAdjusted: Math.round(470 + 80 * Math.sin(i * 0.035)),
+        isForecast: true,
+      });
+    }
+  }
+  
+  // Sort by timestamp and remove duplicates
+  const uniqueData = new Map<number, ChartDataPoint>();
+  data.forEach(point => {
+    const dayKey = Math.floor(point.timestamp / dayMs);
+    if (!uniqueData.has(dayKey) || !uniqueData.get(dayKey)!.isForecast) {
+      uniqueData.set(dayKey, point);
+    }
+  });
+  
+  return Array.from(uniqueData.values()).sort((a, b) => a.timestamp - b.timestamp);
 }
 
-const MOCK_CHART_DATA = generateMockChartData();
-
 interface ForecastUnitProps {
-  inventoryData?: typeof MOCK_INVENTORY;
-  timeline?: typeof MOCK_TIMELINE;
+  inventoryData?: typeof DEFAULT_INVENTORY;
+  timeline?: typeof DEFAULT_TIMELINE;
+  forecasts?: Array<{ week_end: string; forecast: number; units_needed: number }>;
+  salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;
   inventoryOnly?: boolean;
   isDarkMode?: boolean;
   showMetricCards?: boolean;
 }
 
 export default function ForecastUnit({
-  inventoryData = MOCK_INVENTORY,
-  timeline = MOCK_TIMELINE,
+  inventoryData = DEFAULT_INVENTORY,
+  timeline = DEFAULT_TIMELINE,
+  forecasts = [],
+  salesHistory = [],
   inventoryOnly = true,
   isDarkMode = true,
   showMetricCards = true,
@@ -91,7 +162,7 @@ export default function ForecastUnit({
   const [selectedTimeRangeView, setSelectedTimeRangeView] = useState('All Time');
   const [timeRangeSelectFocused, setTimeRangeSelectFocused] = useState(false);
 
-  const chartData = useMemo((): ChartDataPoint[] => MOCK_CHART_DATA, []);
+  const chartData = useMemo((): ChartDataPoint[] => generateChartDataFromForecasts(forecasts, salesHistory), [forecasts, salesHistory]);
   const todayTs = useMemo(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

@@ -6,11 +6,20 @@ import { useUIStore } from '@/stores/ui-store';
 import type { Product } from '@/types';
 import { IconGroupOpenNgoos } from './banana-icon-open-ngoos';
 
+export interface InventoryBreakdown {
+  total: number;
+  fbaAvailable: number;
+  fbaTotal: number;
+  awdAvailable: number;
+  awdTotal: number;
+}
+
 export interface ShipmentTableRow {
   product: Product;
-  inventory: number;
+  inventory: number | InventoryBreakdown;
   unitsToMake: number;
   daysOfInventory: number;
+  doiFba?: number;
   added?: boolean;
 }
 
@@ -280,8 +289,16 @@ export function NewShipmentTable({
         <tbody style={{ borderColor: BORDER_COLOR, display: 'table-row-group' }}>
         {rows.map((row, index) => {
           const id = row.product.id;
-          const totalInv = row.inventory;
+          // Handle both number and object inventory
+          const inventoryData = row.inventory;
+          const totalInv = typeof inventoryData === 'number' 
+            ? inventoryData 
+            : (inventoryData?.total ?? 0);
+          const fbaAvailable = typeof inventoryData === 'number'
+            ? Math.round(inventoryData * 0.6) // Estimate if not provided
+            : (inventoryData?.fbaAvailable ?? 0);
           const doiValue = row.daysOfInventory;
+          const doiFba = row.doiFba ?? Math.round(doiValue * 0.6);
           const unitsToMake = row.unitsToMake;
           const displayDoi = doiValue;
           const doiColor = getDoiColor(displayDoi);

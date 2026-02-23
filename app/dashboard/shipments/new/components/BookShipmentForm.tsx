@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Loader2 } from 'lucide-react';
+import { api, type ShipmentType, type ShipmentItemInput } from '@/lib/api';
 
 const isDarkMode = true;
 
@@ -178,13 +180,31 @@ const addLocationInputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-interface BookShipmentFormProps {
-  onComplete?: () => void;
-  /** Pre-fill from New Shipment (FBA/AWD). */
-  initialShipmentType?: string;
+interface ProductForShipment {
+  id: string | number;
+  asin?: string;
+  sku?: string;
+  name?: string;
+  quantity: number;
+  recommendedQuantity?: number;
 }
 
-export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookShipmentFormProps) {
+interface BookShipmentFormProps {
+  onComplete?: (shipmentId?: number) => void;
+  /** Pre-fill from New Shipment (FBA/AWD). */
+  initialShipmentType?: string;
+  /** Products to include in the shipment */
+  products?: ProductForShipment[];
+  /** Existing shipment ID to book (if updating an existing shipment) */
+  existingShipmentId?: number;
+}
+
+export function BookShipmentForm({ 
+  onComplete, 
+  initialShipmentType = '',
+  products = [],
+  existingShipmentId,
+}: BookShipmentFormProps) {
   const [formData, setFormData] = useState({
     shipmentNumber: '',
     shipmentType: initialShipmentType,
@@ -194,6 +214,8 @@ export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookS
     shipTo: '',
     carrier: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [locations, setLocations] = useState<ShipmentLocation[]>([]);
   useEffect(() => {
@@ -432,7 +454,7 @@ export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookS
     }
   };
 
-  const handleBookShipment = () => {
+  const handleBookShipment = async () => {
     // Validate required fields
     if (
       !formData.shipmentNumber ||
@@ -447,8 +469,57 @@ export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookS
       return;
     }
 
-    console.log('Booking shipment:', formData);
-    if (onComplete) onComplete();
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // Prepare shipment items from products
+      const items: ShipmentItemInput[] = products
+        .filter(p => p.quantity > 0)
+        .map(p => ({
+          product_id: typeof p.id === 'string' ? parseInt(p.id, 10) : p.id,
+          quantity_planned: p.quantity,
+          recommended_quantity: p.recommendedQuantity,
+        }));
+
+      // Map shipment type to API format
+      const shipmentType: ShipmentType = formData.shipmentType.toLowerCase() === 'awd' ? 'awd' : 'fba';
+
+      if (existingShipmentId) {
+        // Book existing shipment
+        const result = await api.bookShipment(existingShipmentId, {
+          amazon_shipment_id: formData.amazonShipmentNumber,
+          amazon_reference_id: formData.amazonRefId,
+          ship_from_name: formData.shipFrom.split(' - ')[0] || formData.shipFrom,
+          ship_from_address: formData.shipFrom,
+          destination_center: formData.shipTo,
+          notes: `Carrier: ${formData.carrier}`,
+        });
+        
+        if (onComplete) onComplete(result.id);
+      } else {
+        // Create new shipment and book it
+        const newShipment = await api.createShipment({
+          name: formData.shipmentNumber,
+          shipment_type: shipmentType,
+          amazon_shipment_id: formData.amazonShipmentNumber,
+          amazon_reference_id: formData.amazonRefId,
+          ship_from_name: formData.shipFrom.split(' - ')[0] || formData.shipFrom,
+          ship_from_address: formData.shipFrom,
+          destination_center: formData.shipTo,
+          status: 'ready',
+          notes: `Carrier: ${formData.carrier}`,
+          items: items,
+        });
+
+        if (onComplete) onComplete(newShipment.id);
+      }
+    } catch (error) {
+      console.error('Failed to book shipment:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Failed to book shipment. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1410,37 +1481,61 @@ export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookS
           document.body
         )}
 
+      {/* Error Message */}
+      {submitError && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid #EF4444',
+          borderRadius: '6px',
+          color: '#EF4444',
+          fontSize: '14px',
+        }}>
+          {submitError}
+        </div>
+      )}
+
       {/* Complete Shipment Button */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
         <button
           type="button"
           onClick={handleBookShipment}
+          disabled={isSubmitting}
           style={{
-            width: '160px',
+            width: isSubmitting ? '180px' : '160px',
             height: '31px',
             borderRadius: '8px',
             border: 'none',
-            backgroundColor: '#007AFF',
+            backgroundColor: isSubmitting ? '#6B7280' : '#007AFF',
             color: '#FFFFFF',
             fontSize: '14px',
             fontWeight: 500,
-            cursor: 'pointer',
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s',
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
+            gap: '8px',
             padding: 0,
             boxSizing: 'border-box',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#0056CC';
+            if (!isSubmitting) e.currentTarget.style.backgroundColor = '#0056CC';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#007AFF';
+            if (!isSubmitting) e.currentTarget.style.backgroundColor = '#007AFF';
           }}
         >
-          Complete Shipment
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Booking...
+            </>
+          ) : (
+            'Complete Shipment'
+          )}
         </button>
       </div>
     </div>

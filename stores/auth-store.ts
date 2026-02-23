@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api, type UserResponse } from '@/lib/api';
 import type { User } from '@/types';
 
 interface AuthState {
@@ -10,63 +11,99 @@ interface AuthState {
 }
 
 interface AuthActions {
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, passwordConfirm: string, firstName?: string, lastName?: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
 }
 
+const mapUserResponse = (response: UserResponse): User => ({
+  id: response.id,
+  email: response.email,
+  first_name: response.first_name,
+  last_name: response.last_name,
+  name: [response.first_name, response.last_name].filter(Boolean).join(' ') || response.email,
+  amazon_seller_id: response.amazon_seller_id,
+  marketplace_id: response.marketplace_id,
+  subscription_tier: response.subscription_tier,
+  timezone: response.timezone,
+  date_joined: response.date_joined,
+});
+
 export const useAuthStore = create<AuthState & AuthActions>()(
   persist(
     (set, get) => ({
-      // State
       user: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
 
-      // Actions
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         
         try {
-          // Simulate API call
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Mock user
-          const mockUser: User = {
-            id: '1',
-            email,
-            name: 'John Doe',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-          
+          const { user } = await api.login(email, password);
           set({ 
-            user: mockUser, 
+            user: mapUserResponse(user), 
             isAuthenticated: true, 
             isLoading: false 
           });
+          return true;
         } catch (error) {
           set({ 
-            error: 'Invalid credentials', 
+            error: error instanceof Error ? error.message : 'Login failed', 
             isLoading: false 
+          });
+          return false;
+        }
+      },
+
+      register: async (email: string, password: string, passwordConfirm: string, firstName?: string, lastName?: string) => {
+        set({ isLoading: true, error: null });
+        
+        try {
+          const { user } = await api.register(email, password, passwordConfirm, firstName, lastName);
+          set({ 
+            user: mapUserResponse(user), 
+            isAuthenticated: true, 
+            isLoading: false 
+          });
+          return true;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Registration failed', 
+            isLoading: false 
+          });
+          return false;
+        }
+      },
+
+      logout: async () => {
+        try {
+          await api.logout();
+        } finally {
+          set({ 
+            user: null, 
+            isAuthenticated: false 
           });
         }
       },
 
-      logout: () => {
-        set({ 
-          user: null, 
-          isAuthenticated: false 
-        });
-      },
-
       checkAuth: async () => {
-        // Check if user is already authenticated
-        const { user } = get();
-        if (user) {
-          set({ isAuthenticated: true });
+        if (!api.isAuthenticated()) {
+          set({ user: null, isAuthenticated: false });
+          return;
+        }
+
+        try {
+          const user = await api.getUser();
+          set({ 
+            user: mapUserResponse(user), 
+            isAuthenticated: true 
+          });
+        } catch {
+          set({ user: null, isAuthenticated: false });
         }
       },
 
@@ -76,7 +113,10 @@ export const useAuthStore = create<AuthState & AuthActions>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      partialize: (state) => ({ 
+        user: state.user, 
+        isAuthenticated: state.isAuthenticated 
+      }),
     }
   )
 );
