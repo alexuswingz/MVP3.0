@@ -130,8 +130,8 @@ function DetailModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      className="fixed inset-0 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.6)', zIndex: 2500 }}
       onClick={onClose}
     >
       <div
@@ -351,6 +351,7 @@ export function ActionItems() {
   const [showNewActionPage, setShowNewActionPage] = useState(false);
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<AddProductsTableRow | null>(null);
+  const [addProductsSearchTerm, setAddProductsSearchTerm] = useState('');
   const [addProductsRows, setAddProductsRows] = useState<AddProductsTableRow[]>([
     { id: '1', product_name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 9720 },
     { id: '2', product_name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 8460 },
@@ -913,20 +914,43 @@ export function ActionItems() {
         </div>
       )}
 
-      {showNewActionPage && (
+      {showNewActionPage && (() => {
+        const q = addProductsSearchTerm.trim().toLowerCase();
+        const filteredRows = q
+          ? addProductsRows.filter((r) => {
+              const name = (r.product_name ?? r.product ?? r.name ?? '').toLowerCase();
+              const asin = (r.asin ?? r.child_asin ?? r.childAsin ?? '').toLowerCase();
+              const brand = (r.brand ?? '').toLowerCase();
+              const size = (r.size ?? '').toLowerCase();
+              return name.includes(q) || asin.includes(q) || brand.includes(q) || size.includes(q);
+            })
+          : addProductsRows;
+        const totalProducts = filteredRows.length;
+        const totalUnits = filteredRows.reduce(
+          (acc, r) => acc + (Number(r.units_to_make ?? r.unitsToMake ?? r.suggestedQty ?? 0) || 0),
+          0
+        );
+        const totalPalettes = totalProducts * 0.5;
+        const totalBoxes = totalUnits / 24;
+        const totalWeightLbs = totalBoxes * 12;
+        const totalTimeHours = totalBoxes * 0.5;
+        const totalFormulas = totalProducts;
+        return (
         <div
           className="fixed top-0 right-0 bottom-0 z-50"
           style={{ left: sidebarCollapsed ? 80 : 280 }}
         >
           <AddProductsPageLayout
             isDarkMode={isDarkMode}
-            productsCount={addProductsRows.length}
+            productsCount={filteredRows.length}
             onBack={() => { setShowNewActionPage(false); setShowNewActionModal(false); }}
             shipmentDate="2026.02.22"
             shipmentType="FBA"
+            searchTerm={addProductsSearchTerm}
+            onSearchTermChange={setAddProductsSearchTerm}
           >
             <AddProductsTableLayout
-              rows={addProductsRows}
+              rows={filteredRows}
               isDarkMode={isDarkMode}
               onRemove={(_, index) => setAddProductsRows((prev) => prev.filter((_, i) => i !== index))}
               onOpenNgoos={(row) => {
@@ -945,16 +969,71 @@ export function ActionItems() {
             selectedRow={selectedNgoosRow ? { ...selectedNgoosRow } : null}
             isDarkMode={isDarkMode}
             allProducts={addProductsRows.map((r) => ({ id: String(r.id ?? '') }))}
+            onActionItemClick={() => setSelectedDetailId(1)}
             onNavigate={(dir) => {
               if (!selectedNgoosRow) return;
-              const idx = addProductsRows.findIndex((r) => String(r.id) === String(selectedNgoosRow.id));
+              const idx = filteredRows.findIndex((r) => String(r.id) === String(selectedNgoosRow.id));
               if (idx < 0) return;
-              const nextIdx = dir === 'next' ? Math.min(idx + 1, addProductsRows.length - 1) : Math.max(idx - 1, 0);
-              setSelectedNgoosRow(addProductsRows[nextIdx]);
+              const nextIdx = dir === 'next' ? Math.min(idx + 1, filteredRows.length - 1) : Math.max(idx - 1, 0);
+              setSelectedNgoosRow(filteredRows[nextIdx]);
             }}
           />
+          {/* Add Products footer - fixed stats bar */}
+          <div
+            style={{
+              position: 'fixed',
+              bottom: '16px',
+              left: `calc(${sidebarCollapsed ? 80 : 280}px + (100vw - ${sidebarCollapsed ? 80 : 280}px) / 2 - 125px)`,
+              transform: 'translateX(-50%)',
+              width: 'fit-content',
+              height: '65px',
+              backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
+              borderRadius: '32px',
+              padding: '16px 24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '32px',
+              zIndex: 1000,
+              boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
+            }}
+          >
+            <div style={{ display: 'flex', gap: '48px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>PRODUCTS</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalProducts}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>PALETTES</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalPalettes.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>BOXES</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{Math.ceil(totalBoxes).toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>UNITS</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalUnits.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap' }}>TIME (HRS)</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalTimeHours.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{Math.round(totalWeightLbs).toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>FORMULAS</span>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalFormulas}</span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -363,6 +363,32 @@ export default function AddProductsTableLayout({
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '12px', color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>{asin}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (asin && asin !== 'N/A') {
+                          void navigator.clipboard.writeText(asin);
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 2,
+                        background: 'none',
+                        border: 'none',
+                        cursor: asin && asin !== 'N/A' ? 'pointer' : 'default',
+                        opacity: asin && asin !== 'N/A' ? 1 : 0.5,
+                      }}
+                      title="Copy ASIN"
+                      aria-label="Copy ASIN"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
                     {(brand || size) && (
                       <span style={{ fontSize: '12px', color: isDarkMode ? '#9CA3AF' : '#6B7280' }}>
                         {brand}
@@ -493,7 +519,7 @@ export default function AddProductsTableLayout({
                     durationSec={0.6}
                   />
                 </div>
-                <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
+                <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content', marginRight: 12 }}>
                   {displayDoi}
                 </span>
                 <div
@@ -507,6 +533,7 @@ export default function AddProductsTableLayout({
                     gap: 8,
                     flexShrink: 0,
                     zIndex: 10,
+                    marginLeft: 12,
                   }}
                 >
                   <img
