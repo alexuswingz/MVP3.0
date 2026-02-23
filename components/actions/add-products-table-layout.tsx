@@ -264,9 +264,11 @@ export default function AddProductsTableLayout({
                 display: 'grid',
                 gridTemplateColumns: '1fr 140px 220px 140px',
                 height: 66,
-                minHeight: 66,
-                maxHeight: 66,
-                padding: '8px 16px',
+                paddingTop: 0,
+                paddingBottom: 0,
+                paddingLeft: 16,
+                paddingRight: 16,
+                marginTop: index === 0 ? 0 : -1,
                 backgroundColor: isDarkMode ? ROW_BG : '#FFFFFF',
                 alignItems: 'center',
                 gap: 32,
@@ -292,7 +294,19 @@ export default function AddProductsTableLayout({
                   pointerEvents: 'none',
                 }}
               />
-              {/* Border line with 30px margin on both sides */}
+              {/* Top border — same inset as bottom so row has equal visual bounds */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 30,
+                  right: 30,
+                  top: 0,
+                  height: 1,
+                  backgroundColor: isDarkMode ? BORDER_COLOR : '#E5E7EB',
+                  zIndex: 1,
+                }}
+              />
+              {/* Bottom border line with 30px margin on both sides */}
               <div
                 style={{
                   position: 'absolute',
