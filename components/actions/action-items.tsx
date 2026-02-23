@@ -343,6 +343,7 @@ function DetailModal({
 
 export function ActionItems() {
   const theme = useUIStore((s) => s.theme);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const isDarkMode = theme !== 'light';
   const [filter, setFilter] = useState<'my' | 'all'>('my');
   const [search, setSearch] = useState('');
@@ -913,7 +914,10 @@ export function ActionItems() {
       )}
 
       {showNewActionPage && (
-        <div className="fixed inset-0 z-50">
+        <div
+          className="fixed top-0 right-0 bottom-0 z-50"
+          style={{ left: sidebarCollapsed ? 80 : 280 }}
+        >
           <AddProductsPageLayout
             isDarkMode={isDarkMode}
             productsCount={addProductsRows.length}
