@@ -14,6 +14,8 @@ export default function AddProductsPageLayout({
   onBack,
   shipmentDate = '2026.02.22',
   shipmentType = 'FBA',
+  searchTerm: controlledSearchTerm,
+  onSearchTermChange,
 }: {
   isDarkMode?: boolean;
   productsCount?: number;
@@ -23,9 +25,13 @@ export default function AddProductsPageLayout({
   onBack?: () => void;
   shipmentDate?: string;
   shipmentType?: string;
+  searchTerm?: string;
+  onSearchTermChange?: (value: string) => void;
 }) {
   const [activeView, setActiveView] = useState<'all-products' | 'floor-inventory'>('all-products');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState('');
+  const searchTerm = controlledSearchTerm !== undefined ? controlledSearchTerm : internalSearchTerm;
+  const setSearchTerm = onSearchTermChange ?? setInternalSearchTerm;
   const currentActive = activeAction;
 
   const renderTab = (tabId: string, label: string) => {

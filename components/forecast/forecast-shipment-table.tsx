@@ -193,7 +193,7 @@ export function NewShipmentTable({
             <th
               className="text-left text-xs font-bold uppercase tracking-wider"
               style={{
-                padding: '1rem 1rem',
+                padding: '0.5rem 1rem',
                 width: '30%',
                 backgroundColor: HEADER_BG,
                 color: '#9CA3AF',
@@ -205,7 +205,7 @@ export function NewShipmentTable({
             <th
               className="text-center text-xs font-bold uppercase tracking-wider"
               style={{
-                padding: '1rem 1rem',
+                padding: '0.5rem 1rem',
                 width: '12%',
                 backgroundColor: HEADER_BG,
                 color: '#9CA3AF',
@@ -217,7 +217,7 @@ export function NewShipmentTable({
             <th
               className="text-center text-xs font-bold uppercase tracking-wider"
               style={{
-                padding: '1rem 1rem',
+                padding: '0.5rem 1rem',
                 width: '18%',
                 backgroundColor: HEADER_BG,
                 color: '#9CA3AF',
@@ -229,14 +229,14 @@ export function NewShipmentTable({
             <th
               className="text-center text-xs font-bold uppercase tracking-wider"
               style={{
-                padding: '1rem 0.75rem',
+                padding: '0.5rem 0.75rem',
                 width: '40%',
                 backgroundColor: HEADER_BG,
                 color: '#9CA3AF',
                 boxSizing: 'border-box',
               }}
             >
-              <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex flex-col items-center justify-center gap-0.5">
                 <span>DAYS OF INVENTORY</span>
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <button
