@@ -140,6 +140,8 @@ export function AddProductsNonTable({
           position: 'relative',
           paddingBottom: 97,
           overflowX: 'hidden',
+          maxWidth: '100%',
+          minWidth: 0,
           borderRadius: 16,
           border: `1px solid ${BORDER_COLOR}`,
           backgroundColor: ROW_BG,
@@ -289,7 +291,7 @@ export function AddProductsNonTable({
         </div>
 
         {/* Product rows - scrollable */}
-        <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto' }}>
+        <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto', overflowX: 'hidden' }}>
           {rows.map((row, index) => {
             const isSelected = selectedIndices.has(index);
             const isAdded = addedIds.has(row.id);
@@ -527,7 +529,7 @@ export function AddProductsNonTable({
                           <div
                             style={{
                               position: 'absolute',
-                              left: -30,
+                              left: -120,
                               top: '50%',
                               transform: 'translateY(-50%)',
                               width: fbaBarWidth,
@@ -550,7 +552,7 @@ export function AddProductsNonTable({
                             </div>
                           </div>
                           <div style={{ width: fbaBarWidth, flexShrink: 0, marginLeft: -20 }} aria-hidden />
-                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -9 }}>
+                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -179 }}>
                             {Math.round(fbaDays)}
                           </span>
                           <div style={{ width: 26, flexShrink: 0 }} aria-hidden />
@@ -559,7 +561,7 @@ export function AddProductsNonTable({
                     })()}
                     {/* When both toggles off: only DOI number */}
                     {!showFbaBar && !showDoiBar && (
-                      <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 'fit-content', marginLeft: -60 }}>
+                      <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 'fit-content', marginLeft: -230 }}>
                         {row.daysOfInventory}
                       </span>
                     )}
@@ -569,7 +571,7 @@ export function AddProductsNonTable({
                         <div
                           style={{
                             position: 'absolute',
-                            left: -30,
+                            left: -120,
                             top: '50%',
                             transform: 'translateY(-50%)',
                             width: 333,
@@ -593,7 +595,7 @@ export function AddProductsNonTable({
                           </div>
                         </div>
                         <div style={{ width: 333, flexShrink: 0, marginLeft: -127 }} aria-hidden />
-                        <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', gap: 2, minWidth: 'fit-content', marginLeft: -5 }}>
+                        <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', gap: 2, minWidth: 'fit-content', marginLeft: -175 }}>
                           {row.daysOfInventory}
                         </span>
                         <div style={{ width: 16, flexShrink: 0 }} aria-hidden />
@@ -604,7 +606,7 @@ export function AddProductsNonTable({
                   <div
                     style={{
                       position: 'absolute',
-                      right: '-5px',
+                      right: '10px',
                       top: '50%',
                       transform: 'translateY(-50%)',
                       display: 'flex',

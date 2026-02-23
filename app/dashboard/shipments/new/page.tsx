@@ -219,7 +219,7 @@ export default function NewShipmentAddProductsPage() {
   }, [shipmentData, showShipmentDetailsModal]);
 
   return (
-    <div className="flex flex-col h-full min-h-0 -m-4 lg:-m-6 flex-1" style={{ backgroundColor: PAGE_BG }}>
+    <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
       <header
         style={{
@@ -929,8 +929,18 @@ export default function NewShipmentAddProductsPage() {
 
       {/* Main Content Area */}
       {activeView === 'all-products' && (
-        <main style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, minHeight: 0, overflow: activeWorkflowTab === 'add-products' && tableMode ? 'hidden' : 'auto', display: 'flex', flexDirection: 'column' }}>
+        <main style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              minWidth: 0,
+              overflowX: 'hidden',
+              overflowY: activeWorkflowTab === 'add-products' && tableMode ? 'hidden' : 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
           {activeWorkflowTab === 'add-products' ? (
             tableMode ? (
               <AddProductsTable

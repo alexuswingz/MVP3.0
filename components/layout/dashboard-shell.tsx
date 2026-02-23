@@ -38,7 +38,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
         )}
         style={{ height: '100dvh', maxHeight: '100dvh' }}
       >
-        <div className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
           {children}
         </div>
       </motion.main>
