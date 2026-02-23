@@ -82,7 +82,7 @@ function saveCompletedShipmentToStorage(
       createdAt: now,
       updatedAt: now,
     };
-    const raw = sessionStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
+    const raw = localStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
     const existing = raw ? JSON.parse(raw) : [];
     const serialized = {
       ...shipment,
@@ -90,7 +90,7 @@ function saveCompletedShipmentToStorage(
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),
     };
-    sessionStorage.setItem(
+    localStorage.setItem(
       COMPLETED_SHIPMENTS_STORAGE_KEY,
       JSON.stringify([...existing, serialized])
     );

@@ -18,7 +18,7 @@ const COMPLETED_SHIPMENTS_STORAGE_KEY = 'mvp_completed_shipments';
 function getCompletedShipmentsFromStorage(): Shipment[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = sessionStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
+    const raw = localStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -201,14 +201,30 @@ export default function ShipmentsPage() {
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
   const [completedShipments, setCompletedShipments] = useState<Shipment[]>([]);
+  const [removedMockIds, setRemovedMockIds] = useState<Set<string>>(new Set());
+
+  function refreshCompletedShipments() {
+    setCompletedShipments(getCompletedShipmentsFromStorage());
+  }
 
   useEffect(() => {
-    setCompletedShipments(getCompletedShipmentsFromStorage());
+    refreshCompletedShipments();
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshCompletedShipments();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   const allShipments = useMemo(
-    () => [...completedShipments, ...mockShipments],
-    [completedShipments]
+    () => [
+      ...completedShipments,
+      ...mockShipments.filter((s) => !removedMockIds.has(s.id)),
+    ],
+    [completedShipments, removedMockIds]
   );
 
   const filteredShipments = allShipments.filter((shipment) => {
@@ -224,6 +240,9 @@ export default function ShipmentsPage() {
     [filteredShipments]
   );
 
+  const shipmentsCount = filteredShipments.length;
+  const archiveCount = allShipments.filter((s) => s.status === 'archived').length;
+
   const archivePlaceholderRows = useMemo<PlanningTableRow[]>(
     () =>
       Array.from({ length: 4 }, (_, i) => ({
@@ -235,13 +254,29 @@ export default function ShipmentsPage() {
         account: '—',
         addProducts: 'completed' as StepStatus,
         bookShipment: 'completed' as StepStatus,
-      })),
-    []
+      })).filter((row) => !removedMockIds.has(row.id)),
+    [removedMockIds]
   );
 
   const handleRowClick = (row: PlanningTableRow) => {
     console.log('Shipment row clicked:', row.id);
   };
+
+  function handleDeleteRow(row: PlanningTableRow) {
+    if (row.id.startsWith('completed-')) {
+      const raw = localStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        const next = parsed.filter((s: { id?: string }) => s.id !== row.id);
+        localStorage.setItem(COMPLETED_SHIPMENTS_STORAGE_KEY, JSON.stringify(next));
+        refreshCompletedShipments();
+      } catch (_) {}
+    } else {
+      setRemovedMockIds((prev) => new Set(prev).add(row.id));
+    }
+  }
 
   return (
     <div
@@ -274,12 +309,17 @@ export default function ShipmentsPage() {
             <LayersIcon />
           </div>
           <div
+            data-shipments-tabs
             style={{
               display: 'inline-flex',
-              gap: 8,
-              borderRadius: 8,
+              gap: 4,
+              borderRadius: 6,
               padding: 4,
-              border: '1px solid #EAEAEA',
+              border: '1px solid #334155',
+              backgroundColor: '#0B111E',
+              height: 31,
+              alignItems: 'center',
+              minWidth: 195,
             }}
           >
             <button
@@ -289,8 +329,8 @@ export default function ShipmentsPage() {
                 padding: '4px 12px',
                 fontSize: 14,
                 fontWeight: 400,
-                borderRadius: 4,
-                border: activeTab === 'shipments' ? '1px solid #EAEAEA' : 'none',
+                borderRadius: 6,
+                border: activeTab === 'shipments' ? '1px solid #334155' : 'none',
                 backgroundColor: activeTab === 'shipments' ? '#1F2937' : 'transparent',
                 color: activeTab === 'shipments' ? '#FFFFFF' : '#9CA3AF',
                 cursor: 'pointer',
@@ -301,7 +341,7 @@ export default function ShipmentsPage() {
                 justifyContent: 'center',
               }}
             >
-              Shipments
+              Shipments ({shipmentsCount})
             </button>
             <button
               type="button"
@@ -310,8 +350,8 @@ export default function ShipmentsPage() {
                 padding: '4px 12px',
                 fontSize: 14,
                 fontWeight: 400,
-                borderRadius: 4,
-                border: activeTab === 'archive' ? '1px solid #EAEAEA' : 'none',
+                borderRadius: 6,
+                border: activeTab === 'archive' ? '1px solid #334155' : 'none',
                 backgroundColor: activeTab === 'archive' ? '#1F2937' : 'transparent',
                 color: activeTab === 'archive' ? '#FFFFFF' : '#9CA3AF',
                 cursor: 'pointer',
@@ -322,7 +362,7 @@ export default function ShipmentsPage() {
                 justifyContent: 'center',
               }}
             >
-              Archive
+              Archive ({archiveCount})
             </button>
           </div>
         </div>
@@ -491,13 +531,13 @@ export default function ShipmentsPage() {
         {/* Planning Table — same structure as 1000bananas2.0 */}
         {activeTab === 'shipments' && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            <PlanningTable rows={planningRows} onRowClick={handleRowClick} />
+            <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
           </motion.section>
         )}
 
         {activeTab === 'archive' && (
           <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-            <PlanningTable rows={archivePlaceholderRows} onRowClick={handleRowClick} />
+            <PlanningTable rows={archivePlaceholderRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
           </motion.section>
         )}
         </div>

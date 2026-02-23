@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
-import { MoreVertical } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MoreVertical, Trash2 } from 'lucide-react';
 
 export type StepStatus = 'pending' | 'in progress' | 'incomplete' | 'completed';
 
@@ -20,6 +20,7 @@ interface PlanningTableProps {
   rows: PlanningTableRow[];
   onRowClick?: (row: PlanningTableRow) => void;
   onMenuClick?: (row: PlanningTableRow, e: React.MouseEvent) => void;
+  onDeleteRow?: (row: PlanningTableRow) => void;
   /** Custom message when rows are empty (e.g. "No data to show") */
   emptyMessage?: string;
 }
@@ -135,8 +136,21 @@ const COLUMN_CONFIG: { key: keyof PlanningTableRow; width: string; label: string
   { key: 'bookShipment', width: '12%', label: 'BOOK', subLabel: 'SHIPMENT' },
 ];
 
-export function PlanningTable({ rows, onRowClick, onMenuClick, emptyMessage }: PlanningTableProps) {
+export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, emptyMessage }: PlanningTableProps) {
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [openMenuRowId, setOpenMenuRowId] = useState<string | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openMenuRowId) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setOpenMenuRowId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenuRowId]);
 
   const handleFilterClick = useCallback((key: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -211,14 +225,18 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, emptyMessage }: P
               </th>
             ))}
             <th
+              className="text-center text-xs font-bold uppercase tracking-wider"
               style={{
-                width: '48px',
+                width: '90px',
                 padding: '1rem 0.5rem',
                 height: 'auto',
                 backgroundColor: HEADER_BG,
                 boxSizing: 'border-box',
+                color: TEXT_MUTED,
               }}
-            />
+            >
+              ACTIONS
+            </th>
           </tr>
         </thead>
         <tbody style={{ borderColor: BORDER_COLOR, display: 'table-row-group' }}>
@@ -409,21 +427,52 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, emptyMessage }: P
                     textAlign: 'center',
                     backgroundColor: 'inherit',
                     borderTop: 'none',
-                    width: 48,
+                    width: 90,
+                    position: 'relative',
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    type="button"
-                    className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-600/50 transition-colors"
-                    aria-label="Row menu"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onMenuClick?.(row, e);
-                    }}
-                  >
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
+                  <div ref={openMenuRowId === row.id ? menuContainerRef : undefined} style={{ position: 'relative', display: 'inline-flex', justifyContent: 'center' }}>
+                    <button
+                      type="button"
+                      className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-600/50 transition-colors"
+                      aria-label="Row menu"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuRowId((prev) => (prev === row.id ? null : row.id));
+                        onMenuClick?.(row, e);
+                      }}
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {openMenuRowId === row.id && onDeleteRow && (
+                      <div
+                        className="rounded shadow-lg border border-gray-600 overflow-hidden"
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: 4,
+                          minWidth: 120,
+                          backgroundColor: '#1F2937',
+                          zIndex: 50,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600/50 hover:text-red-400 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteRow(row);
+                            setOpenMenuRowId(null);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 shrink-0" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             </React.Fragment>
