@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Plus, Search } from 'lucide-react';
@@ -12,6 +12,27 @@ import {
   type StepStatus,
 } from './components/PlanningTable';
 import NewShipmentModal, { type NewShipmentForm } from './components/NewShipmentModal';
+
+const COMPLETED_SHIPMENTS_STORAGE_KEY = 'mvp_completed_shipments';
+
+function getCompletedShipmentsFromStorage(): Shipment[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((s: { plannedDate?: string; createdAt?: string; updatedAt?: string; [k: string]: unknown }) => ({
+      ...s,
+      plannedDate: s.plannedDate ? new Date(s.plannedDate) : undefined,
+      createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+      updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date(),
+      items: Array.isArray(s.items) ? s.items : [],
+    })) as Shipment[];
+  } catch {
+    return [];
+  }
+}
 
 /** Layers icon matching 1000bananas2.0 PlanningHeader (22×22) */
 function LayersIcon() {
@@ -179,8 +200,18 @@ export default function ShipmentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
+  const [completedShipments, setCompletedShipments] = useState<Shipment[]>([]);
 
-  const filteredShipments = mockShipments.filter((shipment) => {
+  useEffect(() => {
+    setCompletedShipments(getCompletedShipmentsFromStorage());
+  }, []);
+
+  const allShipments = useMemo(
+    () => [...completedShipments, ...mockShipments],
+    [completedShipments]
+  );
+
+  const filteredShipments = allShipments.filter((shipment) => {
     const matchesSearch =
       !searchQuery ||
       shipment.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

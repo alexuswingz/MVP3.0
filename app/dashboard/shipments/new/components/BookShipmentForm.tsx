@@ -180,12 +180,14 @@ const addLocationInputStyle: React.CSSProperties = {
 
 interface BookShipmentFormProps {
   onComplete?: () => void;
+  /** Pre-fill from New Shipment (FBA/AWD). */
+  initialShipmentType?: string;
 }
 
-export function BookShipmentForm({ onComplete }: BookShipmentFormProps) {
+export function BookShipmentForm({ onComplete, initialShipmentType = '' }: BookShipmentFormProps) {
   const [formData, setFormData] = useState({
     shipmentNumber: '',
-    shipmentType: '',
+    shipmentType: initialShipmentType,
     amazonShipmentNumber: '',
     amazonRefId: '',
     shipFrom: '',
@@ -201,12 +203,11 @@ export function BookShipmentForm({ onComplete }: BookShipmentFormProps) {
   useEffect(() => {
     try {
       const raw = typeof window !== 'undefined' ? sessionStorage.getItem(SHIPMENT_DETAILS_STORAGE_KEY) : null;
-      if (!raw) return;
-      const saved = JSON.parse(raw) as Record<string, string>;
+      const saved = raw ? (JSON.parse(raw) as Record<string, string>) : {};
       setFormData((prev) => ({
         ...prev,
         ...(saved.shipmentName != null && { shipmentNumber: saved.shipmentName }),
-        ...(saved.shipmentType != null && { shipmentType: saved.shipmentType }),
+        shipmentType: saved.shipmentType ?? initialShipmentType ?? prev.shipmentType,
         ...(saved.amazonShipmentNumber != null && { amazonShipmentNumber: saved.amazonShipmentNumber }),
         ...(saved.amazonRefId != null && { amazonRefId: saved.amazonRefId }),
         ...(saved.shipFrom != null && { shipFrom: saved.shipFrom }),
@@ -214,7 +215,7 @@ export function BookShipmentForm({ onComplete }: BookShipmentFormProps) {
         ...(saved.carrier != null && { carrier: saved.carrier }),
       }));
     } catch (_) {}
-  }, []);
+  }, [initialShipmentType]);
 
   const [locationDropdownFor, setLocationDropdownFor] = useState<'shipFrom' | 'shipTo' | null>(null);
   const [addLocationModalOpen, setAddLocationModalOpen] = useState(false);

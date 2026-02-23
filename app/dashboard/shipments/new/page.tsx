@@ -45,6 +45,8 @@ function saveShipmentDetailsToStorage(data: ShipmentDetailsData) {
   } catch (_) {}
 }
 
+const COMPLETED_SHIPMENTS_STORAGE_KEY = 'mvp_completed_shipments';
+
 function formatShipmentDate(form: NewShipmentForm | null): string {
   if (!form?.shipmentName) {
     const d = new Date();
@@ -54,6 +56,45 @@ function formatShipmentDate(form: NewShipmentForm | null): string {
   if (match) return `${match[1]}.${match[2]}.${match[3]}`;
   const d = new Date();
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function saveCompletedShipmentToStorage(
+  form: NewShipmentForm | null,
+  dateStr: string,
+  typeStr: string
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    const name = form?.shipmentName || `${dateStr} ${typeStr}`;
+    const type = form?.shipmentType?.toLowerCase() === 'fba' ? 'fba' : 'awd';
+    const [y, m, d] = dateStr.split('.').map(Number);
+    const plannedDate = new Date(y, m - 1, d);
+    const now = new Date();
+    const shipment = {
+      id: `completed-${Date.now()}`,
+      name,
+      status: 'received' as const,
+      type,
+      marketplace: form?.marketplace || 'Amazon',
+      account: form?.account || '',
+      plannedDate,
+      items: [] as unknown[],
+      createdAt: now,
+      updatedAt: now,
+    };
+    const raw = sessionStorage.getItem(COMPLETED_SHIPMENTS_STORAGE_KEY);
+    const existing = raw ? JSON.parse(raw) : [];
+    const serialized = {
+      ...shipment,
+      plannedDate: shipment.plannedDate.toISOString(),
+      createdAt: shipment.createdAt.toISOString(),
+      updatedAt: shipment.updatedAt.toISOString(),
+    };
+    sessionStorage.setItem(
+      COMPLETED_SHIPMENTS_STORAGE_KEY,
+      JSON.stringify([...existing, serialized])
+    );
+  } catch (_) {}
 }
 
 const PAGE_BG = '#0a0a0a';
@@ -973,7 +1014,13 @@ export default function NewShipmentAddProductsPage() {
               />
             )
           ) : (
-            <BookShipmentForm onComplete={() => setShowShipmentBookedModal(true)} />
+            <BookShipmentForm
+                initialShipmentType={shipmentData?.shipmentType ?? ''}
+                onComplete={() => {
+                  saveCompletedShipmentToStorage(shipmentData, dateStr, typeStr);
+                  setShowShipmentBookedModal(true);
+                }}
+              />
           )}
           </div>
         </main>
