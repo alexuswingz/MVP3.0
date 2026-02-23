@@ -17,6 +17,7 @@ const DEFAULT_RECENT_CARRIERS = [
 ];
 
 const LOCATIONS_STORAGE_KEY = 'mvp_shipment_locations';
+const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
 
 export interface SavedCarrier {
   id: string;
@@ -195,6 +196,24 @@ export function BookShipmentForm({ onComplete }: BookShipmentFormProps) {
   const [locations, setLocations] = useState<ShipmentLocation[]>([]);
   useEffect(() => {
     setLocations(loadLocations());
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(SHIPMENT_DETAILS_STORAGE_KEY) : null;
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Record<string, string>;
+      setFormData((prev) => ({
+        ...prev,
+        ...(saved.shipmentName != null && { shipmentNumber: saved.shipmentName }),
+        ...(saved.shipmentType != null && { shipmentType: saved.shipmentType }),
+        ...(saved.amazonShipmentNumber != null && { amazonShipmentNumber: saved.amazonShipmentNumber }),
+        ...(saved.amazonRefId != null && { amazonRefId: saved.amazonRefId }),
+        ...(saved.shipFrom != null && { shipFrom: saved.shipFrom }),
+        ...(saved.shipTo != null && { shipTo: saved.shipTo }),
+        ...(saved.carrier != null && { carrier: saved.carrier }),
+      }));
+    } catch (_) {}
   }, []);
 
   const [locationDropdownFor, setLocationDropdownFor] = useState<'shipFrom' | 'shipTo' | null>(null);

@@ -112,6 +112,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartCursorRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const chartTooltipWrapperRef = useRef<HTMLDivElement>(null);
   const gearButtonWrapperRef = useRef<HTMLDivElement>(null);
   const timeRangeDropdownRef = useRef<HTMLDivElement>(null);
   const zoomBoxDragRef = useRef<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
@@ -464,6 +466,19 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
           setChartRangeSelection((prev) =>
             prev.startTimestamp == null ? prev : { ...prev, endTimestamp: t }
           );
+        }
+      }
+      // Update cursor position for tooltip (follow mouse when not zooming/range-dragging)
+      chartCursorRef.current = { clientX: e.clientX, clientY: e.clientY };
+      const wrapper = chartTooltipWrapperRef.current;
+      const container = chartContainerRef.current;
+      if (wrapper) {
+        wrapper.style.left = `${e.clientX}px`;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          wrapper.style.top = `${rect.bottom - 22}px`;
+        } else {
+          wrapper.style.top = `${e.clientY - 250}px`;
         }
       }
     },
@@ -921,14 +936,16 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                         color: '#fff',
                         height: '22px',
                         lineHeight: '22px',
-                        overflow: 'visible',
+                        overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                         margin: 0,
                         marginTop: '-4px',
                         paddingBottom: '4px',
                         boxSizing: 'content-box',
+                        minWidth: 0,
                       }}
+                      title={selectedProduct.name || selectedProduct.product || 'Product Name'}
                     >
                       {selectedProduct.name || selectedProduct.product || 'Product Name'}
                     </h3>
@@ -1702,7 +1719,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           const date = new Date(point?.timestamp ?? 0);
                           const isForecast = point?.isForecast === true;
                           const formatVal = (x: unknown) => (x == null ? '—' : (typeof x === 'number' ? Math.round(x).toLocaleString() : String(x)));
-                          return (
+                          const inner = (
                             <div
                               style={{
                                 backgroundColor: '#1e293b',
@@ -1734,6 +1751,24 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                                   </p>
                                 </>
                               )}
+                            </div>
+                          );
+                          const pos = chartCursorRef.current;
+                          const container = chartContainerRef.current;
+                          const top = container ? container.getBoundingClientRect().bottom - 22 : (pos ? pos.clientY - 250 : 0);
+                          return (
+                            <div
+                              ref={chartTooltipWrapperRef}
+                              style={{
+                                position: 'fixed',
+                                left: pos ? `${pos.clientX}px` : 0,
+                                top,
+                                transform: 'translate(-50%, 0)',
+                                zIndex: 10,
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              {inner}
                             </div>
                           );
                         }}

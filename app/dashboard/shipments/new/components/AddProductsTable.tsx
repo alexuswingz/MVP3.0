@@ -318,21 +318,33 @@ export function AddProductsTable({
       `}</style>
       <div
         style={{
-          marginTop: '1.25rem',
-          position: 'relative',
-          paddingBottom: 97,
-          backgroundColor: HEADER_BG,
-          borderRadius: 12,
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
+        <div
+          style={{
+            marginTop: '1.25rem',
+            position: 'relative',
+            paddingBottom: 97,
+            backgroundColor: HEADER_BG,
+            borderRadius: 12,
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
         <div
           style={{
             overflowX: 'auto',
             overflowY: 'auto',
             width: '100%',
             position: 'relative',
-            minHeight: 400,
-            maxHeight: 'calc(100vh - 280px)',
+            flex: 1,
+            minHeight: 0,
             border: `1px solid #334155`,
             borderRadius: 8,
             backgroundColor: HEADER_BG,
@@ -356,10 +368,11 @@ export function AddProductsTable({
               style={{
                 position: 'sticky',
                 top: 0,
-                zIndex: 1000,
+                zIndex: 1020,
                 backgroundColor: HEADER_BG,
                 display: 'table-header-group',
                 borderBottom: ROW_BORDER,
+                boxShadow: '0 1px 0 0 #334155',
               }}
             >
               <tr style={{ height: 58, maxHeight: 58, backgroundColor: HEADER_BG }}>
@@ -401,6 +414,7 @@ export function AddProductsTable({
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
 

@@ -10,8 +10,10 @@ import { CustomizeColumnsModal, DEFAULT_VISIBLE_COLUMN_KEYS } from './components
 import { DOISettingsModal } from './components/DOISettingsModal';
 import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
+import { ShipmentDetailsModal, type ShipmentDetailsData } from './components/ShipmentDetailsModal';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
+const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
 const isDarkMode = true;
 
 function getShipmentFromStorage(): NewShipmentForm | null {
@@ -23,6 +25,24 @@ function getShipmentFromStorage(): NewShipmentForm | null {
   } catch {
     return null;
   }
+}
+
+function getShipmentDetailsFromStorage(): Partial<ShipmentDetailsData> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SHIPMENT_DETAILS_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Partial<ShipmentDetailsData>;
+  } catch {
+    return null;
+  }
+}
+
+function saveShipmentDetailsToStorage(data: ShipmentDetailsData) {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(SHIPMENT_DETAILS_STORAGE_KEY, JSON.stringify(data));
+  } catch (_) {}
 }
 
 function formatShipmentDate(form: NewShipmentForm | null): string {
@@ -119,6 +139,7 @@ export default function NewShipmentAddProductsPage() {
   const [showExportCompleteModal, setShowExportCompleteModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
+  const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
@@ -176,11 +197,29 @@ export default function NewShipmentAddProductsPage() {
   );
   const totalProducts = filteredRawProducts.length;
   const totalPalettes = totalProducts * 0.5;
-  const totalBoxes = tableRows.reduce((acc, r) => acc + (Number(r.unitsToMake) ?? 0), 0) / 24;
+  const totalUnits = tableRows.reduce((acc, r) => acc + (Number(r.unitsToMake) ?? 0), 0);
+  const totalBoxes = totalUnits / 24;
   const totalWeightLbs = totalBoxes * 12;
 
+  const shipmentDetailsForModal: ShipmentDetailsData | null = useMemo(() => {
+    const fromStorage = getShipmentFromStorage();
+    const details = getShipmentDetailsFromStorage();
+    const name = fromStorage?.shipmentName ?? '';
+    const type = fromStorage?.shipmentType ?? details?.shipmentType ?? '';
+    return {
+      shipmentName: details?.shipmentName ?? name,
+      shipmentType: type,
+      amazonShipmentNumber: details?.amazonShipmentNumber ?? (type ? (type === 'AWD' ? 'STAR-XXXXXXXXXXXXX' : 'FBAXXXXXXXXX') : ''),
+      amazonRefId: details?.amazonRefId ?? 'XXXXXXXX',
+      shipping: details?.shipping ?? 'UPS',
+      shipFrom: details?.shipFrom ?? '',
+      shipTo: details?.shipTo ?? '',
+      carrier: details?.carrier ?? '',
+    };
+  }, [shipmentData, showShipmentDetailsModal]);
+
   return (
-    <div className="flex flex-col min-h-screen -m-4 lg:-m-6" style={{ backgroundColor: PAGE_BG, minHeight: '100vh' }}>
+    <div className="flex flex-col h-full min-h-0 -m-4 lg:-m-6 flex-1" style={{ backgroundColor: PAGE_BG }}>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
       <header
         style={{
@@ -282,6 +321,10 @@ export default function NewShipmentAddProductsPage() {
                   >
                     <button
                       type="button"
+                      onClick={() => {
+                        setShowShipmentDetailsModal(true);
+                        setShowHeaderDropdown(false);
+                      }}
                       style={{
                         width: '100%',
                         padding: '10px 16px',
@@ -886,7 +929,8 @@ export default function NewShipmentAddProductsPage() {
 
       {/* Main Content Area */}
       {activeView === 'all-products' && (
-        <main style={{ flex: 1, overflow: 'auto', padding: '0 24px 24px' }}>
+        <main style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: activeWorkflowTab === 'add-products' && tableMode ? 'hidden' : 'auto', display: 'flex', flexDirection: 'column' }}>
           {activeWorkflowTab === 'add-products' ? (
             tableMode ? (
               <AddProductsTable
@@ -921,11 +965,12 @@ export default function NewShipmentAddProductsPage() {
           ) : (
             <BookShipmentForm onComplete={() => setShowShipmentBookedModal(true)} />
           )}
+          </div>
         </main>
       )}
 
       {activeView === 'floor-inventory' && (
-        <main style={{ flex: 1, padding: '0 24px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14 }}>
+        <main style={{ flex: 1, minHeight: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF', fontSize: 14 }}>
           <p>Floor Inventory view — select a category from the dropdown (e.g. Finished Goods, Shiners, Unused Formulas).</p>
         </main>
       )}
@@ -948,6 +993,18 @@ export default function NewShipmentAddProductsPage() {
         onClose={() => setShowCustomizeColumnsModal(false)}
         visibleColumnKeys={visibleColumnKeys}
         onApply={(visibleKeys) => setVisibleColumnKeys(visibleKeys)}
+      />
+
+      <ShipmentDetailsModal
+        isOpen={showShipmentDetailsModal}
+        onClose={() => setShowShipmentDetailsModal(false)}
+        shipmentData={shipmentDetailsForModal}
+        totalUnits={totalUnits}
+        totalBoxes={totalBoxes}
+        onSave={(data) => {
+          saveShipmentDetailsToStorage(data);
+          setShowShipmentDetailsModal(false);
+        }}
       />
 
       {/* Shipment Booked modal — shown after clicking Complete Shipment */}
