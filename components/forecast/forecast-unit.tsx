@@ -64,6 +64,7 @@ interface ForecastUnitProps {
   timeline?: typeof MOCK_TIMELINE;
   inventoryOnly?: boolean;
   isDarkMode?: boolean;
+  showMetricCards?: boolean;
 }
 
 export default function ForecastUnit({
@@ -71,6 +72,7 @@ export default function ForecastUnit({
   timeline = MOCK_TIMELINE,
   inventoryOnly = true,
   isDarkMode = true,
+  showMetricCards = true,
 }: ForecastUnitProps) {
   const [hoveredSegment, setHoveredSegment] = useState<'fba' | 'total' | 'forecast' | null>(null);
   const [zoomToolActive, setZoomToolActive] = useState(false);
@@ -417,6 +419,7 @@ export default function ForecastUnit({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%' }}>
       {/* Three metric cards */}
+      {showMetricCards && (
       <div
         style={{
           display: 'grid',
@@ -491,6 +494,7 @@ export default function ForecastUnit({
           </div>
         </div>
       </div>
+      )}
 
       {/* Unit Forecast chart */}
       <div

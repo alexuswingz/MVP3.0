@@ -310,6 +310,45 @@ interface NgoosContentProps {
   isAlreadyAdded?: boolean;
   overrideUnitsToMake?: number | null;
   onAddUnits?: (units: number) => void;
+  showActionItems?: boolean;
+  onActionItemsExpandedChange?: (expanded: boolean) => void;
+}
+
+function ActionItemCard({ title, tagBgColor = '#10b981', tagText = 'INV' }: { title: string; tagBgColor?: string; tagText?: string }) {
+  return (
+    <div style={{
+      width: '100%', backgroundColor: '#1C2634', border: '1px solid #334155', borderRadius: '4px', padding: '8px',
+      marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.15)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>{title}</span>
+        <button style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #334155', backgroundColor: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}></div>
+        <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+        <div style={{ flex: 1 }}></div>
+        <span style={{ backgroundColor: tagBgColor, color: '#ffffff', fontSize: '0.625rem', fontWeight: '700', padding: '0.125rem 0.375rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>{tagText}</span>
+      </div>
+    </div>
+  );
+}
+
+function ActionItemsColumn({ title, count, children, onAddClick }: { title: string; count: number; children: React.ReactNode; onAddClick?: (title: string) => void }) {
+  return (
+    <div style={{ backgroundColor: '#1a2332', borderRadius: '8px', padding: '10px', display: 'flex', flexDirection: 'column', height: '252px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>{title}</span>
+        <span style={{ backgroundColor: '#334155', color: '#94a3b8', fontSize: '0.75rem', fontWeight: '600', padding: '0.125rem 0.5rem', borderRadius: '9999px' }}>{count}</span>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>{children}</div>
+      <button onClick={() => onAddClick?.(title)} style={{ backgroundColor: '#4B5563', border: 'none', borderRadius: '4px', padding: '1px 8px 4px 8px', color: '#94a3b8', fontSize: '0.8125rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', height: '24px' }}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>Add action item
+      </button>
+    </div>
+  );
 }
 
 function NgoosContent({
@@ -319,10 +358,15 @@ function NgoosContent({
   isAlreadyAdded = false,
   overrideUnitsToMake = null,
   onAddUnits = () => {},
+  showActionItems = false,
+  onActionItemsExpandedChange,
 }: NgoosContentProps) {
   const [activeTab, setActiveTab] = useState('forecast');
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
   const [displayUnitsOverride, setDisplayUnitsOverride] = useState<number | null>(null);
+  const [actionItemsExpanded, setActionItemsExpanded] = useState(false);
+  const [showActionItemModal, setShowActionItemModal] = useState(false);
+  const [selectedActionCategory, setSelectedActionCategory] = useState('Inventory');
 
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
@@ -345,7 +389,6 @@ function NgoosContent({
         backgroundColor: '#1A2235',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0,
         flex: 1,
         minHeight: inventoryOnly ? '662px' : 0,
         outline: 'none',
@@ -540,17 +583,21 @@ function NgoosContent({
               display: 'flex',
               flexDirection: 'column',
               minHeight: 0,
+              ...(showActionItems && actionItemsExpanded && { flexShrink: 0, minHeight: '380px' }),
             }}
           >
-            <div style={{ marginBottom: '0.75rem' }}>
-              <NgoosCard data={data} inventoryData={inventoryData} onAsinCopy={() => {}} />
-            </div>
+            {(!showActionItems || !actionItemsExpanded) && (
+              <div style={{ marginBottom: '0.75rem' }}>
+                <NgoosCard data={data} inventoryData={inventoryData} onAsinCopy={() => {}} />
+              </div>
+            )}
 
             <ForecastUnit
               inventoryData={inventoryData}
               timeline={timeline}
               inventoryOnly
               isDarkMode={isDarkMode}
+              showMetricCards={!(showActionItems && actionItemsExpanded)}
             />
           </div>
         </>
@@ -566,6 +613,84 @@ function NgoosContent({
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
           <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Ads tab — replace with Ads chart when wiring up</p>
         </div>
+      )}
+
+      {showActionItems && (
+        <>
+        <div style={{ marginTop: '1rem', flexShrink: 0, position: 'relative' }}>
+          <div style={{ backgroundColor: '#0F172A', border: '1px solid #334155', borderRadius: '12px', overflow: 'hidden' }}>
+            <button
+              onClick={() => {
+              const next = !actionItemsExpanded;
+              setActionItemsExpanded(next);
+              onActionItemsExpandedChange?.(next);
+            }}
+              style={{
+                width: '100%', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                backgroundColor: 'transparent', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#212937'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <span style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', letterSpacing: '0.025em' }}>Action Items</span>
+              <svg style={{ width: '20px', height: '20px', color: '#94a3b8', transform: actionItemsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {actionItemsExpanded && (
+              <div style={{ padding: '16px', borderTop: '1px solid #334155', backgroundColor: '#0F172A', overflowY: 'auto', maxHeight: 'min(40vh, 320px)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                  <ActionItemsColumn title="Inventory" count={1} onAddClick={(cat) => { setSelectedActionCategory(cat); setShowActionItemModal(true); }}>
+                    <ActionItemCard title="Low FBA Available" tagBgColor="#10b981" tagText="INV" />
+                  </ActionItemsColumn>
+                  <ActionItemsColumn title="Price" count={1} onAddClick={(cat) => { setSelectedActionCategory(cat); setShowActionItemModal(true); }}>
+                    <ActionItemCard title="Price Edit" tagBgColor="#ef4444" tagText="CA" />
+                  </ActionItemsColumn>
+                  <ActionItemsColumn title="Ads" count={3} onAddClick={(cat) => { setSelectedActionCategory(cat); setShowActionItemModal(true); }}>
+                    <ActionItemCard title="TACOS Too High" tagBgColor="#3b82f6" tagText="JB" />
+                    <ActionItemCard title="Keyword Sweep" tagBgColor="#3b82f6" tagText="JB" />
+                    <ActionItemCard title="Check TOS" tagBgColor="#3b82f6" tagText="JB" />
+                  </ActionItemsColumn>
+                  <ActionItemsColumn title="PDP" count={2} onAddClick={(cat) => { setSelectedActionCategory(cat); setShowActionItemModal(true); }}>
+                    <ActionItemCard title="Slide Edit" tagBgColor="#3b82f6" tagText="JB" />
+                    <ActionItemCard title="Change 2nd Bullet" tagBgColor="#3b82f6" tagText="JB" />
+                  </ActionItemsColumn>
+                </div>
+              </div>
+            )}
+          </div>
+          {showActionItemModal && (
+          <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, borderRadius: '12px' }} onClick={() => setShowActionItemModal(false)}>
+            <div style={{ backgroundColor: '#1A2235', borderRadius: '12px', width: '440px', minHeight: '246px', border: '1px solid #334155', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #334155', backgroundColor: '#1A2235' }}>
+                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#F9FAFB' }}>New {selectedActionCategory} Action Item</h2>
+                <button onClick={() => setShowActionItemModal(false)} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex', padding: '2px' }}>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div style={{ backgroundColor: '#1e2736', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <input type="text" placeholder="Enter Subject..." style={{ width: '100%', maxWidth: '408px', height: '23px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #007AFF', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }} />
+                <textarea placeholder="Enter Description..." style={{ width: '100%', maxWidth: '408px', height: '52px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', cursor: 'pointer', height: '24px', boxSizing: 'border-box' }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A4.992 4.992 0 0112 15a4.992 4.992 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span>Select Assignee</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', cursor: 'pointer', height: '24px', boxSizing: 'border-box' }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth={2}/><line x1="16" y1="2" x2="16" y2="6" strokeWidth={2}/><line x1="8" y1="2" x2="8" y2="6" strokeWidth={2}/><line x1="3" y1="10" x2="21" y2="10" strokeWidth={2}/></svg>
+                    <span>Select Due Date</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', gap: '10px', backgroundColor: '#141C2D', borderTop: '1px solid #334155', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', boxSizing: 'border-box' }}>
+                <button onClick={() => setShowActionItemModal(false)} style={{ width: '64px', height: '23px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#252F42', color: '#E5E7EB', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>Cancel</button>
+                <button style={{ width: '63px', height: '23px', borderRadius: '4px', border: 'none', backgroundColor: 'rgba(0, 122, 255, 0.5)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>Create</button>
+              </div>
+            </div>
+          </div>
+          )}
+        </div>
+        </>
       )}
     </div>
   );
@@ -588,7 +713,8 @@ interface NGOOSmodalProps {
   } | null;
   isDarkMode?: boolean;
   allProducts?: { id: string }[];
-  onNavigate?: (dir: 'prev' | 'next') => void;
+  onNavigate?: ((dir: 'prev' | 'next') => void) | null;
+  showActionItems?: boolean;
 }
 
 export default function NGOOSmodal({
@@ -598,9 +724,11 @@ export default function NGOOSmodal({
   isDarkMode = true,
   allProducts = [],
   onNavigate = null,
+  showActionItems = false,
 }: NGOOSmodalProps) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAddUnits, setPendingAddUnits] = useState<number | null>(null);
+  const [actionItemsExpanded, setActionItemsExpanded] = useState(false);
 
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
@@ -733,7 +861,7 @@ export default function NGOOSmodal({
                     <button
                       type="button"
                       onClick={() => onNavigate?.('prev')}
-                      disabled={!onNavigate || totalProducts === 0}
+                      disabled={onNavigate == null || totalProducts === 0}
                       style={{
                         width: '24px',
                         height: '24px',
@@ -743,13 +871,13 @@ export default function NGOOSmodal({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: onNavigate && totalProducts > 0 ? 'pointer' : 'not-allowed',
+                        cursor: onNavigate != null && totalProducts > 0 ? 'pointer' : 'not-allowed',
                         color: '#9CA3AF',
-                        opacity: onNavigate && totalProducts > 0 ? 1 : 0.5,
+                        opacity: onNavigate != null && totalProducts > 0 ? 1 : 0.5,
                         transition: 'background-color 0.2s',
                       }}
                       onMouseEnter={(e) => {
-                        if (onNavigate && totalProducts > 0) {
+                        if (onNavigate != null && totalProducts > 0) {
                           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                         }
                       }}
@@ -772,7 +900,7 @@ export default function NGOOSmodal({
                     <button
                       type="button"
                       onClick={() => onNavigate?.('next')}
-                      disabled={!onNavigate || totalProducts === 0}
+                      disabled={onNavigate == null || totalProducts === 0}
                       style={{
                         width: '24px',
                         height: '24px',
@@ -782,13 +910,13 @@ export default function NGOOSmodal({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: onNavigate && totalProducts > 0 ? 'pointer' : 'not-allowed',
+                        cursor: onNavigate != null && totalProducts > 0 ? 'pointer' : 'not-allowed',
                         color: '#9CA3AF',
-                        opacity: onNavigate && totalProducts > 0 ? 1 : 0.5,
+                        opacity: onNavigate != null && totalProducts > 0 ? 1 : 0.5,
                         transition: 'background-color 0.2s',
                       }}
                       onMouseEnter={(e) => {
-                        if (onNavigate && totalProducts > 0) {
+                        if (onNavigate != null && totalProducts > 0) {
                           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                         }
                       }}
@@ -831,7 +959,7 @@ export default function NGOOSmodal({
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: isDarkMode ? '#1A2235' : '#F9FAFB',
-            overflow: 'auto',
+            overflow: showActionItems && !actionItemsExpanded ? 'hidden' : 'auto',
           }}
         >
           {!hasAsin ? (
@@ -859,6 +987,8 @@ export default function NGOOSmodal({
               isAlreadyAdded={false}
               overrideUnitsToMake={forecastUnits || null}
               onAddUnits={handleAddUnitsClick}
+              showActionItems={showActionItems}
+              onActionItemsExpandedChange={setActionItemsExpanded}
             />
           )}
         </div>

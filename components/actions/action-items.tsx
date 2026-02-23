@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useUIStore } from '@/stores/ui-store';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import AddProductsPageLayout from '@/components/actions/add-products-page-layout';
+import AddProductsTableLayout, { type AddProductsTableRow } from '@/components/actions/add-products-table-layout';
+import NGOOSmodal from '@/components/forecast/NGOOSmodal';
 
 const MOCK_DETAIL: Record<number, {
   ticketId: string;
@@ -344,6 +347,20 @@ export function ActionItems() {
   const [filter, setFilter] = useState<'my' | 'all'>('my');
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
+  const [showNewActionPage, setShowNewActionPage] = useState(false);
+  const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
+  const [selectedNgoosRow, setSelectedNgoosRow] = useState<AddProductsTableRow | null>(null);
+  const [addProductsRows, setAddProductsRows] = useState<AddProductsTableRow[]>([
+    { id: '1', product_name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 9720 },
+    { id: '2', product_name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 8460 },
+    { id: '3', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 15, units_to_make: 4608 },
+    { id: '4', product_name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 37, units_to_make: 4260 },
+    { id: '5', product_name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 56, units_to_make: 3780 },
+    { id: '6', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 59, units_to_make: 3060 },
+    { id: '7', product_name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 68, units_to_make: 3360 },
+    { id: '8', product_name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 97, units_to_make: 1320 },
+    { id: '9', product_name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 132, units_to_make: 180 },
+  ]);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [newItem, setNewItem] = useState({
     product: '',
@@ -703,7 +720,7 @@ export function ActionItems() {
       )}
 
 
-      {showNewActionModal && (
+      {showNewActionModal && !showNewActionPage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.6)' }}
@@ -884,7 +901,7 @@ export function ActionItems() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowNewActionModal(false); /* TODO: submit */ }}
+                onClick={() => { setShowNewActionModal(false); setShowNewActionPage(true); }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity"
                 style={{ background: '#3b82f6' }}
               >
@@ -892,6 +909,46 @@ export function ActionItems() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showNewActionPage && (
+        <div className="fixed inset-0 z-50">
+          <AddProductsPageLayout
+            isDarkMode={isDarkMode}
+            productsCount={addProductsRows.length}
+            onBack={() => { setShowNewActionPage(false); setShowNewActionModal(false); }}
+            shipmentDate="2026.02.22"
+            shipmentType="FBA"
+          >
+            <AddProductsTableLayout
+              rows={addProductsRows}
+              isDarkMode={isDarkMode}
+              onRemove={(_, index) => setAddProductsRows((prev) => prev.filter((_, i) => i !== index))}
+              onOpenNgoos={(row) => {
+                setSelectedNgoosRow(row);
+                setNgoosModalOpen(true);
+              }}
+            />
+          </AddProductsPageLayout>
+          <NGOOSmodal
+            isOpen={ngoosModalOpen}
+            showActionItems
+            onClose={() => {
+              setNgoosModalOpen(false);
+              setSelectedNgoosRow(null);
+            }}
+            selectedRow={selectedNgoosRow ? { ...selectedNgoosRow } : null}
+            isDarkMode={isDarkMode}
+            allProducts={addProductsRows.map((r) => ({ id: String(r.id ?? '') }))}
+            onNavigate={(dir) => {
+              if (!selectedNgoosRow) return;
+              const idx = addProductsRows.findIndex((r) => String(r.id) === String(selectedNgoosRow.id));
+              if (idx < 0) return;
+              const nextIdx = dir === 'next' ? Math.min(idx + 1, addProductsRows.length - 1) : Math.max(idx - 1, 0);
+              setSelectedNgoosRow(addProductsRows[nextIdx]);
+            }}
+          />
         </div>
       )}
     </div>
