@@ -433,10 +433,7 @@ export default function NewShipmentAddProductsPage() {
             }}
             aria-label="Settings"
           >
-            <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-            </svg>
+            <img src="/assets/Icon%20Button.png" alt="" width={24} height={24} style={{ display: 'block' }} />
           </button>
           <div ref={headerDropdownRef} style={{ position: 'relative' }}>
             <button
@@ -492,7 +489,7 @@ export default function NewShipmentAddProductsPage() {
         </div>
       </header>
 
-      {/* Workflow tabs — Add Products / Book Shipment (circle indicator + underline) */}
+      {/* Workflow tabs — Add Products / Book Shipment (circle indicator + animated fill bar) */}
       <div
         style={{
           display: 'flex',
@@ -502,70 +499,97 @@ export default function NewShipmentAddProductsPage() {
           borderTop: `1px solid ${HEADER_BORDER}`,
           borderBottom: `1px solid ${HEADER_BORDER}`,
           backgroundColor: PAGE_BG,
+          position: 'relative',
         }}
       >
-        <button
-          type="button"
-          onClick={() => setActiveWorkflowTab('add-products')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '12px 16px',
-            fontSize: 14,
-            fontWeight: 500,
-            color: activeWorkflowTab === 'add-products' ? '#3B82F6' : '#9CA3AF',
-            backgroundColor: 'transparent',
-            border: 'none',
-            borderBottom: `2px solid ${activeWorkflowTab === 'add-products' ? '#3B82F6' : 'transparent'}`,
-            marginBottom: -1,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {activeWorkflowTab === 'add-products' ? (
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
-              <circle cx="12" cy="12" r="6" />
-            </svg>
-          ) : (
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
-              <circle cx="12" cy="12" r="6" />
-            </svg>
-          )}
-          <span>Add Products</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveWorkflowTab('book-shipment')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '12px 16px',
-            fontSize: 14,
-            fontWeight: 500,
-            color: activeWorkflowTab === 'book-shipment' ? '#3B82F6' : '#9CA3AF',
-            backgroundColor: 'transparent',
-            border: 'none',
-            borderBottom: `2px solid ${activeWorkflowTab === 'book-shipment' ? '#3B82F6' : 'transparent'}`,
-            marginBottom: -1,
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {activeWorkflowTab === 'book-shipment' ? (
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
-              <circle cx="12" cy="12" r="6" />
-            </svg>
-          ) : (
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
-              <circle cx="12" cy="12" r="6" />
-            </svg>
-          )}
-          <span>Book Shipment</span>
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setActiveWorkflowTab('add-products')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12px 16px',
+              fontSize: 14,
+              fontWeight: 500,
+              color: activeWorkflowTab === 'add-products' ? '#3B82F6' : '#9CA3AF',
+              backgroundColor: 'transparent',
+              border: 'none',
+              marginBottom: -1,
+              cursor: 'pointer',
+              transition: 'color 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {activeWorkflowTab === 'add-products' ? (
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
+                <circle cx="12" cy="12" r="6" />
+              </svg>
+            ) : (
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
+                <circle cx="12" cy="12" r="6" />
+              </svg>
+            )}
+            <span>Add Products</span>
+          </button>
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 2,
+              backgroundColor: '#3B82F6',
+              width: activeWorkflowTab === 'add-products' ? '100%' : '0%',
+              transition: 'width 0.3s ease-out',
+            }}
+          />
+        </div>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => setActiveWorkflowTab('book-shipment')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12px 16px',
+              fontSize: 14,
+              fontWeight: 500,
+              color: activeWorkflowTab === 'book-shipment' ? '#3B82F6' : '#9CA3AF',
+              backgroundColor: 'transparent',
+              border: 'none',
+              marginBottom: -1,
+              cursor: 'pointer',
+              transition: 'color 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {activeWorkflowTab === 'book-shipment' ? (
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
+                <circle cx="12" cy="12" r="6" />
+              </svg>
+            ) : (
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
+                <circle cx="12" cy="12" r="6" />
+              </svg>
+            )}
+            <span>Book Shipment</span>
+          </button>
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 2,
+              backgroundColor: '#3B82F6',
+              width: activeWorkflowTab === 'book-shipment' ? '100%' : '0%',
+              transition: 'width 0.3s ease-out',
+            }}
+          />
+        </div>
       </div>
 
       {/* My Products bar — only on Add Products tab, not on Book Shipment */}
@@ -1001,6 +1025,7 @@ export default function NewShipmentAddProductsPage() {
             ) : (
               <AddProductsNonTable
                 rows={nonTableRows}
+                requiredDoi={requiredDoiNum}
                 onProductClick={(row) => {
                   setSelectedProduct(row);
                   setShowNgoosModal(true);

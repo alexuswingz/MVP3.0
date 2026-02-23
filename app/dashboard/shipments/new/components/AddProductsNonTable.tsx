@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
@@ -20,6 +20,8 @@ export interface NonTableProductRow {
 
 interface AddProductsNonTableProps {
   rows: NonTableProductRow[];
+  /** DOI from DOI settings; when a row is added, bar and number use this instead of row.daysOfInventory */
+  requiredDoi?: number;
   onProductClick?: (row: NonTableProductRow) => void;
   onClear?: () => void;
   onExport?: () => void;
@@ -65,6 +67,7 @@ function getCheckboxStyle(checked: boolean): React.CSSProperties {
 
 export function AddProductsNonTable({
   rows,
+  requiredDoi = 150,
   onProductClick,
   onClear,
   onExport,
@@ -78,6 +81,9 @@ export function AddProductsNonTable({
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
   const [showFbaBar, setShowFbaBar] = useState(false);
   const [showDoiBar, setShowDoiBar] = useState(true);
+  const [barFillAnimation, setBarFillAnimation] = useState<{ rowId: string; targetPct: number } | null>(null);
+  const [barFillPhase, setBarFillPhase] = useState<'start' | 'go'>('start');
+  const [copiedAsinRowId, setCopiedAsinRowId] = useState<string | null>(null);
 
   const toggleSelect = (index: number) => {
     setSelectedIndices((prev) => {
@@ -96,13 +102,34 @@ export function AddProductsNonTable({
   const handleAddClick = (row: NonTableProductRow) => {
     setAddedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(row.id)) next.delete(row.id);
+      const wasAdded = next.has(row.id);
+      if (wasAdded) next.delete(row.id);
       else next.add(row.id);
+      if (!wasAdded) {
+        const targetPct = Math.min(100, (requiredDoi / 100) * 100);
+        setBarFillAnimation({ rowId: row.id, targetPct });
+        setBarFillPhase('start');
+      }
       return next;
     });
   };
 
   const allSelected = rows.length > 0 && selectedIndices.size === rows.length;
+
+  // Animate DOI bar fill when Add is clicked: 0% -> target%. Short delay so 0% paints, then CSS transition runs.
+  useEffect(() => {
+    if (!barFillAnimation || barFillPhase !== 'start') return;
+    const id = setTimeout(() => setBarFillPhase('go'), 50);
+    return () => clearTimeout(id);
+  }, [barFillAnimation, barFillPhase]);
+  useEffect(() => {
+    if (barFillPhase !== 'go' || !barFillAnimation) return;
+    const id = setTimeout(() => {
+      setBarFillAnimation(null);
+      setBarFillPhase('start');
+    }, 650);
+    return () => clearTimeout(id);
+  }, [barFillPhase, barFillAnimation]);
 
   // Footer totals: compute from added rows only (same formulas as page: boxes = units/24, weight = boxes*12, palettes = products*0.5)
   const addedEntries = rows
@@ -392,7 +419,61 @@ export function AddProductsNonTable({
                       {row.product}
                     </button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>{row.asin || 'N/A'}</span>
+                      <span style={{ fontSize: 12, color: '#9CA3AF', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {row.asin || 'N/A'}
+                        {row.asin && (
+                          <button
+                            type="button"
+                            title="Copy ASIN"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const asin = row.asin!;
+                              try {
+                                if (navigator.clipboard?.writeText) {
+                                  await navigator.clipboard.writeText(asin);
+                                } else {
+                                  const ta = document.createElement('textarea');
+                                  ta.value = asin;
+                                  ta.style.position = 'fixed';
+                                  ta.style.opacity = '0';
+                                  document.body.appendChild(ta);
+                                  ta.select();
+                                  document.execCommand('copy');
+                                  document.body.removeChild(ta);
+                                }
+                                setCopiedAsinRowId(row.id);
+                                setTimeout(() => setCopiedAsinRowId(null), 2000);
+                              } catch (_) {}
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 4,
+                              margin: 0,
+                              minWidth: 22,
+                              minHeight: 22,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              borderRadius: 4,
+                              position: 'relative',
+                              zIndex: 2,
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                          </button>
+                        )}
+                        {copiedAsinRowId === row.id && (
+                          <span style={{ fontSize: 11, color: '#22C55E', fontWeight: 500 }}>Copied!</span>
+                        )}
+                      </span>
                       <span style={{ fontSize: 12, color: '#9CA3AF' }}>{row.brand} • {row.size ?? ''}</span>
                     </div>
                   </div>
@@ -552,7 +633,7 @@ export function AddProductsNonTable({
                             </div>
                           </div>
                           <div style={{ width: fbaBarWidth, flexShrink: 0, marginLeft: -20 }} aria-hidden />
-                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -179 }}>
+                          <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content', marginLeft: -102 }}>
                             {Math.round(fbaDays)}
                           </span>
                           <div style={{ width: 26, flexShrink: 0 }} aria-hidden />
@@ -565,8 +646,15 @@ export function AddProductsNonTable({
                         {row.daysOfInventory}
                       </span>
                     )}
-                    {/* DOI bar row - when showDoiBar (Total Inventory) */}
-                    {showDoiBar && (
+                    {/* DOI bar row - when showDoiBar (Total Inventory); when added uses requiredDoi from DOI settings */}
+                    {showDoiBar && (() => {
+                      const isAdded = addedIds.has(row.id);
+                      const doiValue = isAdded ? requiredDoi : Number(row.daysOfInventory);
+                      const targetPct = Math.min(100, (doiValue / 100) * 100);
+                      const isAnimating = barFillAnimation?.rowId === row.id;
+                      const displayPct = isAnimating ? (barFillPhase === 'go' ? barFillAnimation.targetPct : 0) : targetPct;
+                      const doiColor = getDoiColor(doiValue);
+                      return (
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, position: 'relative', minHeight: 32, width: 450, flexShrink: 0, boxSizing: 'border-box', marginTop: showFbaBar ? -6 : 0 }}>
                         <div
                           style={{
@@ -585,10 +673,10 @@ export function AddProductsNonTable({
                           <div style={{ display: 'flex', width: '100%', height: '100%', borderRadius: '6px', overflow: 'hidden' }}>
                             <div
                               style={{
-                                width: `${Math.min(100, (Number(row.daysOfInventory) / 100) * 100)}%`,
+                                width: `${displayPct}%`,
                                 height: '100%',
                                 backgroundColor: '#3399FF',
-                                transition: 'width 0.6s ease-in-out',
+                                transition: isAnimating && barFillPhase === 'start' ? 'none' : 'width 0.6s ease-out',
                               }}
                             />
                             <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
@@ -596,11 +684,11 @@ export function AddProductsNonTable({
                         </div>
                         <div style={{ width: 333, flexShrink: 0, marginLeft: -127 }} aria-hidden />
                         <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, height: 32, display: 'flex', alignItems: 'center', gap: 2, minWidth: 'fit-content', marginLeft: -175 }}>
-                          {row.daysOfInventory}
+                          {doiValue}
                         </span>
                         <div style={{ width: 16, flexShrink: 0 }} aria-hidden />
                       </div>
-                    )}
+                    ); })()}
                   </div>
                   {/* Icon group: pencil + banana, aligned at right and vertically centered */}
                   <div
