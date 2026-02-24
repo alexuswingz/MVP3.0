@@ -1,5 +1,11 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
+let authFailureHandler: (() => void) | null = null;
+
+export function setAuthFailureHandler(handler: (() => void) | null): void {
+  authFailureHandler = handler;
+}
+
 interface TokenResponse {
   access: string;
   refresh: string;
@@ -97,6 +103,7 @@ export class ApiClient {
       } else {
         this.clearTokens();
       }
+      authFailureHandler?.();
     }
 
     if (!response.ok) {

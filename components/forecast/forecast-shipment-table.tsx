@@ -241,7 +241,8 @@ export function NewShipmentTable({
                 <div className="flex items-center justify-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={() => setShowFbaBar((p) => !p)}
+                    onClick={(e) => { e.stopPropagation(); setShowFbaBar((p) => !p); }}
+                    onMouseDown={(e) => e.stopPropagation()}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -250,10 +251,10 @@ export function NewShipmentTable({
                       minHeight: 18,
                       borderRadius: 4,
                       border: '1px solid',
-                      borderColor: showFbaBar ? '#1A5DA7' : 'rgba(255, 255, 255, 0.2)',
+                      borderColor: showFbaBar ? '#1A5DA7' : (isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.12)'),
                       cursor: 'pointer',
-                      background: showFbaBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : 'rgba(255, 255, 255, 0.12)',
-                      color: showFbaBar ? '#FFFFFF' : '#9CA3AF',
+                      background: showFbaBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : (isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'),
+                      color: showFbaBar ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280'),
                       fontSize: 10,
                     }}
                   >
@@ -262,7 +263,8 @@ export function NewShipmentTable({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowDoiBar((p) => !p)}
+                    onClick={(e) => { e.stopPropagation(); setShowDoiBar((p) => !p); }}
+                    onMouseDown={(e) => e.stopPropagation()}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -271,10 +273,10 @@ export function NewShipmentTable({
                       minHeight: 18,
                       borderRadius: 4,
                       border: '1px solid',
-                      borderColor: showDoiBar ? '#1A5DA7' : 'rgba(255, 255, 255, 0.2)',
+                      borderColor: showDoiBar ? '#1A5DA7' : (isDarkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.12)'),
                       cursor: 'pointer',
-                      background: showDoiBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : 'rgba(255, 255, 255, 0.12)',
-                      color: showDoiBar ? '#FFFFFF' : '#9CA3AF',
+                      background: showDoiBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : (isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'),
+                      color: showDoiBar ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280'),
                       fontSize: 10,
                     }}
                   >
@@ -299,9 +301,13 @@ export function NewShipmentTable({
             : (inventoryData?.fbaAvailable ?? 0);
           const doiValue = row.daysOfInventory;
           const doiFba = row.doiFba ?? Math.round(doiValue * 0.6);
+          const fbaDays = doiFba;
           const unitsToMake = row.unitsToMake;
           const displayDoi = doiValue;
           const doiColor = getDoiColor(displayDoi);
+          const fbaDaysColor = getDoiColor(fbaDays);
+          const baseWidth = 100;
+          const fbaBarWidthPx = fbaDays <= 30 ? baseWidth : baseWidth * (fbaDays / 30);
           const asin = row.product.asin || row.product.sku || 'N/A';
           const productName = row.product.name;
           const brand = row.product.brand || '';
@@ -495,28 +501,70 @@ export function NewShipmentTable({
                     display: 'table-cell',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative', paddingRight: showFbaBar && showDoiBar ? 72 : 56 }}>
                     <div
                       style={{
-                        flex: '0 1 431px',
-                        maxWidth: '100%',
-                        height: 19,
-                        borderRadius: 4,
-                        backgroundColor: '#ADD8E6',
-                        overflow: 'hidden',
-                        minWidth: 60,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: showFbaBar && showDoiBar ? 4 : 0,
+                        flex: '1 1 0',
+                        minWidth: 0,
                       }}
                     >
-                      <BarFill
-                        widthPct={Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}
-                        backgroundColor="#0275FC"
-                        durationSec={0.6}
-                      />
+                      {showFbaBar && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 20 }}>
+                          <div
+                            style={{
+                              width: fbaBarWidthPx,
+                              minWidth: baseWidth,
+                              height: 19,
+                              borderRadius: 4,
+                              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <BarFill widthPct={100} backgroundColor="#22C55E" durationSec={0.6} />
+                          </div>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: fbaDaysColor, minWidth: 'fit-content' }}>
+                            {fbaDays}
+                          </span>
+                        </div>
+                      )}
+                      {showDoiBar && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 20 }}>
+                          <div
+                            style={{
+                              flex: '1 1 0',
+                              maxWidth: '100%',
+                              minWidth: 60,
+                              height: 19,
+                              borderRadius: 4,
+                              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : '#E0F2FE',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <BarFill
+                              widthPct={Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}
+                              backgroundColor="#0275FC"
+                              durationSec={0.6}
+                            />
+                          </div>
+                          <span style={{ fontSize: showFbaBar ? 14 : '0.875rem', fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
+                            {displayDoi}
+                          </span>
+                        </div>
+                      )}
+                      {!showFbaBar && !showDoiBar && (
+                        <span style={{ fontSize: '0.875rem', fontWeight: 500, color: isDarkMode ? '#FFFFFF' : '#111827', minWidth: 'fit-content' }}>
+                          {totalInv.toLocaleString()}
+                        </span>
+                      )}
                     </div>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
-                      {displayDoi}
-                    </span>
-                    <IconGroupOpenNgoos onOpenNgoos={onOpenNgoos ?? (() => {})} onEdit={onEdit} row={row} />
+                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <IconGroupOpenNgoos onOpenNgoos={onOpenNgoos ?? (() => {})} onEdit={onEdit} row={row} />
+                    </div>
                   </div>
                 </td>
               </tr>

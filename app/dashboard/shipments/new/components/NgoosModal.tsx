@@ -1268,14 +1268,14 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     marginBottom: '1rem',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: '0.5rem',
                     position: 'relative',
                     zIndex: 10,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 12, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'auto' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#fff', margin: 0, flexShrink: 0 }}>
                       Unit Forecast
                     </h3>
                     {chartRangeSum && (
@@ -1294,6 +1294,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             fontSize: '0.75rem',
                             fontWeight: 500,
                             boxSizing: 'border-box',
+                            flexShrink: 0,
                           }}
                         >
                           {new Date(chartRangeSum.startTs).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}
@@ -1302,22 +1303,22 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                         </span>
                         {chartRangeSum.isForecastOnly ? (
                           <>
-                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400, flexShrink: 0 }}>
                               FORECASTED UNITS: <strong style={{ color: '#e2e8f0', fontWeight: 700 }}>{chartRangeSum.sumForecast.toLocaleString()}</strong>
                             </span>
-                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400, flexShrink: 0 }}>
                               FORECASTED REVENUE: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.forecastRevenueDisplay}</strong>
                             </span>
                           </>
                         ) : (
                           <>
-                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400, flexShrink: 0 }}>
                               UNITS SOLD: <strong style={{ color: '#ffffff', fontWeight: 700 }}>{chartRangeSum.sumUnitsSold.toLocaleString()}</strong>
                             </span>
-                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400, flexShrink: 0 }}>
                               POT. UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.sumForecast.toLocaleString()}</strong>
                             </span>
-                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400 }}>
+                            <span style={{ color: '#94a3b8', fontSize: '0.8125rem', fontWeight: 400, flexShrink: 0 }}>
                               REVENUE GAP: <strong style={{ color: '#22c55e', fontWeight: 700 }}>{chartRangeSum.revenueGapDisplay}</strong>
                             </span>
                           </>
@@ -1325,7 +1326,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       </>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                     {(zoomDomain.left != null || zoomDomain.right != null) && (
                       <button
                         type="button"

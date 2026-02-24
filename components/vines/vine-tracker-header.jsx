@@ -20,7 +20,7 @@ const VineTrackerHeader = ({ onSearch, onNewVineClick }) => {
         >
           <img
             src="/assets/vine.png"
-            alt="Vine Tracker"
+            alt="Vine"
             style={{
               width: 24,
               height: 24,
@@ -30,7 +30,7 @@ const VineTrackerHeader = ({ onSearch, onNewVineClick }) => {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         </div>
-        <h1 className="text-xl font-bold text-foreground-primary">Vine Tracker</h1>
+        <h1 className="text-xl font-bold text-foreground-primary">Vine</h1>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">

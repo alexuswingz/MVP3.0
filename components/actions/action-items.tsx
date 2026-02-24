@@ -2,11 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { useUIStore } from '@/stores/ui-store';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import AddProductsPageLayout from '@/components/actions/add-products-page-layout';
-import AddProductsTableLayout, { type AddProductsTableRow } from '@/components/actions/add-products-table-layout';
-import NGOOSmodal from '@/components/forecast/NGOOSmodal';
 
 const MOCK_DETAIL: Record<number, {
   ticketId: string;
@@ -55,7 +51,19 @@ const MOCK_DETAIL: Record<number, {
   },
 };
 
-const MOCK_ITEMS = [
+type TableRow = {
+  id: number;
+  status: string;
+  productName: string;
+  productId: string;
+  category: string;
+  subject: string;
+  assignee: string;
+  assigneeInitials: string;
+  dueDate: string;
+};
+
+const DEFAULT_TABLE_ITEMS: TableRow[] = [
   { id: 1, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
   { id: 2, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
   { id: 3, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
@@ -64,6 +72,13 @@ const MOCK_ITEMS = [
   { id: 6, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
   { id: 7, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
 ];
+
+function getInitials(name: string): string {
+  if (!name || !name.trim()) return '—';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
+  return name.slice(0, 2).toUpperCase();
+}
 
 function DetailModalRow({ label, children, valueAlign = 'right', vertical = false, footer = false }: { label: string; children: React.ReactNode; valueAlign?: 'left' | 'right'; vertical?: boolean; footer?: boolean }) {
   if (vertical) {
@@ -342,27 +357,10 @@ function DetailModal({
 }
 
 export function ActionItems() {
-  const theme = useUIStore((s) => s.theme);
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
-  const isDarkMode = theme !== 'light';
   const [filter, setFilter] = useState<'my' | 'all'>('my');
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
-  const [showNewActionPage, setShowNewActionPage] = useState(false);
-  const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
-  const [selectedNgoosRow, setSelectedNgoosRow] = useState<AddProductsTableRow | null>(null);
-  const [addProductsSearchTerm, setAddProductsSearchTerm] = useState('');
-  const [addProductsRows, setAddProductsRows] = useState<AddProductsTableRow[]>([
-    { id: '1', product_name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 420, days_of_inventory: 9, units_to_make: 9720 },
-    { id: '2', product_name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 380, days_of_inventory: 9, units_to_make: 8460 },
-    { id: '3', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 350, days_of_inventory: 15, units_to_make: 4608 },
-    { id: '4', product_name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 200, days_of_inventory: 37, units_to_make: 4260 },
-    { id: '5', product_name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 150, days_of_inventory: 56, units_to_make: 3780 },
-    { id: '6', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 80, days_of_inventory: 59, units_to_make: 3060 },
-    { id: '7', product_name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 45, days_of_inventory: 68, units_to_make: 3360 },
-    { id: '8', product_name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 520, days_of_inventory: 97, units_to_make: 1320 },
-    { id: '9', product_name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 610, days_of_inventory: 132, units_to_make: 180 },
-  ]);
+  const [tableItems, setTableItems] = useState<TableRow[]>(DEFAULT_TABLE_ITEMS);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [newItem, setNewItem] = useState({
     product: '',
@@ -563,7 +561,7 @@ export function ActionItems() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_ITEMS.map((row) => (
+                {tableItems.map((row) => (
                   <tr
                     key={row.id}
                     className="hover:opacity-95 transition-opacity overflow-hidden"
@@ -722,7 +720,7 @@ export function ActionItems() {
       )}
 
 
-      {showNewActionModal && !showNewActionPage && (
+      {showNewActionModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.6)' }}
@@ -903,7 +901,26 @@ export function ActionItems() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowNewActionModal(false); setShowNewActionPage(true); }}
+                onClick={() => {
+                  const nextId = Math.max(0, ...tableItems.map((r) => r.id)) + 1;
+                  const catLabel = CATEGORIES.find((c) => c.id === newItem.category)?.label ?? newItem.category;
+                  setTableItems((prev) => [
+                    {
+                      id: nextId,
+                      status: 'To Do',
+                      productName: newItem.product.trim() || 'New product...',
+                      productId: '—',
+                      category: catLabel,
+                      subject: newItem.subject.trim() || '—',
+                      assignee: newItem.assignee.trim() || '—',
+                      assigneeInitials: getInitials(newItem.assignee),
+                      dueDate: newItem.dueDate.trim() || '—',
+                    },
+                    ...prev,
+                  ]);
+                  setShowNewActionModal(false);
+                  setNewItem({ product: '', category: 'inventory', subject: '', description: '', assignee: '', dueDate: '' });
+                }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity"
                 style={{ background: '#3b82f6' }}
               >
@@ -914,126 +931,6 @@ export function ActionItems() {
         </div>
       )}
 
-      {showNewActionPage && (() => {
-        const q = addProductsSearchTerm.trim().toLowerCase();
-        const filteredRows = q
-          ? addProductsRows.filter((r) => {
-              const name = (r.product_name ?? r.product ?? r.name ?? '').toLowerCase();
-              const asin = (r.asin ?? r.child_asin ?? r.childAsin ?? '').toLowerCase();
-              const brand = (r.brand ?? '').toLowerCase();
-              const size = (r.size ?? '').toLowerCase();
-              return name.includes(q) || asin.includes(q) || brand.includes(q) || size.includes(q);
-            })
-          : addProductsRows;
-        const totalProducts = filteredRows.length;
-        const totalUnits = filteredRows.reduce(
-          (acc, r) => acc + (Number(r.units_to_make ?? r.unitsToMake ?? r.suggestedQty ?? 0) || 0),
-          0
-        );
-        const totalPalettes = totalProducts * 0.5;
-        const totalBoxes = totalUnits / 24;
-        const totalWeightLbs = totalBoxes * 12;
-        const totalTimeHours = totalBoxes * 0.5;
-        const totalFormulas = totalProducts;
-        return (
-        <div
-          className="fixed top-0 right-0 bottom-0 z-50"
-          style={{ left: sidebarCollapsed ? 80 : 280 }}
-        >
-          <AddProductsPageLayout
-            isDarkMode={isDarkMode}
-            productsCount={filteredRows.length}
-            onBack={() => { setShowNewActionPage(false); setShowNewActionModal(false); }}
-            shipmentDate="2026.02.22"
-            shipmentType="FBA"
-            searchTerm={addProductsSearchTerm}
-            onSearchTermChange={setAddProductsSearchTerm}
-          >
-            <AddProductsTableLayout
-              rows={filteredRows}
-              isDarkMode={isDarkMode}
-              onRemove={(_, index) => setAddProductsRows((prev) => prev.filter((_, i) => i !== index))}
-              onOpenNgoos={(row) => {
-                setSelectedNgoosRow(row);
-                setNgoosModalOpen(true);
-              }}
-            />
-          </AddProductsPageLayout>
-          <NGOOSmodal
-            isOpen={ngoosModalOpen}
-            showActionItems
-            onClose={() => {
-              setNgoosModalOpen(false);
-              setSelectedNgoosRow(null);
-            }}
-            selectedRow={selectedNgoosRow ? { ...selectedNgoosRow } : null}
-            isDarkMode={isDarkMode}
-            allProducts={addProductsRows.map((r) => ({ id: String(r.id ?? '') }))}
-            onActionItemClick={() => setSelectedDetailId(1)}
-            onNavigate={(dir) => {
-              if (!selectedNgoosRow) return;
-              const idx = filteredRows.findIndex((r) => String(r.id) === String(selectedNgoosRow.id));
-              if (idx < 0) return;
-              const nextIdx = dir === 'next' ? Math.min(idx + 1, filteredRows.length - 1) : Math.max(idx - 1, 0);
-              setSelectedNgoosRow(filteredRows[nextIdx]);
-            }}
-          />
-          {/* Add Products footer - fixed stats bar */}
-          <div
-            style={{
-              position: 'fixed',
-              bottom: '16px',
-              left: `calc(${sidebarCollapsed ? 80 : 280}px + (100vw - ${sidebarCollapsed ? 80 : 280}px) / 2 - 125px)`,
-              transform: 'translateX(-50%)',
-              width: 'fit-content',
-              height: '65px',
-              backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.85)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
-              borderRadius: '32px',
-              padding: '16px 24px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '32px',
-              zIndex: 1000,
-              boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
-            }}
-          >
-            <div style={{ display: 'flex', gap: '48px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>PRODUCTS</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalProducts}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>PALETTES</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalPalettes.toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>BOXES</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{Math.ceil(totalBoxes).toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>UNITS</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalUnits.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap' }}>TIME (HRS)</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalTimeHours.toFixed(2)}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{Math.round(totalWeightLbs).toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 400, color: '#9CA3AF' }}>FORMULAS</span>
-                <span style={{ fontSize: '18px', fontWeight: 700, color: isDarkMode ? '#FFFFFF' : '#000000' }}>{totalFormulas}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
     </div>
   );
 }

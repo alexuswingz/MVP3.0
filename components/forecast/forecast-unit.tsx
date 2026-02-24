@@ -205,10 +205,11 @@ export default function ForecastUnit({
     return { displayLo, displayHi, sumLo: lo, sumHi, isForecastOnly };
   }, [chartRangeSelection.startTimestamp, chartRangeSelection.endTimestamp, todayLineTimestamp, todayTs]);
 
-  // Sum units over selected range
+  // Sum units and revenue over selected range
   const chartRangeSum = useMemo(() => {
     if (!chartData.length || !chartRangeSelectionEffective) return null;
     const { sumLo, sumHi, isForecastOnly } = chartRangeSelectionEffective;
+    const dayMs = 86400000;
     let unitsSold = 0;
     let unitsSmoothed = 0;
     chartData.forEach((d) => {
@@ -218,10 +219,24 @@ export default function ForecastUnit({
         unitsSmoothed += Number(d.forecastBase ?? d.forecastAdjusted) || 0;
       }
     });
-    return { unitsSold, unitsSmoothed, isForecastOnly };
-  }, [chartData, chartRangeSelectionEffective]);
+    // Sum actual revenue for the range from salesHistory (prorate weekly revenue by days in range)
+    let rangeRevenue = 0;
+    if (salesHistory.length > 0) {
+      salesHistory.forEach((week) => {
+        const weekEnd = new Date(week.week_end).getTime();
+        const weekStart = weekEnd - 6 * dayMs;
+        const rangeStart = Math.max(sumLo, weekStart);
+        const rangeEnd = Math.min(sumHi, weekEnd);
+        if (rangeStart <= rangeEnd) {
+          const daysInRange = Math.round((rangeEnd - rangeStart) / dayMs) + 1;
+          rangeRevenue += (week.revenue / 7) * daysInRange;
+        }
+      });
+    }
+    return { unitsSold, unitsSmoothed, isForecastOnly, rangeRevenue };
+  }, [chartData, chartRangeSelectionEffective, salesHistory]);
 
-  const unitCost = 0; // For revenue gap display
+  const unitCost = 0; // For revenue gap display (pot - actual) when no price; use rangeRevenue for actual
 
   // Segment boundaries (mock: FBA 45d, Total 65d, Forecast 130d from today)
   const fbaDays = timeline.fbaAvailable ?? 45;
@@ -587,31 +602,32 @@ export default function ForecastUnit({
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: '1rem',
-            flexWrap: 'wrap',
+            flexWrap: 'nowrap',
             gap: '0.5rem',
           }}
         >
           <h3 style={{ fontSize: inventoryOnly ? '0.85rem' : '1rem', fontWeight: '600', color: '#fff', margin: 0, flexShrink: 0 }}>
             Unit Forecast
           </h3>
-          {/* Range selection stats bar - on same row as Unit Forecast */}
+          {/* Range selection stats bar - same row as Unit Forecast, single row only */}
           {chartRangeSum && chartRangeSelectionEffective && (
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '1.5rem',
-                flexWrap: 'wrap',
+                gap: '1rem',
+                flexWrap: 'nowrap',
                 fontSize: '0.75rem',
                 flex: 1,
                 justifyContent: 'center',
                 minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'auto',
               }}
             >
               <span
                 style={{
                   color: '#e2e8f0',
-                  marginRight: '0.25rem',
                   padding: '4px 8px',
                   border: '1px solid #334155',
                   borderRadius: '4px',
@@ -632,15 +648,18 @@ export default function ForecastUnit({
                 }}
                 title="Selected date range"
               >
-                {`${new Date(chartRangeSelectionEffective.displayLo).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })} - ${new Date(chartRangeSelectionEffective.displayHi).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}`}
+                {`${new Date(chartRangeSelectionEffective.displayLo).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })} – ${new Date(chartRangeSelectionEffective.displayHi).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}`}
               </span>
               {chartRangeSum.isForecastOnly ? (
                 <>
                   <span style={{ color: '#94a3b8' }}>
-                    FORECASTED UNITS: <strong style={{ color: '#22c55e', fontWeight: 600 }}>{chartRangeSum.unitsSmoothed.toLocaleString()}</strong>
+                    UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 600 }}>—</strong>
                   </span>
                   <span style={{ color: '#94a3b8' }}>
-                    FORECASTED REVENUE: <strong style={{ color: '#22c55e', fontWeight: 600 }}>
+                    POT. UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 600 }}>{chartRangeSum.unitsSmoothed.toLocaleString()}</strong>
+                  </span>
+                  <span style={{ color: '#94a3b8' }}>
+                    REVENUE: <strong style={{ color: '#22c55e', fontWeight: 600 }}>
                       {(chartRangeSum.unitsSmoothed * unitCost).toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </strong>
                   </span>
@@ -652,6 +671,13 @@ export default function ForecastUnit({
                   </span>
                   <span style={{ color: '#94a3b8' }}>
                     POT. UNITS SOLD: <strong style={{ color: '#22c55e', fontWeight: 600 }}>{chartRangeSum.unitsSmoothed.toLocaleString()}</strong>
+                  </span>
+                  <span style={{ color: '#94a3b8' }}>
+                    REVENUE: <strong style={{ color: '#22c55e', fontWeight: 600 }}>
+                      {chartRangeSum.rangeRevenue > 0
+                        ? chartRangeSum.rangeRevenue.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '—'}
+                    </strong>
                   </span>
                   <span style={{ color: '#94a3b8' }}>
                     REVENUE GAP: <strong style={{ color: '#22c55e', fontWeight: 600 }}>

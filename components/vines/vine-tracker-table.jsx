@@ -922,6 +922,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                 style={{
                   padding: '1rem 1.25rem 1.25rem 1.25rem',
                   width: col.width,
+                  ...(col.key === 'action' ? { minWidth: '100px' } : {}),
                   height: 'auto',
                   backgroundColor: HEADER_BG,
                   color: '#9CA3AF',
@@ -1096,14 +1097,14 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '6px',
                           width: '167px',
                           height: '24px',
                           minWidth: '132px',
                           paddingTop: '4px',
-                          paddingRight: '12px',
+                          paddingRight: '8px',
                           paddingBottom: '4px',
-                          paddingLeft: '12px',
+                          paddingLeft: '8px',
                           borderRadius: '4px',
                           borderWidth: '1px',
                           borderStyle: 'solid',
@@ -1111,6 +1112,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           backgroundColor: '#374151',
                           boxSizing: 'border-box',
                           cursor: 'pointer',
+                          overflow: 'hidden',
                         }}
                       >
                         {(row.status || 'Awaiting Reviews') === 'Awaiting Reviews' ? (
@@ -1129,20 +1131,26 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           </svg>
                         )}
                         <span
-                          style={{ 
-                            fontSize: '0.875rem', 
-                            fontWeight: 500, 
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 500,
                             color: '#FFFFFF',
                             whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            minWidth: 0,
+                            flex: 1,
                           }}
                         >
                           {row.status || 'Awaiting Reviews'}
                         </span>
+                        {/* Down chevron - inside container */}
                         <svg
-                          style={{ width: '0.85rem', height: '0.85rem', marginLeft: 'auto' }}
+                          style={{ width: '0.85rem', height: '0.85rem', flexShrink: 0 }}
                           fill="none"
-                          stroke="#FFFFFF"
+                          stroke="#9CA3AF"
                           viewBox="0 0 24 24"
+                          aria-hidden
                         >
                           <path
                             strokeLinecap="round"
@@ -1157,14 +1165,14 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '6px',
                           width: '167px',
                           height: '24px',
                           minWidth: '132px',
                           paddingTop: '4px',
-                          paddingRight: '12px',
+                          paddingRight: '8px',
                           paddingBottom: '4px',
-                          paddingLeft: '12px',
+                          paddingLeft: '8px',
                           borderRadius: '4px',
                           borderWidth: '1px',
                           borderStyle: 'solid',
@@ -1172,6 +1180,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           backgroundColor: '#374151',
                           boxSizing: 'border-box',
                           cursor: 'pointer',
+                          overflow: 'hidden',
                         }}
                       >
                         {/* Status icon - awaiting.png for Awaiting Reviews */}
@@ -1191,20 +1200,26 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           </svg>
                         )}
                         <span
-                          style={{ 
-                            fontSize: '0.875rem', 
-                            fontWeight: 500, 
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: 500,
                             color: '#FFFFFF',
                             whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            minWidth: 0,
+                            flex: 1,
                           }}
                         >
                           {row.status || 'Awaiting Reviews'}
                         </span>
+                        {/* Down chevron - inside container */}
                         <svg
-                          style={{ width: '0.85rem', height: '0.85rem', marginLeft: 'auto' }}
+                          style={{ width: '0.85rem', height: '0.85rem', flexShrink: 0 }}
                           fill="none"
-                          stroke="#FFFFFF"
+                          stroke="#9CA3AF"
                           viewBox="0 0 24 24"
+                          aria-hidden
                         >
                           <path
                             strokeLinecap="round"
@@ -1283,7 +1298,8 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                               title={row.productName || 'Select Product'}
                               style={{
                                 width: '100%',
-                                minWidth: '561px',
+                                minWidth: 0,
+                                maxWidth: '100%',
                                 height: '28px',
                                 paddingTop: '6px',
                                 paddingRight: '32px',
@@ -2087,9 +2103,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       height: 'auto',
                       minHeight: '40px',
                       display: 'table-cell',
+                      width: '12%',
+                      minWidth: '100px',
+                      boxSizing: 'border-box',
                     }}
                   >
                     {isNewRow ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -2259,8 +2279,9 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       >
                         Create
                       </button>
+                      </div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}>
                         {/* Plus icon */}
                         <button
                           type="button"
