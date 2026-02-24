@@ -196,7 +196,7 @@ function DetailModal({
                 opacity: 1,
               }}
             >
-              <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: '#1e3a2f' }}>
+              <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
                 <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
                 </svg>
@@ -276,7 +276,7 @@ function DetailModal({
           <div className="w-px flex-shrink-0 self-stretch" style={{ background: '#404040' }} aria-hidden />
           <div
             className="flex flex-col flex-shrink-0 min-h-0 overflow-hidden"
-            style={{ width: 280, gap: 12, padding: '16px', background: '#0B111E', opacity: 1 }}
+            style={{ width: 280, gap: 12, padding: '16px', background: '#1A2235', opacity: 1 }}
           >
             <h3 className="text-sm font-medium text-white flex-shrink-0" style={{ textAlign: 'left' }}>Additional Details</h3>
             <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 8, marginBottom: 12 }} />
@@ -353,15 +353,15 @@ export function ActionItems() {
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<AddProductsTableRow | null>(null);
   const [addProductsSearchTerm, setAddProductsSearchTerm] = useState('');
   const [addProductsRows, setAddProductsRows] = useState<AddProductsTableRow[]>([
-    { id: '1', product_name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 9720 },
-    { id: '2', product_name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 9, units_to_make: 8460 },
-    { id: '3', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 15, units_to_make: 4608 },
-    { id: '4', product_name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 37, units_to_make: 4260 },
-    { id: '5', product_name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 56, units_to_make: 3780 },
-    { id: '6', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 59, units_to_make: 3060 },
-    { id: '7', product_name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 68, units_to_make: 3360 },
-    { id: '8', product_name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 97, units_to_make: 1320 },
-    { id: '9', product_name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, days_of_inventory: 132, units_to_make: 180 },
+    { id: '1', product_name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Fo...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 420, days_of_inventory: 9, units_to_make: 9720 },
+    { id: '2', product_name: 'Bloom City Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 380, days_of_inventory: 9, units_to_make: 8460 },
+    { id: '3', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 350, days_of_inventory: 15, units_to_make: 4608 },
+    { id: '4', product_name: 'Gardenia Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 200, days_of_inventory: 37, units_to_make: 4260 },
+    { id: '5', product_name: 'Hibiscus Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 150, days_of_inventory: 56, units_to_make: 3780 },
+    { id: '6', product_name: 'Arborvitae Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 80, days_of_inventory: 59, units_to_make: 3060 },
+    { id: '7', product_name: 'Organic Liquid Seaweed...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 45, days_of_inventory: 68, units_to_make: 3360 },
+    { id: '8', product_name: 'Bloom City Liquid Silica Boost...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 520, days_of_inventory: 97, units_to_make: 1320 },
+    { id: '9', product_name: 'TPS NUTRIENTS Tree Fertilizer...', asin: 'B0C73TDZCQ', brand: 'TPS Nutrients', size: '8oz', total_inventory: 926, fba_available: 610, days_of_inventory: 132, units_to_make: 180 },
   ]);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [newItem, setNewItem] = useState({
@@ -413,7 +413,7 @@ export function ActionItems() {
           <div className="flex items-center gap-4 min-w-0">
             <div
               className="flex items-center justify-center flex-shrink-0 rounded-lg overflow-hidden"
-              style={{ width: 36, height: 36, background: '#1a1a1a' }}
+              style={{ width: 36, height: 36, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}
             >
               <Image src="/rocket.png" alt="" width={20} height={20} className="object-contain" />
             </div>
@@ -421,7 +421,7 @@ export function ActionItems() {
             <div
               className="flex flex-shrink-0 flex-row items-center box-border"
               style={{
-                background: '#1A2235',
+                background: '#0B111E',
                 border: '1px solid #404040',
                 borderRadius: 8,
                 width: 192,
@@ -437,7 +437,7 @@ export function ActionItems() {
                   padding: '0 14px',
                   borderRadius: 6,
                   ...(filter === 'my'
-                    ? { background: '#1a1a1a', color: '#FFFFFF' }
+                    ? { background: '#334155', color: '#FFFFFF' }
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
@@ -450,7 +450,7 @@ export function ActionItems() {
                   padding: '0 14px',
                   borderRadius: 6,
                   ...(filter === 'all'
-                    ? { background: '#1a1a1a', color: '#FFFFFF' }
+                    ? { background: '#334155', color: '#FFFFFF' }
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
@@ -604,7 +604,7 @@ export function ActionItems() {
                         onClick={() => setSelectedDetailId(row.id)}
                         className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer w-full text-left border-0 bg-transparent p-0"
                       >
-                        <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: '#1e3a2f' }}>
+                        <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
                           <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
                           </svg>

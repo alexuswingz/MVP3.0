@@ -6,6 +6,7 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./production/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
@@ -55,6 +56,17 @@ const config: Config = {
           DEFAULT: "#334155",
           focus: "#3B82F6",
         },
+        "dark-bg": {
+          primary: "#111827",
+          secondary: "#1F2937",
+          tertiary: "#374151",
+        },
+        "dark-text": {
+          primary: "#F9FAFB",
+          secondary: "#9CA3AF",
+        },
+        "dark-border": { primary: "#374151" },
+        "light-bg": { primary: "#F9FAFB" },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

@@ -10,6 +10,7 @@ export const NAV_ITEMS = [
   { id: 'forecast', label: 'Forecast', icon: 'TrendingUp', path: '/dashboard/forecast' },
   { id: 'shipments', label: 'Shipments', icon: 'Truck', path: '/dashboard/shipments' },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
+  { id: 'vines', label: 'Vines', icon: 'Sprout', path: '/dashboard/vines' },
   { id: 'settings', label: 'Settings', icon: 'Settings', path: '/dashboard/settings' },
 ] as const;
 

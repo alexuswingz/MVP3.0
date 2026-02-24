@@ -40,6 +40,10 @@ export interface AddProductsTableRow {
   totalInventory?: number;
   total_inventory?: number;
   inventory?: number;
+  fbaAvailable?: number;
+  fba_available?: number;
+  fbaDays?: number;
+  fba_days?: number;
   doiTotal?: number;
   daysOfInventory?: number;
   days_of_inventory?: number;
@@ -197,7 +201,8 @@ export default function AddProductsTableLayout({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', marginLeft: -160, marginTop: -3 }}>
             <button
               type="button"
-              onClick={() => setShowFbaBar((p) => !p)}
+              onClick={(e) => { e.stopPropagation(); setShowFbaBar((p) => !p); }}
+              onMouseDown={(e) => e.stopPropagation()}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -208,10 +213,10 @@ export default function AddProductsTableLayout({
                 boxSizing: 'border-box',
                 borderRadius: '4px',
                 border: '1px solid',
-                borderColor: showFbaBar ? '#1A5DA7' : 'rgba(255,255,255,0.2)',
+                borderColor: showFbaBar ? '#1A5DA7' : (isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)'),
                 cursor: 'pointer',
-                background: showFbaBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : 'rgba(255,255,255,0.12)',
-                color: showFbaBar ? '#FFFFFF' : '#9CA3AF',
+                background: showFbaBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : (isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'),
+                color: showFbaBar ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280'),
               }}
             >
               <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: showFbaBar ? '#22C55E' : '#64758B', flexShrink: 0 }} />
@@ -219,7 +224,8 @@ export default function AddProductsTableLayout({
             </button>
             <button
               type="button"
-              onClick={() => setShowDoiBar((p) => !p)}
+              onClick={(e) => { e.stopPropagation(); setShowDoiBar((p) => !p); }}
+              onMouseDown={(e) => e.stopPropagation()}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -230,10 +236,10 @@ export default function AddProductsTableLayout({
                 boxSizing: 'border-box',
                 borderRadius: '4px',
                 border: '1px solid',
-                borderColor: showDoiBar ? '#1A5DA7' : 'rgba(255,255,255,0.2)',
+                borderColor: showDoiBar ? '#1A5DA7' : (isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)'),
                 cursor: 'pointer',
-                background: showDoiBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : 'rgba(255,255,255,0.12)',
-                color: showDoiBar ? '#FFFFFF' : '#9CA3AF',
+                background: showDoiBar ? 'linear-gradient(to right, #1A5DA7, #007AFF)' : (isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'),
+                color: showDoiBar ? '#FFFFFF' : (isDarkMode ? '#9CA3AF' : '#6B7280'),
               }}
             >
               <span style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: showDoiBar ? '#3B82F6' : '#64758B', flexShrink: 0 }} />
@@ -247,14 +253,20 @@ export default function AddProductsTableLayout({
       <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
         {rows.map((row, index) => {
           const totalInv = Number(row.totalInventory ?? row.total_inventory ?? row.inventory ?? 0) || 0;
+          const fbaValue = Number(row.fbaAvailable ?? row.fba_available ?? 0) || 0;
+          const fbaDays = Number(row.fbaDays ?? row.fba_days ?? row.days_of_inventory ?? row.daysOfInventory ?? row.doiTotal ?? 0) || 0;
           const doiValue = Number(row.doiTotal ?? row.daysOfInventory ?? row.days_of_inventory ?? 0) || 0;
           const unitsToMake = row.unitsToMake ?? row.units_to_make ?? row.suggestedQty ?? 0;
           const displayDoi = doiValue;
           const doiColor = getDoiColor(displayDoi);
+          const fbaDaysColor = getDoiColor(fbaDays);
           const asin = row.asin || row.child_asin || row.childAsin || 'N/A';
           const productName = row.product || row.product_name || row.name || 'Product';
           const brand = row.brand || '';
           const size = row.size || '';
+          const baseWidth = 100;
+          const fbaBarWidthPx = fbaDays <= 30 ? baseWidth : baseWidth * (fbaDays / 30);
+          const doiMax = 150;
 
           return (
             <div
@@ -493,35 +505,69 @@ export default function AddProductsTableLayout({
               <div
                 style={{
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingRight: 56,
+                  gap: showFbaBar && showDoiBar ? 4 : 0,
+                  paddingRight: showFbaBar && showDoiBar ? 72 : 56,
                   paddingLeft: 16,
                   marginLeft: -275,
                   position: 'relative',
                   zIndex: 1,
                 }}
               >
-                <div
-                  style={{
-                    flex: '1 1 0',
-                    maxWidth: '100%',
-                    minWidth: 60,
-                    height: 20,
-                    borderRadius: 6,
-                    backgroundColor: '#ADD8E6',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <BarFill
-                    widthPct={Math.min(100, (Number(displayDoi) / Math.max(150, 1)) * 100)}
-                    backgroundColor="#0275FC"
-                    durationSec={0.6}
-                  />
-                </div>
-                <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content', marginRight: 12 }}>
-                  {displayDoi}
-                </span>
+                {showFbaBar && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 20 }}>
+                      <div
+                        style={{
+                          width: fbaBarWidthPx,
+                          minWidth: baseWidth,
+                          height: 20,
+                          borderRadius: 6,
+                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <BarFill
+                          widthPct={100}
+                          backgroundColor="#22C55E"
+                          durationSec={0.6}
+                        />
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: fbaDaysColor, minWidth: 'fit-content' }}>
+                        {fbaDays}
+                      </span>
+                  </div>
+                )}
+                {showDoiBar && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', height: 20 }}>
+                    <div
+                      style={{
+                        flex: '1 1 0',
+                        maxWidth: '100%',
+                        minWidth: 60,
+                        height: 20,
+                        borderRadius: 6,
+                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.12)' : '#E0F2FE',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <BarFill
+                        widthPct={Math.min(100, (Number(displayDoi) / Math.max(doiMax, 1)) * 100)}
+                        backgroundColor="#0275FC"
+                        durationSec={0.6}
+                      />
+                    </div>
+                    <span style={{ fontSize: showFbaBar ? 14 : 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
+                      {displayDoi}
+                    </span>
+                  </div>
+                )}
+                {!showFbaBar && !showDoiBar && (
+                  <span style={{ fontSize: 20, fontWeight: 500, color: isDarkMode ? '#FFFFFF' : '#111827', minWidth: 'fit-content' }}>
+                    {totalInv.toLocaleString()}
+                  </span>
+                )}
                 <div
                   style={{
                     position: 'absolute',
@@ -530,10 +576,13 @@ export default function AddProductsTableLayout({
                     transform: 'translateY(-50%)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: 12,
                     flexShrink: 0,
                     zIndex: 10,
                     marginLeft: 12,
+                    paddingLeft: 8,
+                    backgroundColor: 'transparent',
+                    pointerEvents: 'auto',
                   }}
                 >
                   <img

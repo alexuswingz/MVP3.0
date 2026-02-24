@@ -73,11 +73,20 @@ export class ApiClient {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+    } catch (err) {
+      const msg = err instanceof TypeError && (err as Error).message === 'Failed to fetch'
+        ? `Cannot reach the API server at ${API_BASE_URL}. Make sure the backend is running.`
+        : (err instanceof Error ? err.message : 'Network error');
+      throw new Error(msg);
+    }
 
+<<<<<<< Updated upstream
     if (response.status === 401) {
       if (this.refreshToken) {
         const refreshed = await this.refreshAccessToken();
@@ -96,6 +105,21 @@ export class ApiClient {
             throw new Error(await this.parseError(retryResponse));
           }
           return retryResponse.json();
+=======
+    if (response.status === 401 && this.refreshToken) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
+        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+          ...options,
+          headers,
+        });
+        if (!retryResponse.ok) {
+          const message = await this.parseError(retryResponse).catch(() =>
+            retryResponse.statusText || `Request failed with status ${retryResponse.status}`
+          );
+          throw new Error(typeof message === 'string' ? message : 'An error occurred');
+>>>>>>> Stashed changes
         }
       } else {
         this.clearTokens();
@@ -105,7 +129,10 @@ export class ApiClient {
     }
 
     if (!response.ok) {
-      throw new Error(await this.parseError(response));
+      const message = await this.parseError(response).catch(() =>
+        response.statusText || `Request failed with status ${response.status}`
+      );
+      throw new Error(typeof message === 'string' ? message : 'An error occurred');
     }
 
     if (response.status === 204) {
