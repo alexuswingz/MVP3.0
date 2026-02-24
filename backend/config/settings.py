@@ -142,6 +142,15 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Django REST Framework
+# In development (DEBUG=True), use very high throttle rates so login isn't blocked
+_throttle_classes = [
+    'rest_framework.throttling.AnonRateThrottle',
+    'rest_framework.throttling.UserRateThrottle',
+]
+_throttle_rates = {
+    'anon': '10000/day' if DEBUG else '100/day',
+    'user': '10000/day',
+}
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -152,14 +161,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day'
-    },
+    'DEFAULT_THROTTLE_CLASSES': _throttle_classes,
+    'DEFAULT_THROTTLE_RATES': _throttle_rates,
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],

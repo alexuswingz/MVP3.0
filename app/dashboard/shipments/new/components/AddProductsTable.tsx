@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BORDER = '1px solid #334155';
 const TABLE_BG = '#1A2235';
@@ -52,6 +53,14 @@ export interface AddProductRow {
   fbaAvailable?: string | number;
   awdTotal?: string | number;
   unitsToMake?: number;
+  /** Labels available; when set and qty > this, show label warning icon */
+  labelsAvailable?: number;
+  label_inventory?: number;
+  labels_available?: number;
+}
+
+function getLabelsAvailableFromRow(row: AddProductRow): number {
+  return row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
 }
 
 export type TableColumnKey = (typeof COLUMNS)[number]['key'];
@@ -129,6 +138,9 @@ export function AddProductsTable({
 }: AddProductsTableProps) {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
+  const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
+  const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
+  const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
 
   const visibleColumns = useMemo((): (ColDef & { left?: number })[] => {
     if (!visibleColumnKeys || visibleColumnKeys.length === 0) return COLUMNS as (ColDef & { left?: number })[];
@@ -246,33 +258,179 @@ export function AddProductsTable({
             </button>
           </div>
         );
-      case 'unitsToMake':
+      case 'unitsToMake': {
+        const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
+        const labelsAvail = getLabelsAvailableFromRow(row);
+        const labelsNeeded = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+        const showLabelWarning = labelsAvail > 0 && labelsNeeded > labelsAvail;
         return (
-          <div style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', justifyContent: 'center' }}>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '')}
-              onChange={(e) => {
-                const v = e.target.value.replace(/,/g, '');
-                if (v === '' || /^\d+$/.test(v)) setQtyValues((prev) => ({ ...prev, [index]: v }));
-              }}
-              style={{
-                width: 107,
-                minWidth: 107,
-                height: 34,
-                padding: '8px 6px',
-                borderRadius: 8,
-                border: '1px solid #334155',
-                outline: 'none',
-                backgroundColor: HEADER_BG,
-                color: '#FFFFFF',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                textAlign: 'center',
-                boxSizing: 'border-box',
-              }}
-            />
+          <div style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', justifyContent: 'center', position: 'relative', zIndex: clickedLabelWarningIndex === index ? 10001 : undefined }}>
+            {/* Fixed-width slot so input doesn't move when icon appears */}
+            <div style={{ position: 'relative', width: 26, minWidth: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {showLabelWarning && (
+                <>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setClickedLabelWarningIndex((prev) => (prev === index ? null : index));
+                    }}
+                    onMouseEnter={() => setHoveredLabelWarningIndex(index)}
+                    onMouseLeave={() => setHoveredLabelWarningIndex(null)}
+                    title={`Order exceeds available labels. Labels Available: ${labelsAvail.toLocaleString()}`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      backgroundColor: '#FEE2E2',
+                      color: '#DC2626',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    !
+                  </span>
+                  {hoveredLabelWarningIndex === index && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '50%',
+                        bottom: '100%',
+                        transform: 'translateX(-50%)',
+                        marginBottom: 6,
+                        padding: '6px 10px',
+                        backgroundColor: '#1F2937',
+                        color: '#F9FAFB',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        lineHeight: 1.3,
+                        borderRadius: 8,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        border: '1px solid #374151',
+                        whiteSpace: 'nowrap',
+                        zIndex: 10002,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      Order exceeds available labels. Labels Available: {labelsAvail.toLocaleString()}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div
+              style={{ position: 'relative', width: 107, minWidth: 107, height: 34 }}
+              onMouseEnter={() => setHoveredQtyIndex(index)}
+              onMouseLeave={() => setHoveredQtyIndex(null)}
+            >
+              <input
+                type="text"
+                inputMode="numeric"
+                value={qtyDisplay}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/,/g, '');
+                  if (v === '' || /^\d+$/.test(v)) setQtyValues((prev) => ({ ...prev, [index]: v }));
+                }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  padding: '8px 28px 8px 6px',
+                  borderRadius: 8,
+                  border: '1px solid #334155',
+                  outline: 'none',
+                  backgroundColor: HEADER_BG,
+                  color: '#FFFFFF',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {hoveredQtyIndex === index && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: 4,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 0,
+                    zIndex: 3,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                      const increment = getQtyIncrement(row);
+                      const rounded = roundQtyUpToNearestCase(current, row);
+                      const newVal = rounded === current ? rounded + increment : rounded;
+                      setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                    }}
+                    style={{
+                      width: 20,
+                      height: 10,
+                      border: 'none',
+                      borderRadius: 2,
+                      background: 'transparent',
+                      color: '#64748B',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                      outline: 'none',
+                      pointerEvents: 'auto',
+                    }}
+                    title="Increase (case)"
+                  >
+                    <svg width={12} height={12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 4L6 1L9 4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                      if (current <= 0) return;
+                      const increment = getQtyIncrement(row);
+                      const rounded = roundQtyDownToNearestCase(current, row);
+                      const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
+                      setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                    }}
+                    style={{
+                      width: 20,
+                      height: 10,
+                      border: 'none',
+                      borderRadius: 2,
+                      background: 'transparent',
+                      color: '#64748B',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                      outline: 'none',
+                      pointerEvents: 'auto',
+                    }}
+                    title="Decrease (case)"
+                  >
+                    <svg width={12} height={12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               type="button"
               style={{
@@ -296,8 +454,65 @@ export function AddProductsTable({
             >
               <span style={{ fontSize: '1rem', lineHeight: 1 }}>+</span> Add
             </button>
+            {clickedLabelWarningIndex === index && showLabelWarning && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  bottom: '100%',
+                  marginBottom: 8,
+                  backgroundColor: '#1F2937',
+                  borderRadius: 12,
+                  padding: '6px 8px',
+                  width: 199,
+                  minHeight: 76,
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.4)',
+                  zIndex: 9999,
+                  border: '1px solid #374151',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  boxSizing: 'border-box',
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <h3 style={{ fontSize: 13, fontWeight: 600, color: '#F9FAFB', margin: 0, lineHeight: '15px' }}>
+                    Order exceeds available labels
+                  </h3>
+                  <p style={{ fontSize: 11, fontWeight: 400, color: '#9CA3AF', margin: 0, lineHeight: '14px' }}>
+                    Labels Available: {labelsAvail.toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  style={{
+                    width: 175,
+                    height: 23,
+                    backgroundColor: '#3B82F6',
+                    color: '#FFFFFF',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    borderRadius: 4,
+                    border: 'none',
+                    cursor: 'pointer',
+                    alignSelf: 'center',
+                    padding: 0,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQtyValues((prev) => ({ ...prev, [index]: String(labelsAvail) }));
+                    setClickedLabelWarningIndex(null);
+                  }}
+                >
+                  Use Available
+                </button>
+              </div>
+            )}
           </div>
         );
+      }
       default:
         return formatCell((row as Record<string, unknown>)[col.key] as string | number | undefined | null);
     }
@@ -350,6 +565,7 @@ export function AddProductsTable({
             backgroundColor: HEADER_BG,
           }}
         >
+          <div style={{ paddingBottom: 100, minHeight: '100%' }}>
           <table
             style={{
               width: 'max-content',
@@ -414,6 +630,7 @@ export function AddProductsTable({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
         </div>
       </div>

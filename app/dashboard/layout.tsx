@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { useAuthStore } from '@/stores/auth-store';
+import { setAuthFailureHandler } from '@/lib/api';
 
 export default function DashboardLayout({
   children,
@@ -11,7 +12,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, setSessionExpired } = useAuthStore();
+
+  useEffect(() => {
+    setAuthFailureHandler(() => {
+      setSessionExpired();
+      window.location.href = '/login';
+    });
+    return () => setAuthFailureHandler(null);
+  }, [setSessionExpired]);
 
   useEffect(() => {
     if (!isAuthenticated) {

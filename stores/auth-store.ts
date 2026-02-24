@@ -14,6 +14,8 @@ interface AuthActions {
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, passwordConfirm: string, firstName?: string, lastName?: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  /** Clear auth state without calling API (e.g. when API returns 401 / invalid token) */
+  setSessionExpired: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
 }
@@ -51,8 +53,12 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           });
           return true;
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'Login failed';
+          const isNetworkError = message === 'Failed to fetch';
           set({ 
-            error: error instanceof Error ? error.message : 'Login failed', 
+            error: isNetworkError 
+              ? 'Cannot reach server. Start the Django backend (e.g. run `python manage.py runserver` in the backend folder).' 
+              : message, 
             isLoading: false 
           });
           return false;
@@ -71,8 +77,12 @@ export const useAuthStore = create<AuthState & AuthActions>()(
           });
           return true;
         } catch (error) {
+          const message = error instanceof Error ? error.message : 'Registration failed';
+          const isNetworkError = message === 'Failed to fetch';
           set({ 
-            error: error instanceof Error ? error.message : 'Registration failed', 
+            error: isNetworkError 
+              ? 'Cannot reach server. Start the Django backend (e.g. run `python manage.py runserver` in the backend folder).' 
+              : message, 
             isLoading: false 
           });
           return false;
@@ -88,6 +98,10 @@ export const useAuthStore = create<AuthState & AuthActions>()(
             isAuthenticated: false 
           });
         }
+      },
+
+      setSessionExpired: () => {
+        set({ user: null, isAuthenticated: false, error: null });
       },
 
       checkAuth: async () => {

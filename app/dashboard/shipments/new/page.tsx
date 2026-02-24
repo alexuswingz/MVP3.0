@@ -6,7 +6,7 @@ import { Search, RotateCcw, Loader2 } from 'lucide-react';
 import type { NewShipmentForm } from '../components/NewShipmentModal';
 import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
 import { AddProductsNonTable, type NonTableProductRow } from './components/AddProductsNonTable';
-import { CustomizeColumnsModal, DEFAULT_VISIBLE_COLUMN_KEYS } from './components/CustomizeColumnsModal';
+import { CustomizeColumnsModal, DEFAULT_VISIBLE_COLUMN_KEYS, type ColumnKey } from './components/CustomizeColumnsModal';
 import { DOISettingsModal } from './components/DOISettingsModal';
 import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
@@ -174,7 +174,7 @@ export default function NewShipmentAddProductsPage() {
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
   const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);

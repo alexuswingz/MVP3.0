@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
@@ -16,6 +17,10 @@ export interface NonTableProductRow {
   daysOfInventory: number;
   /** FBA available days (for FBA Available bar when toggled on) */
   fbaAvailableDoi?: number;
+  /** Labels available for this product; when set and qty > this, show label warning icon */
+  labelsAvailable?: number;
+  label_inventory?: number;
+  labels_available?: number;
 }
 
 interface AddProductsNonTableProps {
@@ -84,6 +89,12 @@ export function AddProductsNonTable({
   const [barFillAnimation, setBarFillAnimation] = useState<{ rowId: string; targetPct: number } | null>(null);
   const [barFillPhase, setBarFillPhase] = useState<'start' | 'go'>('start');
   const [copiedAsinRowId, setCopiedAsinRowId] = useState<string | null>(null);
+  const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
+  const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
+  const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
+
+  const getLabelsAvailable = (row: NonTableProductRow) =>
+    row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
 
   const toggleSelect = (index: number) => {
     setSelectedIndices((prev) => {
@@ -317,8 +328,8 @@ export function AddProductsNonTable({
           </div>
         </div>
 
-        {/* Product rows - scrollable */}
-        <div style={{ maxHeight: 'calc(100vh - 260px)', overflowY: 'auto', overflowX: 'hidden' }}>
+        {/* Product rows - no inner scroll; main page scroll only */}
+        <div style={{ overflowX: 'hidden' }}>
           {rows.map((row, index) => {
             const isSelected = selectedIndices.has(index);
             const isAdded = addedIds.has(row.id);
@@ -500,7 +511,7 @@ export function AddProductsNonTable({
                   {row.inventory.toLocaleString()}
                 </div>
 
-                {/* UNITS TO MAKE column - input + Add only, no bar (bar is in DOI column) */}
+                {/* UNITS TO MAKE column - label warning icon (when qty > labels) + input + arrows + Add */}
                 <div
                   style={{
                     display: 'flex',
@@ -512,10 +523,76 @@ export function AddProductsNonTable({
                     marginRight: 20,
                     position: 'relative',
                     minWidth: 220,
-                    zIndex: 1,
+                    zIndex: clickedLabelWarningIndex === index ? 10001 : 1,
                   }}
                 >
-                  <div style={{ position: 'relative', width: 110, height: 28 }}>
+                  {/* Fixed-width slot so input doesn't move when icon appears */}
+                  <div style={{ position: 'relative', width: 26, minWidth: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {(() => {
+                      const labelsAvail = getLabelsAvailable(row);
+                      const labelsNeeded = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                      const showLabelWarning = labelsAvail > 0 && labelsNeeded > labelsAvail;
+                      if (!showLabelWarning) return null;
+                      return (
+                        <>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setClickedLabelWarningIndex((prev) => (prev === index ? null : index));
+                            }}
+                            onMouseEnter={() => setHoveredLabelWarningIndex(index)}
+                            onMouseLeave={() => setHoveredLabelWarningIndex(null)}
+                            title={`Order exceeds available labels. Labels Available: ${labelsAvail.toLocaleString()}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 18,
+                              height: 18,
+                              borderRadius: '50%',
+                              backgroundColor: '#FEE2E2',
+                              color: '#DC2626',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            !
+                          </span>
+                          {hoveredLabelWarningIndex === index && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: '50%',
+                                bottom: '100%',
+                                transform: 'translateX(-50%)',
+                                marginBottom: 6,
+                                padding: '6px 10px',
+                                backgroundColor: '#1F2937',
+                                color: '#F9FAFB',
+                                fontSize: 12,
+                                fontWeight: 500,
+                                lineHeight: 1.3,
+                                borderRadius: 8,
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                                border: '1px solid #374151',
+                                whiteSpace: 'nowrap',
+                                zIndex: 10002,
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              Order exceeds available labels. Labels Available: {labelsAvail.toLocaleString()}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div
+                    style={{ position: 'relative', width: 110, height: 28 }}
+                    onMouseEnter={() => setHoveredQtyIndex(index)}
+                    onMouseLeave={() => setHoveredQtyIndex(null)}
+                  >
                     <input
                       type="text"
                       inputMode="numeric"
@@ -536,11 +613,93 @@ export function AddProductsNonTable({
                         fontSize: 13,
                         fontWeight: 500,
                         outline: 'none',
-                        padding: '0 12px',
+                        padding: '0 28px 0 12px',
                         boxSizing: 'border-box',
                         cursor: 'text',
                       }}
                     />
+                    {/* Arrow buttons - show on hover */}
+                    {hoveredQtyIndex === index && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 4,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 0,
+                          zIndex: 3,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                            const increment = getQtyIncrement(row);
+                            const rounded = roundQtyUpToNearestCase(current, row);
+                            const newVal = rounded === current ? rounded + increment : rounded;
+                            setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                          }}
+                          style={{
+                            width: 20,
+                            height: 10,
+                            border: 'none',
+                            borderRadius: 2,
+                            background: 'transparent',
+                            color: '#9CA3AF',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            outline: 'none',
+                            pointerEvents: 'auto',
+                          }}
+                          title="Increase (case)"
+                        >
+                          <svg width={12} height={12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 4L6 1L9 4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                            if (current <= 0) return;
+                            const increment = getQtyIncrement(row);
+                            const rounded = roundQtyDownToNearestCase(current, row);
+                            const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
+                            setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                          }}
+                          style={{
+                            width: 20,
+                            height: 10,
+                            border: 'none',
+                            borderRadius: 2,
+                            background: 'transparent',
+                            color: '#9CA3AF',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            outline: 'none',
+                            pointerEvents: 'auto',
+                          }}
+                          title="Decrease (case)"
+                        >
+                          <svg width={12} height={12} viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -567,6 +726,68 @@ export function AddProductsNonTable({
                     {!isAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
                     <span>{isAdded ? 'Added' : 'Add'}</span>
                   </button>
+                  {/* Label warning popover - when icon clicked */}
+                  {clickedLabelWarningIndex === index && (() => {
+                    const labelsAvail = getLabelsAvailable(row);
+                    const labelsNeeded = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                    if (labelsNeeded <= labelsAvail) return null;
+                    return (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          bottom: '100%',
+                          marginBottom: 8,
+                          backgroundColor: '#1F2937',
+                          borderRadius: 12,
+                          padding: '6px 8px',
+                          width: 199,
+                          minHeight: 76,
+                          boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.4)',
+                          zIndex: 9999,
+                          border: '1px solid #374151',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          boxSizing: 'border-box',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <h3 style={{ fontSize: 13, fontWeight: 600, color: '#F9FAFB', margin: 0, lineHeight: '15px' }}>
+                            Order exceeds available labels
+                          </h3>
+                          <p style={{ fontSize: 11, fontWeight: 400, color: '#9CA3AF', margin: 0, lineHeight: '14px' }}>
+                            Labels Available: {labelsAvail.toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          style={{
+                            width: 175,
+                            height: 23,
+                            backgroundColor: '#3B82F6',
+                            color: '#FFFFFF',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            borderRadius: 4,
+                            border: 'none',
+                            cursor: 'pointer',
+                            alignSelf: 'center',
+                            padding: 0,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQtyValues((prev) => ({ ...prev, [index]: String(labelsAvail) }));
+                            setClickedLabelWarningIndex(null);
+                          }}
+                        >
+                          Use Available
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* DAYS OF INVENTORY column - FBA bar (when toggled) + DOI bar + number + icon group */}

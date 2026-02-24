@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { exportShipmentTemplate } from '@/utils/shipmentExport';
 
 interface ExportTemplateModalProps {
   isOpen: boolean;
@@ -133,8 +132,29 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
           onExport(selectedType);
         }
         
-        // Call the export function with the selected template type, products, and shipment data
-        await exportShipmentTemplate(selectedType, products || [], shipmentData || {});
+        // Call server API to generate Excel (exceljs runs only on server)
+        const res = await fetch('/api/shipment-export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateType: selectedType,
+            products: products || [],
+            shipmentData: shipmentData || {},
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || res.statusText || 'Export failed');
+        }
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || `export_${selectedType}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
         
         // Show export complete popup
         setShowExportComplete(true);
