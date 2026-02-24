@@ -1,14 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-/** Set by the app to clear auth state and redirect when the API returns 401 / invalid token */
-let authFailureHandler: (() => void) | null = null;
-export function setAuthFailureHandler(handler: (() => void) | null): void {
-  authFailureHandler = handler;
-}
-
-/** Message thrown when the backend rejects the token (401); app can redirect to login */
-export const SESSION_EXPIRED_MESSAGE = 'SESSION_EXPIRED';
-
 interface TokenResponse {
   access: string;
   refresh: string;
@@ -86,7 +77,6 @@ export class ApiClient {
       throw new Error(msg);
     }
 
-<<<<<<< Updated upstream
     if (response.status === 401) {
       if (this.refreshToken) {
         const refreshed = await this.refreshAccessToken();
@@ -97,35 +87,16 @@ export class ApiClient {
             headers,
           });
           if (!retryResponse.ok) {
-            if (retryResponse.status === 401) {
-              this.clearTokens();
-              authFailureHandler?.();
-              throw new Error(SESSION_EXPIRED_MESSAGE);
-            }
-            throw new Error(await this.parseError(retryResponse));
+            const message = await this.parseError(retryResponse).catch(() =>
+              retryResponse.statusText || `Request failed with status ${retryResponse.status}`
+            );
+            throw new Error(typeof message === 'string' ? message : 'An error occurred');
           }
           return retryResponse.json();
-=======
-    if (response.status === 401 && this.refreshToken) {
-      const refreshed = await this.refreshAccessToken();
-      if (refreshed) {
-        (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
-        const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-          ...options,
-          headers,
-        });
-        if (!retryResponse.ok) {
-          const message = await this.parseError(retryResponse).catch(() =>
-            retryResponse.statusText || `Request failed with status ${retryResponse.status}`
-          );
-          throw new Error(typeof message === 'string' ? message : 'An error occurred');
->>>>>>> Stashed changes
         }
       } else {
         this.clearTokens();
       }
-      authFailureHandler?.();
-      throw new Error(SESSION_EXPIRED_MESSAGE);
     }
 
     if (!response.ok) {
