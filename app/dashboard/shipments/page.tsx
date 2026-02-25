@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Plus, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,9 @@ function apiShipmentToInternal(s: ShipmentListItem): Shipment {
     marketplace: 'Amazon',
     account: s.ship_from_name || 'TPS Nutrients',
     plannedDate: s.planned_ship_date ? new Date(s.planned_ship_date) : undefined,
+    amazonShipmentId: s.amazon_shipment_id || undefined,
     items: [],
+    itemCount: s.item_count,
     createdAt: new Date(s.created_at),
     updatedAt: new Date(s.updated_at),
   };
@@ -51,18 +53,29 @@ const typeConfig: Record<ShipmentType, { label: string }> = {
   fba: { label: 'FBA' },
 };
 
-/** Map Shipment status to ADD PRODUCTS / BOOK SHIPMENT for the table */
-function stepStatusesFromShipmentStatus(status: ShipmentStatus): { addProducts: StepStatus; bookShipment: StepStatus } {
+/** Map Shipment status (and booking, item count) to ADD PRODUCTS / BOOK SHIPMENT for the table.
+ * When status is "planning" and has items, Add Products is in progress and Book Shipment not started.
+ * When status is "ready" and amazonShipmentId is set, Book Shipment is completed. */
+function stepStatusesFromShipmentStatus(
+  status: ShipmentStatus,
+  amazonShipmentId?: string,
+  itemCount?: number
+): { addProducts: StepStatus; bookShipment: StepStatus } {
   const completed: StepStatus = 'completed';
   const pending: StepStatus = 'pending';
   const inProgress: StepStatus = 'in progress';
+  const isBooked = Boolean(amazonShipmentId?.trim());
+  const hasItems = (itemCount ?? 0) > 0;
   switch (status) {
     case 'received':
     case 'shipped':
       return { addProducts: completed, bookShipment: completed };
     case 'ready':
-      return { addProducts: completed, bookShipment: inProgress };
+      return { addProducts: completed, bookShipment: isBooked ? completed : inProgress };
     case 'planning':
+      return hasItems
+        ? { addProducts: inProgress, bookShipment: pending }
+        : { addProducts: pending, bookShipment: pending };
     case 'archived':
     default:
       return { addProducts: pending, bookShipment: pending };
@@ -79,12 +92,13 @@ function formatShipmentDate(d: Date | undefined): string {
 }
 
 function shipmentToPlanningRow(s: Shipment): PlanningTableRow {
-  const steps = stepStatusesFromShipmentStatus(s.status);
+  const status = s.status as ShipmentStatus;
+  const steps = stepStatusesFromShipmentStatus(status, s.amazonShipmentId, s.itemCount);
   return {
     id: s.id,
-    status: statusConfig[s.status].label,
+    status: statusConfig[status]?.label ?? status ?? 'Unknown',
     shipment: formatShipmentDate(s.plannedDate) || s.name,
-    type: typeConfig[s.type].label,
+    type: typeConfig[s.type as ShipmentType]?.label ?? String(s.type ?? ''),
     marketplace: s.marketplace,
     account: s.account,
     addProducts: steps.addProducts,
@@ -113,6 +127,7 @@ const NEW_SHIPMENT_STORAGE_KEY = 'mvp_new_shipment_data';
 
 export default function ShipmentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'shipments' | 'archive'>('shipments');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
@@ -149,6 +164,14 @@ export default function ShipmentsPage() {
     fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
   }, [activeTab, fetchShipments]);
 
+  // Refetch when returning from new-shipment page (Back after creating draft) so the new row appears
+  useEffect(() => {
+    if (searchParams.get('refetch') === '1') {
+      fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+      router.replace('/dashboard/shipments', { scroll: false });
+    }
+  }, [searchParams, router, activeTab, fetchShipments]);
+
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
@@ -168,8 +191,13 @@ export default function ShipmentsPage() {
   const archiveCount = stats?.received ?? 0;
 
   const handleRowClick = (row: PlanningTableRow) => {
-    console.log('Shipment row clicked:', row.id);
-    router.push(`/dashboard/shipments/${row.id}`);
+    const tab = row.addProducts !== 'completed' ? 'add-products' : 'book-shipment';
+    router.push(`/dashboard/shipments/new?shipmentId=${row.id}&tab=${tab}`);
+  };
+
+  const handleStepClick = (row: PlanningTableRow, step: 'addProducts' | 'bookShipment') => {
+    const tab = step === 'addProducts' ? 'add-products' : 'book-shipment';
+    router.push(`/dashboard/shipments/new?shipmentId=${row.id}&tab=${tab}`);
   };
 
   async function handleDeleteRow(row: PlanningTableRow) {
@@ -492,7 +520,7 @@ export default function ShipmentsPage() {
                 No shipments found. Click "New Shipment" to create one.
               </div>
             ) : (
-              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />
             )}
           </motion.section>
         )}
@@ -509,7 +537,7 @@ export default function ShipmentsPage() {
                 No archived shipments found.
               </div>
             ) : (
-              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onDeleteRow={handleDeleteRow} />
+              <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />
             )}
           </motion.section>
         )}

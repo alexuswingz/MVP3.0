@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BG = '#1A2235';
@@ -30,6 +30,12 @@ interface AddProductsNonTableProps {
   onProductClick?: (row: NonTableProductRow) => void;
   onClear?: () => void;
   onExport?: () => void;
+  /** Initial set of added product row IDs (e.g. when returning from Book Shipment tab so selections persist) */
+  initialAddedIds?: string[];
+  /** Called when the set of added product IDs changes */
+  onAddedIdsChange?: (ids: string[]) => void;
+  /** Called when user edits "units to make" so the page can save it when creating the draft */
+  onUnitsOverride?: (productId: string, units: number | null) => void;
   totalProducts?: number;
   totalPalettes?: number;
   totalBoxes?: number;
@@ -76,22 +82,46 @@ export function AddProductsNonTable({
   onProductClick,
   onClear,
   onExport,
+  initialAddedIds,
+  onAddedIdsChange,
+  onUnitsOverride,
   totalProducts = 0,
   totalPalettes = 0,
   totalBoxes = 0,
   totalWeightLbs = 0,
 }: AddProductsNonTableProps) {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set(initialAddedIds ?? []));
+
+  // When parent loads a shipment and sends initialAddedIds (e.g. opening from table), sync so added products are not lost
+  useEffect(() => {
+    const ids = initialAddedIds ?? [];
+    if (ids.length > 0 && addedIds.size === 0) {
+      setAddedIds(new Set(ids));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when we have IDs and selection is empty
+  }, [initialAddedIds?.length, addedIds.size]);
+
+  useEffect(() => {
+    onAddedIdsChange?.(Array.from(addedIds));
+  }, [addedIds, onAddedIdsChange]);
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
   const [showFbaBar, setShowFbaBar] = useState(false);
   const [showDoiBar, setShowDoiBar] = useState(true);
-  const [barFillAnimation, setBarFillAnimation] = useState<{ rowId: string; targetPct: number } | null>(null);
+  const [barFillAnimation, setBarFillAnimation] = useState<{ rowId: string; startPct: number; targetPct: number } | null>(null);
   const [barFillPhase, setBarFillPhase] = useState<'start' | 'go'>('start');
   const [copiedAsinRowId, setCopiedAsinRowId] = useState<string | null>(null);
   const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
   const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
   const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
+  const [shipmentStatsMenuOpen, setShipmentStatsMenuOpen] = useState(false);
+  const shipmentStatsPopupRef = useRef<HTMLDivElement>(null);
+  const [footerStatsVisibility, setFooterStatsVisibility] = useState({
+    products: true,
+    palettes: true,
+    boxes: true,
+    weightLbs: true,
+  });
 
   const getLabelsAvailable = (row: NonTableProductRow) =>
     row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
@@ -113,12 +143,14 @@ export function AddProductsNonTable({
   const handleAddClick = (row: NonTableProductRow) => {
     setAddedIds((prev) => {
       const next = new Set(prev);
-      const wasAdded = next.has(row.id);
-      if (wasAdded) next.delete(row.id);
-      else next.add(row.id);
+      const rowIdStr = String(row.id);
+      const wasAdded = next.has(rowIdStr);
+      if (wasAdded) next.delete(rowIdStr);
+      else next.add(rowIdStr);
       if (!wasAdded) {
+        const startPct = Math.min(100, (Number(row.daysOfInventory) / 100) * 100);
         const targetPct = Math.min(100, (requiredDoi / 100) * 100);
-        setBarFillAnimation({ rowId: row.id, targetPct });
+        setBarFillAnimation({ rowId: row.id, startPct, targetPct });
         setBarFillPhase('start');
       }
       return next;
@@ -127,10 +159,10 @@ export function AddProductsNonTable({
 
   const allSelected = rows.length > 0 && selectedIndices.size === rows.length;
 
-  // Animate DOI bar fill when Add is clicked: 0% -> target%. Short delay so 0% paints, then CSS transition runs.
+  // Animate DOI bar fill when Add is clicked: startPct (current blue) -> target%. Bar extends from current fill to full target.
   useEffect(() => {
     if (!barFillAnimation || barFillPhase !== 'start') return;
-    const id = setTimeout(() => setBarFillPhase('go'), 50);
+    const id = setTimeout(() => setBarFillPhase('go'), 25);
     return () => clearTimeout(id);
   }, [barFillAnimation, barFillPhase]);
   useEffect(() => {
@@ -138,14 +170,26 @@ export function AddProductsNonTable({
     const id = setTimeout(() => {
       setBarFillAnimation(null);
       setBarFillPhase('start');
-    }, 650);
+    }, 325);
     return () => clearTimeout(id);
   }, [barFillPhase, barFillAnimation]);
+
+  // Close Shipment Stats popup when clicking outside
+  useEffect(() => {
+    if (!shipmentStatsMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const popup = shipmentStatsPopupRef.current;
+      const isTrigger = (e.target as Element).closest('[data-shipment-stats-trigger]');
+      if (popup && !popup.contains(e.target as Node) && !isTrigger) setShipmentStatsMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [shipmentStatsMenuOpen]);
 
   // Footer totals: compute from added rows only (same formulas as page: boxes = units/24, weight = boxes*12, palettes = products*0.5)
   const addedEntries = rows
     .map((row, index) => ({ row, index }))
-    .filter(({ row }) => addedIds.has(row.id));
+    .filter(({ row }) => addedIds.has(String(row.id)));
   const addedProductCount = addedEntries.length;
   const totalUnitsAdded = addedEntries.reduce(
     (acc, { row, index }) => acc + (Number(qtyValues[index]) || Number(row.unitsToMake) || 0),
@@ -332,7 +376,7 @@ export function AddProductsNonTable({
         <div style={{ overflowX: 'hidden' }}>
           {rows.map((row, index) => {
             const isSelected = selectedIndices.has(index);
-            const isAdded = addedIds.has(row.id);
+            const isAdded = addedIds.has(String(row.id));
             const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
             const doiColor = getDoiColor(row.daysOfInventory);
 
@@ -593,31 +637,86 @@ export function AddProductsNonTable({
                     onMouseEnter={() => setHoveredQtyIndex(index)}
                     onMouseLeave={() => setHoveredQtyIndex(null)}
                   >
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={qtyDisplay}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
-                        setQtyValues((prev) => ({ ...prev, [index]: v }));
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        borderRadius: 6,
-                        border: 'none',
-                        backgroundColor: '#2C3544',
-                        color: '#E5E7EB',
-                        textAlign: 'center',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        outline: 'none',
-                        padding: '0 28px 0 12px',
-                        boxSizing: 'border-box',
-                        cursor: 'text',
-                      }}
-                    />
+                    {(() => {
+                      const defaultUnits = row.unitsToMake != null ? Number(row.unitsToMake) : 0;
+                      const currentUnits = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                      const unitsHasChanged = currentUnits !== defaultUnits;
+                      return (
+                        <>
+                          {/* Reset icon - inside container on left, only when value changed */}
+                          {unitsHasChanged && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQtyValues((prev) => {
+                                  const next = { ...prev };
+                                  delete next[index];
+                                  return next;
+                                });
+                                onUnitsOverride?.(String(row.id), null);
+                              }}
+                              title="Reset units to default"
+                              style={{
+                                position: 'absolute',
+                                left: 4,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: 20,
+                                height: 20,
+                                border: 'none',
+                                borderRadius: 4,
+                                background: 'transparent',
+                                color: '#9CA3AF',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                outline: 'none',
+                                zIndex: 2,
+                              }}
+                            >
+                              <svg width={12} height={12} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                          )}
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={qtyDisplay}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                              setQtyValues((prev) => ({ ...prev, [index]: v }));
+                              const parsed = parseInt(v, 10);
+                              if (!Number.isNaN(parsed) && parsed !== (row.unitsToMake != null ? Number(row.unitsToMake) : 0)) {
+                                onUnitsOverride?.(String(row.id), parsed);
+                              } else if (v === '' || Number.isNaN(parsed)) {
+                                onUnitsOverride?.(String(row.id), null);
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              borderRadius: 6,
+                              border: 'none',
+                              backgroundColor: '#2C3544',
+                              color: '#E5E7EB',
+                              textAlign: 'center',
+                              fontSize: 13,
+                              fontWeight: 500,
+                              outline: 'none',
+                              padding: '0 28px 0 26px',
+                              boxSizing: 'border-box',
+                              cursor: 'text',
+                            }}
+                          />
+                        </>
+                      );
+                    })()}
                     {/* Arrow buttons - show on hover */}
                     {hoveredQtyIndex === index && (
                       <div
@@ -644,6 +743,7 @@ export function AddProductsNonTable({
                             const rounded = roundQtyUpToNearestCase(current, row);
                             const newVal = rounded === current ? rounded + increment : rounded;
                             setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                            onUnitsOverride?.(String(row.id), newVal);
                           }}
                           style={{
                             width: 20,
@@ -676,6 +776,7 @@ export function AddProductsNonTable({
                             const rounded = roundQtyDownToNearestCase(current, row);
                             const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
                             setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                            onUnitsOverride?.(String(row.id), newVal);
                           }}
                           style={{
                             width: 20,
@@ -780,6 +881,7 @@ export function AddProductsNonTable({
                           onClick={(e) => {
                             e.stopPropagation();
                             setQtyValues((prev) => ({ ...prev, [index]: String(labelsAvail) }));
+                            onUnitsOverride?.(String(row.id), labelsAvail);
                             setClickedLabelWarningIndex(null);
                           }}
                         >
@@ -869,11 +971,11 @@ export function AddProductsNonTable({
                     )}
                     {/* DOI bar row - when showDoiBar (Total Inventory); when added uses requiredDoi from DOI settings */}
                     {showDoiBar && (() => {
-                      const isAdded = addedIds.has(row.id);
+                      const isAdded = addedIds.has(String(row.id));
                       const doiValue = isAdded ? requiredDoi : Number(row.daysOfInventory);
                       const targetPct = Math.min(100, (doiValue / 100) * 100);
                       const isAnimating = barFillAnimation?.rowId === row.id;
-                      const displayPct = isAnimating ? (barFillPhase === 'go' ? barFillAnimation.targetPct : 0) : targetPct;
+                      const displayPct = isAnimating ? (barFillPhase === 'go' ? barFillAnimation.targetPct : barFillAnimation.startPct) : targetPct;
                       const doiColor = getDoiColor(doiValue);
                       return (
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, position: 'relative', minHeight: 32, width: 450, flexShrink: 0, boxSizing: 'border-box', marginTop: showFbaBar ? -6 : 0 }}>
@@ -897,7 +999,7 @@ export function AddProductsNonTable({
                                 width: `${displayPct}%`,
                                 height: '100%',
                                 backgroundColor: '#3399FF',
-                                transition: isAnimating && barFillPhase === 'start' ? 'none' : 'width 0.6s ease-out',
+                                transition: isAnimating && barFillPhase === 'start' ? 'none' : 'width 0.3s ease-out',
                               }}
                             />
                             <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
@@ -1013,30 +1115,38 @@ export function AddProductsNonTable({
         }}
       >
         <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PRODUCTS</span>
-            {addedIds.size > 0 && (
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedProductCount}</span>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PALETTES</span>
-            {addedIds.size > 0 && (
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedTotalPalettes.toFixed(2)}</span>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>BOXES</span>
-            {addedIds.size > 0 && (
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(addedTotalBoxes).toLocaleString()}</span>
-            )}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
-            {addedIds.size > 0 && (
-              <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(addedTotalWeightLbs).toLocaleString()}</span>
-            )}
-          </div>
+          {footerStatsVisibility.products && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PRODUCTS</span>
+              {addedIds.size > 0 && (
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedProductCount}</span>
+              )}
+            </div>
+          )}
+          {footerStatsVisibility.palettes && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PALETTES</span>
+              {addedIds.size > 0 && (
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedTotalPalettes.toFixed(2)}</span>
+              )}
+            </div>
+          )}
+          {footerStatsVisibility.boxes && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>BOXES</span>
+              {addedIds.size > 0 && (
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(addedTotalBoxes).toLocaleString()}</span>
+              )}
+            </div>
+          )}
+          {footerStatsVisibility.weightLbs && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
+              {addedIds.size > 0 && (
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(addedTotalWeightLbs).toLocaleString()}</span>
+              )}
+            </div>
+          )}
         </div>
         {(onClear != null || onExport != null) && (
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
@@ -1088,13 +1198,15 @@ export function AddProductsNonTable({
                 </button>
                 <button
                   type="button"
-                  aria-label="Menu"
+                  aria-label="Shipment stats"
+                  data-shipment-stats-trigger
+                  onClick={() => setShipmentStatsMenuOpen((prev) => !prev)}
                   style={{
                     padding: 4,
                     border: 'none',
                     borderRadius: 4,
                     backgroundColor: 'transparent',
-                    color: '#9CA3AF',
+                    color: shipmentStatsMenuOpen ? '#3B82F6' : '#9CA3AF',
                     fontSize: '1.25rem',
                     cursor: 'pointer',
                     display: 'flex',
@@ -1109,6 +1221,91 @@ export function AddProductsNonTable({
           </div>
         )}
       </div>
+
+      {/* Shipment Stats popup - above footer (same as 1000bananas2.0) */}
+      {shipmentStatsMenuOpen && (
+        <div
+          ref={shipmentStatsPopupRef}
+          style={{
+            position: 'fixed',
+            bottom: 96,
+            left: 'calc(50% + 220px)',
+            transform: 'translateX(-50%)',
+            width: 204,
+            minHeight: 214,
+            maxHeight: '80vh',
+            backgroundColor: '#1F2937',
+            borderRadius: 8,
+            boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+            border: '1px solid #374151',
+            zIndex: 1001,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 8, borderBottom: '1px solid #374151' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#FFFFFF' }}>Shipment Stats</span>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setShipmentStatsMenuOpen(false)}
+              style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2}><path d="M12 4L4 12M4 4l8 8" /></svg>
+            </button>
+          </div>
+          <div style={{ padding: 8, gap: 2, display: 'flex', flexDirection: 'column', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+            {[
+              { key: 'products', label: 'Products' },
+              { key: 'palettes', label: 'Palettes' },
+              { key: 'boxes', label: 'Boxes' },
+              { key: 'weightLbs', label: 'Weight (lbs)' },
+            ].map(({ key, label }) => (
+              <div
+                key={key}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  padding: '6px 8px',
+                }}
+              >
+                <span style={{ color: '#9CA3AF', display: 'flex' }} aria-hidden>≡</span>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!footerStatsVisibility[key as keyof typeof footerStatsVisibility]}
+                    onChange={() => setFooterStatsVisibility((prev) => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
+                    style={{ position: 'absolute', opacity: 0, width: 0, height: 0, margin: 0, pointerEvents: 'none' }}
+                    aria-hidden
+                  />
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 4,
+                      border: '1px solid #6B7280',
+                      backgroundColor: footerStatsVisibility[key as keyof typeof footerStatsVisibility] ? '#3B82F6' : '#374151',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {footerStatsVisibility[key as keyof typeof footerStatsVisibility] && (
+                      <svg width={10} height={8} viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 4L4 7L9 1" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                </label>
+                <span style={{ flex: 1, fontSize: 13, color: '#FFFFFF' }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }

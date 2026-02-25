@@ -85,20 +85,22 @@ class ShipmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def book(self, request, pk=None):
         """
-        Book a shipment - transition from planning to ready status.
+        Book a shipment - transition from planning to ready, or update booking details on an already ready shipment.
         Can include shipment details in the request body.
         """
         shipment = self.get_object()
         
-        if shipment.status != 'planning':
+        if shipment.status not in ('planning', 'ready'):
             return Response(
                 {'error': f'Cannot book shipment in {shipment.status} status'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         # Update shipment with provided data
-        update_fields = ['status']
-        shipment.status = 'ready'
+        update_fields = []
+        if shipment.status == 'planning':
+            shipment.status = 'ready'
+            update_fields.append('status')
         
         # Optional fields to update
         if 'amazon_shipment_id' in request.data:

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BORDER = '1px solid #334155';
@@ -72,6 +72,12 @@ interface AddProductsTableProps {
   onProductClick?: (row: AddProductRow) => void;
   onClear?: () => void;
   onExport?: () => void;
+  /** Initial set of added product row IDs (e.g. when returning from Book Shipment tab so selections persist) */
+  initialAddedIds?: string[];
+  /** Called when the set of added product IDs changes */
+  onAddedIdsChange?: (ids: string[]) => void;
+  /** Called when user edits "units to make" so the page can save it when creating the draft */
+  onUnitsOverride?: (productId: string, units: number | null) => void;
   totalProducts?: number;
   totalPalettes?: number;
   totalBoxes?: number;
@@ -131,16 +137,32 @@ export function AddProductsTable({
   onProductClick,
   onClear,
   onExport,
+  initialAddedIds,
+  onAddedIdsChange,
+  onUnitsOverride,
   totalProducts = 0,
   totalPalettes = 0,
   totalBoxes = 0,
   totalWeightLbs = 0,
 }: AddProductsTableProps) {
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set(initialAddedIds ?? []));
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
   const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
   const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
   const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
+
+  // When parent loads a shipment and sends initialAddedIds (e.g. opening from table), sync so added products are not lost
+  useEffect(() => {
+    const ids = initialAddedIds ?? [];
+    if (ids.length > 0 && selectedRows.size === 0) {
+      setSelectedRows(new Set(ids));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when we have IDs and selection is empty
+  }, [initialAddedIds?.length, selectedRows.size]);
+
+  useEffect(() => {
+    onAddedIdsChange?.(Array.from(selectedRows));
+  }, [selectedRows, onAddedIdsChange]);
 
   const visibleColumns = useMemo((): (ColDef & { left?: number })[] => {
     if (!visibleColumnKeys || visibleColumnKeys.length === 0) return COLUMNS as (ColDef & { left?: number })[];
@@ -157,7 +179,7 @@ export function AddProductsTable({
   // Footer totals: compute from selected rows only (same formulas: boxes = units/24, weight = boxes*12, palettes = products*0.5)
   const selectedEntries = rows
     .map((row, index) => ({ row, index }))
-    .filter(({ row }) => selectedRows.has(row.id));
+    .filter(({ row }) => selectedRows.has(String(row.id)));
   const selectedProductCount = selectedEntries.length;
   const totalUnitsSelected = selectedEntries.reduce(
     (acc, { row, index }) => acc + (Number(qtyValues[index]) || Number(row.unitsToMake) || 0),
@@ -178,7 +200,7 @@ export function AddProductsTable({
 
   const selectAll = () => {
     if (selectedRows.size === rows.length) setSelectedRows(new Set());
-    else setSelectedRows(new Set(rows.map((r) => r.id)));
+    else setSelectedRows(new Set(rows.map((r) => String(r.id))));
   };
 
   const formatCell = (v: string | number | undefined | null): string => {
@@ -224,9 +246,9 @@ export function AddProductsTable({
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '100%', height: '100%', minHeight: 58, margin: 0 }}>
             <input
               type="checkbox"
-              checked={selectedRows.has(row.id)}
-              onChange={() => toggleRow(row.id)}
-              style={getCheckboxStyle(selectedRows.has(row.id))}
+              checked={selectedRows.has(String(row.id))}
+              onChange={() => toggleRow(String(row.id))}
+              style={getCheckboxStyle(selectedRows.has(String(row.id)))}
             />
           </label>
         );
@@ -332,7 +354,16 @@ export function AddProductsTable({
                 value={qtyDisplay}
                 onChange={(e) => {
                   const v = e.target.value.replace(/,/g, '');
-                  if (v === '' || /^\d+$/.test(v)) setQtyValues((prev) => ({ ...prev, [index]: v }));
+                  if (v === '' || /^\d+$/.test(v)) {
+                    setQtyValues((prev) => ({ ...prev, [index]: v }));
+                    const parsed = parseInt(v, 10);
+                    const defaultUnits = row.unitsToMake != null ? Number(row.unitsToMake) : 0;
+                    if (!Number.isNaN(parsed) && parsed !== defaultUnits) {
+                      onUnitsOverride?.(String(row.id), parsed);
+                    } else if (v === '' || Number.isNaN(parsed)) {
+                      onUnitsOverride?.(String(row.id), null);
+                    }
+                  }
                 }}
                 style={{
                   width: '100%',
@@ -374,6 +405,7 @@ export function AddProductsTable({
                       const rounded = roundQtyUpToNearestCase(current, row);
                       const newVal = rounded === current ? rounded + increment : rounded;
                       setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                      onUnitsOverride?.(String(row.id), newVal);
                     }}
                     style={{
                       width: 20,
@@ -406,6 +438,7 @@ export function AddProductsTable({
                       const rounded = roundQtyDownToNearestCase(current, row);
                       const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
                       setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                      onUnitsOverride?.(String(row.id), newVal);
                     }}
                     style={{
                       width: 20,
@@ -503,6 +536,7 @@ export function AddProductsTable({
                   onClick={(e) => {
                     e.stopPropagation();
                     setQtyValues((prev) => ({ ...prev, [index]: String(labelsAvail) }));
+                    onUnitsOverride?.(String(row.id), labelsAvail);
                     setClickedLabelWarningIndex(null);
                   }}
                 >

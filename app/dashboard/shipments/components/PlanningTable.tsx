@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreVertical, Trash2 } from 'lucide-react';
 
 export type StepStatus = 'pending' | 'in progress' | 'incomplete' | 'completed';
@@ -19,6 +20,8 @@ export interface PlanningTableRow {
 interface PlanningTableProps {
   rows: PlanningTableRow[];
   onRowClick?: (row: PlanningTableRow) => void;
+  /** When user clicks the ADD PRODUCTS or BOOK SHIPMENT status cell, open that step (e.g. navigate with tab param) */
+  onStepClick?: (row: PlanningTableRow, step: 'addProducts' | 'bookShipment') => void;
   onMenuClick?: (row: PlanningTableRow, e: React.MouseEvent) => void;
   onDeleteRow?: (row: PlanningTableRow) => void;
   /** Custom message when rows are empty (e.g. "No data to show") */
@@ -136,17 +139,26 @@ const COLUMN_CONFIG: { key: keyof PlanningTableRow; width: string; label: string
   { key: 'bookShipment', width: '12%', label: 'BOOK', subLabel: 'SHIPMENT' },
 ];
 
-export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, emptyMessage }: PlanningTableProps) {
+const MENU_DROPDOWN_HEIGHT = 44;
+
+export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDeleteRow, emptyMessage }: PlanningTableProps) {
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   const [openMenuRowId, setOpenMenuRowId] = useState<string | null>(null);
-  const menuContainerRef = useRef<HTMLDivElement>(null);
+  /** Anchor rect for the open actions menu (from trigger button). Used to position portal dropdown. */
+  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
+  const menuPortalRef = useRef<HTMLDivElement>(null);
+
+  const openRow = openMenuRowId != null ? rows.find((r) => r.id === openMenuRowId) ?? null : null;
 
   useEffect(() => {
     if (!openMenuRowId) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
-        setOpenMenuRowId(null);
-      }
+      const target = e.target as Node;
+      if (menuPortalRef.current?.contains(target)) return;
+      const trigger = document.querySelector(`[data-planning-menu-trigger="${openMenuRowId}"]`);
+      if (trigger?.contains(target)) return;
+      setOpenMenuRowId(null);
+      setMenuAnchorRect(null);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -400,6 +412,13 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, empt
                     minHeight: 40,
                     display: 'table-cell',
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStepClick?.(row, 'addProducts');
+                    if (!onStepClick) onRowClick?.(row);
+                  }}
+                  className={onStepClick ? 'cursor-pointer' : ''}
+                  title={onStepClick ? 'Open Add Products step' : undefined}
                 >
                   <div className="flex justify-center">
                     <StatusCircle status={row.addProducts} isAddProducts />
@@ -415,6 +434,13 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, empt
                     minHeight: 40,
                     display: 'table-cell',
                   }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onStepClick?.(row, 'bookShipment');
+                    if (!onStepClick) onRowClick?.(row);
+                  }}
+                  className={onStepClick ? 'cursor-pointer' : ''}
+                  title={onStepClick ? 'Open Book Shipment step' : undefined}
                 >
                   <div className="flex justify-center">
                     <StatusCircle status={row.bookShipment} />
@@ -432,46 +458,26 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, empt
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div ref={openMenuRowId === row.id ? menuContainerRef : undefined} style={{ position: 'relative', display: 'inline-flex', justifyContent: 'center' }}>
+                  <div style={{ position: 'relative', display: 'inline-flex', justifyContent: 'center' }}>
                     <button
                       type="button"
+                      data-planning-menu-trigger={row.id}
                       className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-600/50 transition-colors"
                       aria-label="Row menu"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenMenuRowId((prev) => (prev === row.id ? null : row.id));
+                        if (openMenuRowId === row.id) {
+                          setOpenMenuRowId(null);
+                          setMenuAnchorRect(null);
+                        } else {
+                          setOpenMenuRowId(row.id);
+                          setMenuAnchorRect((e.currentTarget as HTMLElement).getBoundingClientRect());
+                        }
                         onMenuClick?.(row, e);
                       }}
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
-                    {openMenuRowId === row.id && onDeleteRow && (
-                      <div
-                        className="rounded shadow-lg border border-gray-600 overflow-hidden"
-                        style={{
-                          position: 'absolute',
-                          top: '100%',
-                          right: 0,
-                          marginTop: 4,
-                          minWidth: 120,
-                          backgroundColor: '#1F2937',
-                          zIndex: 50,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600/50 hover:text-red-400 transition-colors"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteRow(row);
-                            setOpenMenuRowId(null);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 shrink-0" />
-                          Delete
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </td>
               </tr>
@@ -487,6 +493,49 @@ export function PlanningTable({ rows, onRowClick, onMenuClick, onDeleteRow, empt
           <p className="text-sm">{emptyMessage ?? 'No shipments to show'}</p>
         </div>
       )}
+
+      {/* Actions dropdown in portal so it is not cut off by table overflow (e.g. last row) */}
+      {openMenuRowId &&
+        openRow &&
+        menuAnchorRect &&
+        onDeleteRow &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          (() => {
+            const openUpward = menuAnchorRect.bottom + MENU_DROPDOWN_HEIGHT > window.innerHeight;
+            return (
+              <div
+                ref={menuPortalRef}
+                className="rounded shadow-lg border border-gray-600 overflow-hidden"
+                style={{
+                  position: 'fixed',
+                  right: window.innerWidth - menuAnchorRect.right,
+                  minWidth: 120,
+                  backgroundColor: '#1F2937',
+                  zIndex: 9999,
+                  ...(openUpward
+                    ? { bottom: window.innerHeight - menuAnchorRect.top + 4 }
+                    : { top: menuAnchorRect.bottom + 4 }),
+                }}
+              >
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-600/50 hover:text-red-400 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteRow(openRow);
+                    setOpenMenuRowId(null);
+                    setMenuAnchorRect(null);
+                  }}
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  Delete
+                </button>
+              </div>
+            );
+          })(),
+          document.body
+        )}
     </div>
   );
 }

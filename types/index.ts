@@ -121,6 +121,8 @@ export interface Shipment {
   amazonShipmentId?: string;
   amazonRefId?: string;
   items: ShipmentItem[];
+  /** From list API; used to show Add Products "in progress" when status is planning and itemCount > 0 */
+  itemCount?: number;
   createdAt: Date;
   updatedAt: Date;
 }

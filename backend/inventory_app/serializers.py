@@ -4,8 +4,8 @@ from forecast_app.models import Product
 
 
 class ShipmentItemSerializer(serializers.ModelSerializer):
-    """Serializer for shipment items"""
-    product_id = serializers.IntegerField(write_only=True)
+    """Serializer for shipment items. product_id is read from product.id when outputting (GET); for create/update the parent uses raw dicts."""
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
     product_asin = serializers.CharField(source='product.asin', read_only=True)
     product_sku = serializers.CharField(source='product.sku', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)

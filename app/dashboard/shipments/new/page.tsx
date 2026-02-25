@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, RotateCcw, Loader2 } from 'lucide-react';
 import type { NewShipmentForm } from '../components/NewShipmentModal';
 import { AddProductsTable, type AddProductRow } from './components/AddProductsTable';
@@ -12,7 +13,8 @@ import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
 import { ShipmentDetailsModal, type ShipmentDetailsData } from './components/ShipmentDetailsModal';
 import ExportTemplateModal from './components/ExportTemplateModal';
-import { api, type ForecastTableResponse } from '@/lib/api';
+import { api, type ForecastTableResponse, type ShipmentDetail } from '@/lib/api';
+import { calculateUnitsToMake } from '@/lib/calculations';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
 const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
@@ -168,7 +170,32 @@ export default function NewShipmentAddProductsPage() {
   const [showRequiredDoiTooltip, setShowRequiredDoiTooltip] = useState(false);
   const [showSaveDefaultConfirm, setShowSaveDefaultConfirm] = useState(false);
   const [pendingSaveDefaultDoi, setPendingSaveDefaultDoi] = useState<string | null>(null);
+  /** When user applies DOI settings, recalculated units to make per product id (from new DOI). Cleared on refetch. */
+  const [recalculatedUnitsByProductId, setRecalculatedUnitsByProductId] = useState<Record<string, number> | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<'add-products' | 'book-shipment'>('add-products');
+  /** Product IDs added in Add Products step; persisted when switching to Book Shipment so they’re still there when going back */
+  const [addedProductIds, setAddedProductIds] = useState<Set<string>>(new Set());
+  const handleAddedIdsChange = useCallback((ids: string[]) => setAddedProductIds(new Set(ids)), []);
+  /** User-edited "units to make" per product id; used when creating draft so typed values are saved */
+  const [userQtyOverrides, setUserQtyOverrides] = useState<Record<string, number>>({});
+  const handleUnitsOverride = useCallback((productId: string, units: number | null) => {
+    setUserQtyOverrides((prev) => {
+      if (units === null) {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      }
+      return { ...prev, [productId]: units };
+    });
+  }, []);
+  /** After adding products, we create a draft shipment (status ready) when user goes to Book Shipment or clicks Back; row then shows in table with Book Shipment in progress */
+  const [draftShipmentId, setDraftShipmentId] = useState<number | null>(null);
+  const [isCreatingDraft, setIsCreatingDraft] = useState(false);
+  /** When opening from table row (shipmentId in URL), the loaded shipment so we show Book Shipment tab with its data */
+  const [loadedShipment, setLoadedShipment] = useState<ShipmentDetail | null>(null);
+  const [loadedShipmentError, setLoadedShipmentError] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [showNgoosModal, setShowNgoosModal] = useState(false);
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
@@ -185,10 +212,55 @@ export default function NewShipmentAddProductsPage() {
     setShipmentData(getShipmentFromStorage());
   }, []);
 
+  // When opening from table row (?shipmentId=...), load that shipment and show the requested tab
+  const urlShipmentId = searchParams.get('shipmentId');
+  const urlTab = searchParams.get('tab');
+  useEffect(() => {
+    if (!urlShipmentId) {
+      setLoadedShipment(null);
+      setLoadedShipmentError(null);
+      return;
+    }
+    const id = parseInt(urlShipmentId, 10);
+    if (Number.isNaN(id)) {
+      setLoadedShipmentError('Invalid shipment ID');
+      return;
+    }
+    const tab = urlTab === 'add-products' ? 'add-products' : 'book-shipment';
+    setActiveWorkflowTab(tab);
+    let cancelled = false;
+    setLoadedShipmentError(null);
+    api
+      .getShipment(id)
+      .then((shipment) => {
+        if (cancelled) return;
+        setLoadedShipment(shipment);
+        setDraftShipmentId(shipment.id);
+        setAddedProductIds(new Set(shipment.items.map((item) => String(item.product_id))));
+        setUserQtyOverrides({});
+        // Sync header from loaded shipment
+        setShipmentData((prev) => ({
+          ...(prev ?? { shipmentName: '', shipmentType: '', marketplace: 'Amazon', account: '' }),
+          shipmentName: shipment.planned_ship_date ?? shipment.name,
+          shipmentType: shipment.shipment_type === 'fba' ? 'FBA' : 'AWD',
+          account: prev?.account ?? shipment.ship_from_name ?? '',
+        }));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadedShipmentError(err instanceof Error ? err.message : 'Failed to load shipment');
+        setLoadedShipment(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlShipmentId, urlTab]);
+
   // Fetch forecast data from API
   const fetchForecastData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setRecalculatedUnitsByProductId(null);
     try {
       const data = await api.getForecastTable();
       setApiData(data);
@@ -231,18 +303,56 @@ export default function NewShipmentAddProductsPage() {
   }, [apiData?.rows, searchTerm]);
 
   const requiredDoiNum = Math.max(0, parseInt(String(requiredDoi).replace(/\D/g, '') || '150', 10) || 150);
+
+  /** When opening from table, overlay quantities from loaded shipment so Add Products shows the same units (not reset to forecast) */
+  const loadedShipmentQuantities = useMemo(() => {
+    if (!loadedShipment?.items?.length) return null;
+    const map: Record<string, number> = {};
+    for (const item of loadedShipment.items) {
+      map[String(item.product_id)] = item.quantity_planned;
+    }
+    return map;
+  }, [loadedShipment?.items]);
   
-  // Transform API rows to table format
-  const tableRows = useMemo(
-    () => filteredApiRows.map(transformApiRowToAddProductRow),
-    [filteredApiRows]
-  );
-  
-  // Transform API rows to non-table format
-  const nonTableRows: NonTableProductRow[] = useMemo(
-    () => filteredApiRows.map(transformApiRowToNonTableRow),
-    [filteredApiRows]
-  );
+  // Transform API rows to table format; overlay recalculated units when user applied DOI; overlay loaded shipment quantities when opening from table
+  const tableRows = useMemo(() => {
+    let rows = filteredApiRows.map(transformApiRowToAddProductRow);
+    if (recalculatedUnitsByProductId) {
+      rows = rows.map((r) => {
+        const recalc = recalculatedUnitsByProductId[r.id];
+        if (recalc !== undefined) return { ...r, unitsToMake: recalc };
+        return r;
+      });
+    }
+    if (loadedShipmentQuantities) {
+      rows = rows.map((r) => {
+        const qty = loadedShipmentQuantities[String(r.id)];
+        if (qty !== undefined) return { ...r, unitsToMake: qty };
+        return r;
+      });
+    }
+    return rows;
+  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities]);
+
+  // Transform API rows to non-table format; overlay recalculated units when user applied DOI; overlay loaded shipment quantities when opening from table
+  const nonTableRows: NonTableProductRow[] = useMemo(() => {
+    let rows = filteredApiRows.map(transformApiRowToNonTableRow);
+    if (recalculatedUnitsByProductId) {
+      rows = rows.map((r) => {
+        const recalc = recalculatedUnitsByProductId[r.id];
+        if (recalc !== undefined) return { ...r, unitsToMake: recalc };
+        return r;
+      });
+    }
+    if (loadedShipmentQuantities) {
+      rows = rows.map((r) => {
+        const qty = loadedShipmentQuantities[String(r.id)];
+        if (qty !== undefined) return { ...r, unitsToMake: qty };
+        return r;
+      });
+    }
+    return rows;
+  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities]);
   
   // Use summary data from API or calculate from rows
   const totalProducts = apiData?.summary?.totalProducts ?? filteredApiRows.length;
@@ -268,6 +378,62 @@ export default function NewShipmentAddProductsPage() {
     };
   }, [shipmentData, showShipmentDetailsModal]);
 
+  /** Create a draft shipment so it appears in the table. When forBookStep, status=ready (Book Shipment in progress) and requires at least one product; when going Back, always create (even with 0 products) so the row shows. */
+  const createDraftShipment = useCallback(async (forBookStep?: boolean): Promise<boolean> => {
+    if (draftShipmentId != null) return true;
+    if (forBookStep && addedProductIds.size === 0) return false;
+    setIsCreatingDraft(true);
+    try {
+      const name = (shipmentData?.shipmentName || `${dateStr} ${typeStr}`).trim() || 'New Shipment';
+      const shipmentType = (shipmentData?.shipmentType?.toLowerCase() === 'fba' ? 'fba' : 'awd') as 'fba' | 'awd';
+      const items = tableRows
+        .filter((r) => addedProductIds.has(String(r.id)))
+        .map((r) => ({
+          product_id: Number(r.id),
+          quantity_planned: userQtyOverrides[String(r.id)] ?? r.unitsToMake ?? 0,
+        }));
+      const plannedShipDate = dateStr ? dateStr.replace(/\./g, '-') : undefined;
+      const created = await api.createShipment({
+        name,
+        shipment_type: shipmentType,
+        status: forBookStep ? 'ready' : 'planning',
+        items,
+        planned_ship_date: plannedShipDate,
+      });
+      setDraftShipmentId(created.id);
+      return true;
+    } catch (err) {
+      console.error('Failed to create draft shipment:', err);
+      return false;
+    } finally {
+      setIsCreatingDraft(false);
+    }
+  }, [draftShipmentId, addedProductIds, tableRows, dateStr, typeStr, shipmentData, userQtyOverrides]);
+
+  const handleBackClick = useCallback(
+    async (e: React.MouseEvent) => {
+      if (draftShipmentId == null) {
+        e.preventDefault();
+        const ok = await createDraftShipment(false);
+        if (ok) router.push('/dashboard/shipments?refetch=1');
+        else router.push('/dashboard/shipments');
+      } else {
+        router.push('/dashboard/shipments');
+      }
+    },
+    [draftShipmentId, createDraftShipment, router]
+  );
+
+  const handleBookShipmentTabClick = useCallback(async () => {
+    if (addedProductIds.size === 0) return;
+    if (draftShipmentId == null) {
+      const ok = await createDraftShipment(true);
+      if (ok) setActiveWorkflowTab('book-shipment');
+    } else {
+      setActiveWorkflowTab('book-shipment');
+    }
+  }, [addedProductIds.size, draftShipmentId, createDraftShipment]);
+
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
@@ -282,8 +448,12 @@ export default function NewShipmentAddProductsPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link
+          <a
             href="/dashboard/shipments"
+            onClick={(e) => {
+              e.preventDefault();
+              handleBackClick(e as unknown as React.MouseEvent);
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -295,14 +465,19 @@ export default function NewShipmentAddProductsPage() {
               backgroundColor: isDarkMode ? '#252F42' : '#FFFFFF',
               border: isDarkMode ? '1px solid #334155' : '1px solid #E5E7EB',
               borderRadius: 8,
-              cursor: 'pointer',
+              cursor: isCreatingDraft ? 'wait' : 'pointer',
               padding: 6,
             }}
+            aria-busy={isCreatingDraft}
           >
-            <svg style={{ width: 16, height: 16, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </Link>
+            {isCreatingDraft ? (
+              <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'white' }} />
+            ) : (
+              <svg style={{ width: 16, height: 16, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            )}
+          </a>
           {dateStr && (
             <div style={{ fontSize: 16, fontWeight: 400, color: isDarkMode ? '#FFFFFF' : '#111827', fontFamily: 'Inter, system-ui, sans-serif' }}>
               {dateStr}
@@ -535,6 +710,10 @@ export default function NewShipmentAddProductsPage() {
               <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
                 <circle cx="12" cy="12" r="6" />
               </svg>
+            ) : activeWorkflowTab === 'book-shipment' ? (
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="#10B981" aria-hidden>
+                <circle cx="12" cy="12" r="6" />
+              </svg>
             ) : (
               <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
                 <circle cx="12" cy="12" r="6" />
@@ -558,7 +737,9 @@ export default function NewShipmentAddProductsPage() {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            onClick={() => setActiveWorkflowTab('book-shipment')}
+            onClick={() => addedProductIds.size > 0 && handleBookShipmentTabClick()}
+            title={addedProductIds.size === 0 ? 'Add at least one product first' : undefined}
+            disabled={addedProductIds.size === 0}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -566,11 +747,11 @@ export default function NewShipmentAddProductsPage() {
               padding: '12px 16px',
               fontSize: 14,
               fontWeight: 500,
-              color: activeWorkflowTab === 'book-shipment' ? '#3B82F6' : '#9CA3AF',
+              color: addedProductIds.size === 0 ? '#6B7280' : activeWorkflowTab === 'book-shipment' ? '#3B82F6' : '#9CA3AF',
               backgroundColor: 'transparent',
               border: 'none',
               marginBottom: -1,
-              cursor: 'pointer',
+              cursor: addedProductIds.size === 0 ? 'not-allowed' : 'pointer',
               transition: 'color 0.2s',
               whiteSpace: 'nowrap',
             }}
@@ -580,7 +761,7 @@ export default function NewShipmentAddProductsPage() {
                 <circle cx="12" cy="12" r="6" />
               </svg>
             ) : (
-              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" aria-hidden>
+              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={addedProductIds.size === 0 ? '#6B7280' : '#9CA3AF'} strokeWidth="2" aria-hidden>
                 <circle cx="12" cy="12" r="6" />
               </svg>
             )}
@@ -767,6 +948,21 @@ export default function NewShipmentAddProductsPage() {
                   setRequiredDoi(newDoi);
                   if (fromApplyButton) {
                     setShowRequiredDoiWarning(true);
+                    const newDoiNum = Math.max(0, parseInt(String(newDoi).replace(/\D/g, '') || '150', 10) || 150);
+                    if (apiData?.rows) {
+                      const next: Record<string, number> = {};
+                      for (const row of apiData.rows) {
+                        const dailySales = (row.avgWeeklySales ?? 0) / 7;
+                        const units = calculateUnitsToMake(
+                          row.inventory?.total ?? 0,
+                          dailySales,
+                          newDoiNum,
+                          0
+                        );
+                        next[row.product.id] = units;
+                      }
+                      setRecalculatedUnitsByProductId(next);
+                    }
                   } else {
                     setSavedDefaultDoi(newDoi);
                   }
@@ -1016,7 +1212,12 @@ export default function NewShipmentAddProductsPage() {
             }}
           >
           {activeWorkflowTab === 'add-products' ? (
-            loading ? (
+            urlShipmentId && !loadedShipment ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, color: '#9CA3AF' }}>
+                <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3B82F6' }} />
+                <span style={{ fontSize: 14 }}>Loading shipment…</span>
+              </div>
+            ) : loading ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
                 <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3B82F6' }} />
                 <span style={{ color: '#9CA3AF', fontSize: 14 }}>Loading products...</span>
@@ -1050,6 +1251,9 @@ export default function NewShipmentAddProductsPage() {
                 }}
                 onClear={() => {}}
                 onExport={() => setShowExportTemplateModal(true)}
+                initialAddedIds={Array.from(addedProductIds)}
+                onAddedIdsChange={handleAddedIdsChange}
+                onUnitsOverride={handleUnitsOverride}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -1065,27 +1269,57 @@ export default function NewShipmentAddProductsPage() {
                 }}
                 onClear={() => {}}
                 onExport={() => setShowExportTemplateModal(true)}
+                initialAddedIds={Array.from(addedProductIds)}
+                onAddedIdsChange={handleAddedIdsChange}
+                onUnitsOverride={handleUnitsOverride}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
                 totalWeightLbs={totalWeightLbs}
               />
             )
+          ) : urlShipmentId && loadedShipmentError ? (
+            <div style={{ padding: 24, textAlign: 'center', color: '#EF4444' }}>
+              <p>{loadedShipmentError}</p>
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/shipments')}
+                style={{ marginTop: 12, padding: '8px 16px', borderRadius: 6, backgroundColor: '#374151', color: '#FFF', border: 'none', cursor: 'pointer' }}
+              >
+                Back to shipments
+              </button>
+            </div>
+          ) : urlShipmentId && !loadedShipment ? (
+            <div style={{ padding: 48, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, color: '#9CA3AF' }}>
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3B82F6' }} />
+              <p>Loading shipment…</p>
+            </div>
           ) : (
             <BookShipmentForm
-                initialShipmentType={shipmentData?.shipmentType ?? ''}
-                products={tableRows.map((row) => ({
-                  id: row.id,
-                  asin: row.asin,
-                  sku: row.asin,
-                  name: row.product,
-                  quantity: row.unitsToMake || 0,
-                  recommendedQuantity: row.unitsToMake || 0,
-                }))}
-                onComplete={(shipmentId) => {
+                existingShipmentId={loadedShipment?.id ?? draftShipmentId ?? undefined}
+                initialShipmentType={loadedShipment?.shipment_type ?? shipmentData?.shipmentType ?? ''}
+                products={
+                  loadedShipment
+                    ? loadedShipment.items.map((item) => ({
+                        id: String(item.product_id),
+                        asin: item.product_asin,
+                        sku: item.product_sku,
+                        name: item.product_name,
+                        quantity: item.quantity_planned,
+                        recommendedQuantity: item.recommended_quantity ?? item.quantity_planned,
+                      }))
+                    : tableRows.map((row) => ({
+                        id: row.id,
+                        asin: row.asin,
+                        sku: row.asin,
+                        name: row.product,
+                        quantity: row.unitsToMake || 0,
+                        recommendedQuantity: row.unitsToMake || 0,
+                      }))
+                }
+                onComplete={() => {
                   saveCompletedShipmentToStorage(shipmentData, dateStr, typeStr);
                   setShowShipmentBookedModal(true);
-                  console.log('Shipment booked with ID:', shipmentId);
                 }}
               />
           )}
