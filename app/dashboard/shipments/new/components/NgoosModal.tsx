@@ -14,6 +14,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import ForecastSettingsModal, { type ForecastSettingsPayload } from '@/components/forecast/forecast-settings-modal';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 
 const isDarkMode = true;
 
@@ -116,10 +117,14 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [selectedCategory, setSelectedCategory] = useState('Inventory');
   const [editingField, setEditingField] = useState<'subject' | 'description' | null>(null);
   const [editingValue, setEditingValue] = useState('');
-  const [selectedActionItem, setSelectedActionItem] = useState<{
+  const [descriptionHtml, setDescriptionHtml] = useState('');
+  
+  // Store all action items with their edits
+  type ActionItemType = {
     id: string;
     title: string;
     description: string;
+    descriptionHtml?: string;
     status: string;
     category: string;
     assignedTo: string;
@@ -128,7 +133,139 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     createdBy: string;
     dateCreated: string;
     ticketId: string;
-  } | null>(null);
+  };
+  
+  // Default action items data
+  const defaultActionItemsData: Record<string, ActionItemType> = {
+    'I-123': {
+      id: 'I-123',
+      title: 'Low FBA Available',
+      description: 'Stock levels have dropped below 15 days coverage based on current sales velocity of 45 units/day. We need to initiate an immediate restock shipment to FBA to avoid stockout.\n\nPlease check current warehouse inventory and create a shipping plan for at least 1,500 units.\n\n• Current FBA Stock: 420 units\n• Reserved: 85 units\n• Inbound: 0 units\n• Recommended Replenishment: 2,000 units',
+      status: 'To Do',
+      category: 'Inventory',
+      assignedTo: 'Jeff D.',
+      assignedColor: '#10b981',
+      dueDate: 'Feb. 24, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 20, 2025',
+      ticketId: '#I-123',
+    },
+    'P-101': {
+      id: 'P-101',
+      title: 'Price Edit',
+      description: 'Review and adjust pricing strategy based on competitor analysis.',
+      status: 'To Do',
+      category: 'Price',
+      assignedTo: 'Carlos A.',
+      assignedColor: '#ef4444',
+      dueDate: 'Feb. 28, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 18, 2025',
+      ticketId: '#P-101',
+    },
+    'A-201': {
+      id: 'A-201',
+      title: 'TACOS Too High',
+      description: 'Total Advertising Cost of Sales is above target threshold. Review and optimize ad campaigns.',
+      status: 'To Do',
+      category: 'Ads',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Feb. 26, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 19, 2025',
+      ticketId: '#A-201',
+    },
+    'A-202': {
+      id: 'A-202',
+      title: 'Keyword Sweep',
+      description: 'Perform keyword research and update targeting strategy.',
+      status: 'To Do',
+      category: 'Ads',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Mar. 1, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 19, 2025',
+      ticketId: '#A-202',
+    },
+    'A-203': {
+      id: 'A-203',
+      title: 'Check TOS',
+      description: 'Review Terms of Service compliance for current ad campaigns.',
+      status: 'To Do',
+      category: 'Ads',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Mar. 5, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 19, 2025',
+      ticketId: '#A-203',
+    },
+    'D-301': {
+      id: 'D-301',
+      title: 'Slide Edit',
+      description: 'Update product image slides with new lifestyle photos.',
+      status: 'To Do',
+      category: 'PDP',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Mar. 3, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 17, 2025',
+      ticketId: '#D-301',
+    },
+    'D-302': {
+      id: 'D-302',
+      title: 'Change 2nd Bullet',
+      description: 'Update second bullet point to highlight new feature benefits.',
+      status: 'To Do',
+      category: 'PDP',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Mar. 7, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 17, 2025',
+      ticketId: '#D-302',
+    },
+  };
+  
+  // Load action items from localStorage or use defaults
+  const getInitialActionItems = (): Record<string, ActionItemType> => {
+    if (typeof window === 'undefined') return defaultActionItemsData;
+    try {
+      const saved = localStorage.getItem('ngoos-action-items');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Failed to load action items from localStorage:', e);
+    }
+    return defaultActionItemsData;
+  };
+  
+  const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItemType>>(getInitialActionItems);
+  
+  const [selectedActionItem, setSelectedActionItem] = useState<ActionItemType | null>(null);
+  
+  // Save action items to localStorage whenever they change
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ngoos-action-items', JSON.stringify(actionItemsData));
+      } catch (e) {
+        console.error('Failed to save action items to localStorage:', e);
+      }
+    }
+  }, [actionItemsData]);
+  
+  // Helper to update action item in the data store
+  const updateActionItem = (item: ActionItemType) => {
+    setActionItemsData(prev => ({
+      ...prev,
+      [item.id]: item
+    }));
+  };
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartCursorRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const chartTooltipWrapperRef = useRef<HTMLDivElement>(null);
@@ -1622,8 +1759,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                   tabIndex={-1}
                   style={{
                     width: '100%',
-                    height: 212,
-                    minHeight: 212,
+                    height: 190,
+                    minHeight: 190,
                     position: 'relative',
                     marginTop: '0.25rem',
                     cursor: chartContainerCursor,
@@ -2144,19 +2281,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
                             {/* Action Item: Low FBA Available */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'I-123',
-                                title: 'Low FBA Available',
-                                description: 'Stock levels have dropped below 15 days coverage based on current sales velocity of 45 units/day. We need to initiate an immediate restock shipment to FBA to avoid stockout.\n\nPlease check current warehouse inventory and create a shipping plan for at least 1,500 units.\n\n• Current FBA Stock: 420 units\n• Reserved: 85 units\n• Inbound: 0 units\n• Recommended Replenishment: 2,000 units',
-                                status: 'To Do',
-                                category: 'Inventory',
-                                assignedTo: 'Jeff D.',
-                                assignedColor: '#10b981',
-                                dueDate: 'Feb. 24, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 20, 2025',
-                                ticketId: '#I-123',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['I-123'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2244,19 +2369,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
                             {/* Action Item: Price Edit */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'P-101',
-                                title: 'Price Edit',
-                                description: 'Review and adjust pricing strategy based on competitor analysis.',
-                                status: 'To Do',
-                                category: 'Price',
-                                assignedTo: 'Carlos A.',
-                                assignedColor: '#ef4444',
-                                dueDate: 'Feb. 28, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 18, 2025',
-                                ticketId: '#P-101',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['P-101'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2344,19 +2457,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
                             {/* Action Item: TACOS Too High */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'A-201',
-                                title: 'TACOS Too High',
-                                description: 'Total Advertising Cost of Sales is above target threshold. Review and optimize ad campaigns.',
-                                status: 'To Do',
-                                category: 'Ads',
-                                assignedTo: 'Jeff B.',
-                                assignedColor: '#3b82f6',
-                                dueDate: 'Mar. 1, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 19, 2025',
-                                ticketId: '#A-201',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['A-201'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2391,19 +2492,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             </div>
                             {/* Action Item: Keyword Sweep */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'A-202',
-                                title: 'Keyword Sweep',
-                                description: 'Perform keyword research and update targeting strategy.',
-                                status: 'To Do',
-                                category: 'Ads',
-                                assignedTo: 'Jeff B.',
-                                assignedColor: '#3b82f6',
-                                dueDate: 'Mar. 5, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 19, 2025',
-                                ticketId: '#A-202',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['A-202'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2438,19 +2527,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             </div>
                             {/* Action Item: Check TOS */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'A-203',
-                                title: 'Check TOS',
-                                description: 'Review Terms of Service compliance for current ad campaigns.',
-                                status: 'To Do',
-                                category: 'Ads',
-                                assignedTo: 'Jeff B.',
-                                assignedColor: '#3b82f6',
-                                dueDate: 'Mar. 3, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 19, 2025',
-                                ticketId: '#A-203',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['A-203'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2538,19 +2615,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
                             {/* Action Item: Slide Edit */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'D-301',
-                                title: 'Slide Edit',
-                                description: 'Update product image slides with new lifestyle photos.',
-                                status: 'To Do',
-                                category: 'PDP',
-                                assignedTo: 'Jeff B.',
-                                assignedColor: '#3b82f6',
-                                dueDate: 'Mar. 10, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 21, 2025',
-                                ticketId: '#D-301',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['D-301'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -2585,19 +2650,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             </div>
                             {/* Action Item: Change 2nd Bullet */}
                             <div
-                              onClick={() => setSelectedActionItem({
-                                id: 'D-302',
-                                title: 'Change 2nd Bullet',
-                                description: 'Update second bullet point to highlight new feature benefits.',
-                                status: 'To Do',
-                                category: 'PDP',
-                                assignedTo: 'Jeff B.',
-                                assignedColor: '#3b82f6',
-                                dueDate: 'Mar. 8, 2025',
-                                createdBy: 'Christian R.',
-                                dateCreated: 'Feb. 21, 2025',
-                                ticketId: '#D-302',
-                              })}
+                              onClick={() => setSelectedActionItem(actionItemsData['D-302'])}
                               style={{
                                 width: '100%',
                                 height: '32px',
@@ -3308,7 +3361,13 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                     onClick={() => {
                       if (editingField !== 'description') {
                         setEditingField('description');
-                        setEditingValue(selectedActionItem.description);
+                        if (selectedActionItem.descriptionHtml) {
+                          setDescriptionHtml(selectedActionItem.descriptionHtml);
+                        } else {
+                          const plainText = selectedActionItem.description;
+                          const htmlContent = plainText.replace(/\n/g, '<br>').replace(/• /g, '&bull; ');
+                          setDescriptionHtml(htmlContent);
+                        }
                       }
                     }}
                     style={{
@@ -3317,8 +3376,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       gap: '8px',
                       padding: '8px',
                       borderRadius: '4px',
-                      border: editingField === 'description' ? '1px solid #334155' : '1px solid transparent',
-                      cursor: 'pointer',
+                      border: editingField === 'description' ? '1px solid transparent' : '1px solid transparent',
+                      cursor: editingField === 'description' ? 'default' : 'pointer',
                       transition: 'border-color 0.2s',
                     }}
                     onMouseEnter={(e) => { if (editingField !== 'description') e.currentTarget.style.borderColor = '#334155'; }}
@@ -3326,77 +3385,41 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                   >
                     <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
                     {editingField === 'description' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }} onClick={(e) => e.stopPropagation()}>
-                        {/* Toolbar */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '8px',
-                          backgroundColor: '#0F172A',
-                          borderRadius: '4px 4px 0 0',
-                          border: '1px solid #334155',
-                          borderBottom: 'none',
-                        }}>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>B</button>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontStyle: 'italic', fontSize: '0.875rem' }}>I</button>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.875rem' }}>U</button>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', textDecoration: 'line-through', fontSize: '0.875rem' }}>S</button>
-                          <div style={{ width: '1px', height: '16px', backgroundColor: '#334155', margin: '0 4px' }} />
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                            </svg>
-                          </button>
-                          <div style={{ width: '1px', height: '16px', backgroundColor: '#334155', margin: '0 4px' }} />
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                            </svg>
-                          </button>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                          </button>
-                        </div>
-                        {/* Textarea */}
-                        <textarea
-                          value={editingValue}
-                          onChange={(e) => setEditingValue(e.target.value)}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <RichTextEditor
+                          value={descriptionHtml}
+                          onChange={setDescriptionHtml}
+                          placeholder="Add description..."
+                          className="min-h-[150px]"
+                          background="#0F172A"
                           autoFocus
-                          style={{
-                            width: '100%',
-                            minHeight: '150px',
-                            backgroundColor: '#0F172A',
-                            border: '1px solid #334155',
-                            borderRadius: '0 0 4px 4px',
-                            padding: '12px',
-                            color: '#cbd5e1',
-                            fontSize: '0.875rem',
-                            lineHeight: '1.6',
-                            outline: 'none',
-                            resize: 'vertical',
-                            fontFamily: 'inherit',
-                          }}
                         />
                       </div>
                     ) : (
-                      <div style={{ fontSize: '0.875rem', color: '#cbd5e1', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                        {selectedActionItem.description}
-                      </div>
+                      selectedActionItem.descriptionHtml ? (
+                        <div 
+                          style={{ fontSize: '0.875rem', color: '#cbd5e1', lineHeight: '1.6' }}
+                          className="rich-text-content"
+                          dangerouslySetInnerHTML={{ __html: selectedActionItem.descriptionHtml }}
+                        />
+                      ) : (
+                        <div style={{ fontSize: '0.875rem', color: '#cbd5e1', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                          {selectedActionItem.description}
+                        </div>
+                      )
                     )}
                   </div>
                   {/* Cancel/Save buttons outside the border */}
                   {editingField === 'description' && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingRight: '8px' }}>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setEditingField(null); setEditingValue(''); }}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setEditingField(null); 
+                          setDescriptionHtml(''); 
+                        }}
                         style={{
                           padding: '6px 16px',
                           backgroundColor: 'transparent',
@@ -3410,13 +3433,24 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                         Cancel
                       </button>
                       <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (selectedActionItem) {
-                            setSelectedActionItem({ ...selectedActionItem, description: editingValue });
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = descriptionHtml;
+                            const plainText = tempDiv.innerText || tempDiv.textContent || '';
+                            const updatedItem = { 
+                              ...selectedActionItem, 
+                              description: plainText,
+                              descriptionHtml: descriptionHtml 
+                            };
+                            setSelectedActionItem(updatedItem);
+                            updateActionItem(updatedItem);
                           }
                           setEditingField(null);
-                          setEditingValue('');
+                          setDescriptionHtml('');
                         }}
                         style={{
                           padding: '6px 16px',
@@ -3554,6 +3588,18 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               </div>
             </div>
           </div>
+          <style dangerouslySetInnerHTML={{ __html: `
+            .rich-text-content b, .rich-text-content strong { font-weight: 700; }
+            .rich-text-content i, .rich-text-content em { font-style: italic; }
+            .rich-text-content u { text-decoration: underline; }
+            .rich-text-content s, .rich-text-content strike { text-decoration: line-through; }
+            .rich-text-content ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
+            .rich-text-content ol { list-style-type: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+            .rich-text-content li { margin: 0.25em 0; }
+            .rich-text-content a { color: #60a5fa; text-decoration: underline; cursor: pointer; }
+            .rich-text-content img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+            .rich-text-content p { margin: 0.25em 0; }
+          `}} />
         </div>
       )}
     </div>

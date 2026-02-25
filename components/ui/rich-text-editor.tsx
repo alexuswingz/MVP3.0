@@ -42,6 +42,8 @@ export interface RichTextEditorProps {
   background?: string;
   /** When true, content expands to fit and no scrollbar is shown (for full visibility when editing). */
   expandToFit?: boolean;
+  /** When true, automatically focus the editor and show toolbar on mount. */
+  autoFocus?: boolean;
 }
 
 export function RichTextEditor({
@@ -54,13 +56,16 @@ export function RichTextEditor({
   onFocusChange,
   background = '#1A202C',
   expandToFit = false,
+  autoFocus = false,
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const isInternalUpdate = useRef(false);
-  const [isFocused, setIsFocused] = useState(false);
+  const [isFocused, setIsFocused] = useState(autoFocus);
+  const [showFontSizeDropdown, setShowFontSizeDropdown] = useState(false);
+  const fontSizeRef = useRef<HTMLDivElement>(null);
 
   const exec = useCallback((cmd: string, cmdValue?: string) => {
     editorRef.current?.focus();
@@ -75,8 +80,11 @@ export function RichTextEditor({
 
   const insertLink = useCallback(() => {
     const url = window.prompt('Enter URL:', 'https://');
-    if (url) exec('createLink', url);
-  }, [exec]);
+    if (url) {
+      exec('createLink', url);
+      setTimeout(() => handleInput(), 0);
+    }
+  }, [exec, handleInput]);
 
   const insertImage = useCallback(() => {
     imageInputRef.current?.click();
@@ -89,11 +97,12 @@ export function RichTextEditor({
       const reader = new FileReader();
       reader.onload = () => {
         exec('insertImage', reader.result as string);
+        setTimeout(() => handleInput(), 0);
       };
       reader.readAsDataURL(file);
       e.target.value = '';
     },
-    [exec]
+    [exec, handleInput]
   );
 
   const insertAttachment = useCallback(() => {
@@ -105,9 +114,10 @@ export function RichTextEditor({
       const file = e.target.files?.[0];
       if (!file) return;
       exec('insertHTML', `<p>📎 <a href="#" target="_blank">${file.name}</a></p>`);
+      setTimeout(() => handleInput(), 0);
       e.target.value = '';
     },
-    [exec]
+    [exec, handleInput]
   );
 
   // Sync value from props (e.g. switching tickets) - only when different to avoid cursor jumps
@@ -121,6 +131,34 @@ export function RichTextEditor({
       isInternalUpdate.current = false;
     }
   }, [value]);
+
+  // Auto-focus the editor on mount when autoFocus is true
+  useEffect(() => {
+    if (autoFocus && editorRef.current) {
+      setTimeout(() => {
+        editorRef.current?.focus();
+      }, 0);
+    }
+  }, [autoFocus]);
+
+  // Close font size dropdown when clicking outside
+  useEffect(() => {
+    if (!showFontSizeDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fontSizeRef.current && !fontSizeRef.current.contains(e.target as Node)) {
+        setShowFontSizeDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFontSizeDropdown]);
+
+  const setFontSize = useCallback((size: string) => {
+    editorRef.current?.focus();
+    exec('fontSize', size);
+    setTimeout(() => handleInput(), 0);
+    setShowFontSizeDropdown(false);
+  }, [exec, handleInput]);
 
   const handleContentFocus = useCallback(() => {
     setIsFocused(true);
@@ -139,7 +177,10 @@ export function RichTextEditor({
     (cmd: string) => () => {
       editorRef.current?.focus();
       exec(cmd);
-      handleInput();
+      // Small delay to ensure DOM is updated before reading innerHTML
+      setTimeout(() => {
+        handleInput();
+      }, 0);
     },
     [exec, handleInput]
   );
@@ -182,6 +223,62 @@ export function RichTextEditor({
         <ToolbarButton onClick={handleFormat('strikeThrough')} title="Strikethrough">
           <span className="text-sm line-through">S</span>
         </ToolbarButton>
+        {/* Font Size Dropdown */}
+        <div ref={fontSizeRef} className="relative">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setShowFontSizeDropdown(!showFontSizeDropdown)}
+            title="Text Size"
+            className="p-1.5 rounded hover:bg-white/10 transition-colors text-gray-400 flex items-center gap-0.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
+            </svg>
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showFontSizeDropdown && (
+            <div 
+              className="absolute top-full left-0 mt-1 bg-[#1e293b] border border-gray-600 rounded-md shadow-lg z-50 py-1 min-w-[100px]"
+              style={{ zIndex: 9999 }}
+            >
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFontSize('1')}
+                className="w-full px-3 py-1 text-left text-xs text-gray-300 hover:bg-white/10"
+              >
+                Small
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFontSize('3')}
+                className="w-full px-3 py-1 text-left text-sm text-gray-300 hover:bg-white/10"
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFontSize('5')}
+                className="w-full px-3 py-1 text-left text-base text-gray-300 hover:bg-white/10"
+              >
+                Large
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFontSize('7')}
+                className="w-full px-3 py-1 text-left text-lg text-gray-300 hover:bg-white/10"
+              >
+                Extra Large
+              </button>
+            </div>
+          )}
+        </div>
         <ToolbarButton onClick={handleFormat('insertUnorderedList')} title="Bullet List">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
