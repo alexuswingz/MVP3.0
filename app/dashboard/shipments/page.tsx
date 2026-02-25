@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2 } from 'lucide-react';
+import { Plus, Search, Loader2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Shipment, ShipmentStatus, ShipmentType } from '@/types';
 import {
@@ -13,15 +13,6 @@ import {
 } from './components/PlanningTable';
 import NewShipmentModal, { type NewShipmentForm } from './components/NewShipmentModal';
 import { api, type ShipmentListItem, type ShipmentStats } from '@/lib/api';
-
-/** Layers icon matching 1000bananas2.0 PlanningHeader (22×22) */
-function LayersIcon() {
-  return (
-    <svg style={{ width: 22, height: 22, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4" />
-    </svg>
-  );
-}
 
 function apiShipmentToInternal(s: ShipmentListItem): Shipment {
   return {
@@ -188,7 +179,7 @@ export default function ShipmentsPage() {
   );
 
   const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
-  const archiveCount = stats?.received ?? 0;
+  const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
 
   const handleRowClick = (row: PlanningTableRow) => {
     const tab = row.addProducts !== 'completed' ? 'add-products' : 'book-shipment';
@@ -230,18 +221,22 @@ export default function ShipmentsPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 9999,
-              backgroundColor: '#111827',
-            }}
-          >
-            <LayersIcon />
+          {/* Shipments Title with Icon */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 6,
+                backgroundColor: '#1F2937',
+              }}
+            >
+              <Truck className="w-7 h-7 text-white" />
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 600, color: '#FFFFFF' }}>Shipments</span>
           </div>
           <div
             data-shipments-tabs

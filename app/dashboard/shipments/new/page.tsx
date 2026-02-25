@@ -436,6 +436,36 @@ export default function NewShipmentAddProductsPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
+      {/* CSS for hover-only scrollbar on main content */}
+      <style>{`
+        .shipment-content-scroll::-webkit-scrollbar {
+          width: 8px !important;
+          height: 8px !important;
+        }
+        .shipment-content-scroll::-webkit-scrollbar-track {
+          background: transparent !important;
+        }
+        .shipment-content-scroll::-webkit-scrollbar-thumb {
+          background-color: transparent !important;
+          border-radius: 4px !important;
+        }
+        .shipment-content-scroll:hover::-webkit-scrollbar-thumb {
+          background-color: #4B5563 !important;
+        }
+        .shipment-content-scroll:hover::-webkit-scrollbar-thumb:hover {
+          background-color: #6B7280 !important;
+        }
+        .shipment-content-scroll {
+          scrollbar-width: thin !important;
+          scrollbar-color: transparent transparent !important;
+        }
+        .shipment-content-scroll:hover {
+          scrollbar-color: #4B5563 transparent !important;
+        }
+        .shipment-content-scroll::-webkit-scrollbar-corner {
+          background: transparent !important;
+        }
+      `}</style>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
       <header
         style={{
@@ -1201,6 +1231,7 @@ export default function NewShipmentAddProductsPage() {
       {activeView === 'all-products' && (
         <main style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
           <div
+            className="shipment-content-scroll"
             style={{
               flex: 1,
               minHeight: 0,

@@ -554,7 +554,7 @@ export function AddProductsTable({
 
   return (
     <>
-      {/* CSS for table row hover effects */}
+      {/* CSS for table row hover effects and scrollbar */}
       <style>{`
         /* Table row hover effect */
         .table-row:hover {
@@ -563,6 +563,36 @@ export function AddProductsTable({
         /* Sticky cells need background color update on hover */
         .table-row:hover td[style*="position: sticky"] {
           background-color: #1A2235 !important;
+        }
+        /* Hide scrollbar by default, show on hover - Webkit browsers (Chrome, Safari, Edge) */
+        .add-products-table-container::-webkit-scrollbar {
+          width: 8px !important;
+          height: 8px !important;
+        }
+        .add-products-table-container::-webkit-scrollbar-track {
+          background: transparent !important;
+        }
+        .add-products-table-container::-webkit-scrollbar-thumb {
+          background-color: transparent !important;
+          border-radius: 4px !important;
+        }
+        .add-products-table-container:hover::-webkit-scrollbar-thumb {
+          background-color: #4B5563 !important;
+        }
+        .add-products-table-container:hover::-webkit-scrollbar-thumb:hover {
+          background-color: #6B7280 !important;
+        }
+        /* Firefox */
+        .add-products-table-container {
+          scrollbar-width: thin !important;
+          scrollbar-color: transparent transparent !important;
+        }
+        .add-products-table-container:hover {
+          scrollbar-color: #4B5563 transparent !important;
+        }
+        /* Hide scrollbar corner */
+        .add-products-table-container::-webkit-scrollbar-corner {
+          background: transparent !important;
         }
       `}</style>
       <div
@@ -587,6 +617,7 @@ export function AddProductsTable({
           }}
         >
         <div
+          className="add-products-table-container"
           style={{
             overflowX: 'auto',
             overflowY: 'auto',
