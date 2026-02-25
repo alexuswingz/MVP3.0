@@ -111,6 +111,24 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
+  const [actionItemsExpanded, setActionItemsExpanded] = useState(false);
+  const [showActionItemModal, setShowActionItemModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('Inventory');
+  const [editingField, setEditingField] = useState<'subject' | 'description' | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [selectedActionItem, setSelectedActionItem] = useState<{
+    id: string;
+    title: string;
+    description: string;
+    status: string;
+    category: string;
+    assignedTo: string;
+    assignedColor: string;
+    dueDate: string;
+    createdBy: string;
+    dateCreated: string;
+    ticketId: string;
+  } | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartCursorRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const chartTooltipWrapperRef = useRef<HTMLDivElement>(null);
@@ -247,6 +265,12 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
       }
     });
     const msPerDay = 24 * 60 * 60 * 1000;
+    
+    // Use exact timestamps based on days for accurate segment widths
+    const fbaTs = todayTs + fbaDays * msPerDay;
+    const totalTs = todayTs + totalDays * msPerDay;
+    const forecastEndTs = todayTs + forecastEndDays * msPerDay;
+    
     const findClosest = (targetDays: number) => {
       const targetTs = todayTs + targetDays * msPerDay;
       let closest = null;
@@ -263,25 +287,24 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     const fbaPoint = fbaDays > 0 ? findClosest(fbaDays) : todayDataPoint;
     const totalPoint = totalDays > 0 ? findClosest(totalDays) : fbaPoint || todayDataPoint;
     const forecastPoint = forecastEndDays > 0 ? findClosest(forecastEndDays) : data[data.length - 1] || null;
-    let greenEndTs = totalPoint?.timestamp;
-    if (fbaPoint && totalPoint && totalPoint.timestamp <= (fbaPoint?.timestamp ?? 0)) {
-      const nextIdx = data.findIndex((p) => p.timestamp === fbaPoint?.timestamp) + 1;
-      greenEndTs = data[nextIdx]?.timestamp ?? (fbaPoint.timestamp + msPerDay);
-    }
-    const hasViolet = todayDataPoint && fbaPoint && fbaPoint.timestamp > todayDataPoint.timestamp;
-    const hasGreen = fbaPoint && greenEndTs != null && greenEndTs > (fbaPoint?.timestamp ?? 0);
-    const blueStart = hasGreen ? greenEndTs : totalPoint?.timestamp;
-    const hasBlue = forecastPoint && blueStart != null && forecastPoint.timestamp > blueStart;
+    
+    const hasViolet = fbaDays > 0 && fbaTs > todayTs;
+    const hasGreen = totalDays > fbaDays && totalTs > fbaTs;
+    const hasBlue = forecastEndDays > totalDays && forecastEndTs > totalTs;
+    
     return {
       todayDataPoint,
       fbaPoint,
       totalPoint,
       forecastPoint,
-      greenEndTs,
+      // Use exact day-based timestamps for segment boundaries
+      todayTs,
+      fbaTs,
+      totalTs,
+      forecastEndTs,
       hasViolet,
       hasGreen,
       hasBlue,
-      blueStart,
       segmentOpacity: 0.2,
     };
   }, [chartBuild]);
@@ -874,7 +897,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               </div>
             </div>
 
-            {/* Horizontal Scrolling Container */}
+            {/* Horizontal Scrolling Container - Hidden when Action Items expanded */}
+            {!actionItemsExpanded && (
             <div
               style={{
                 display: 'flex',
@@ -1129,8 +1153,10 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 </div>
               </div>
             </div>
+            )}
 
-            {/* Three Large Metric Cards */}
+            {/* Three Large Metric Cards - Hidden when Action Items expanded */}
+            {!actionItemsExpanded && (
             <div
               style={{
                 display: 'grid',
@@ -1245,6 +1271,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 </div>
               </div>
             </div>
+            )}
 
             {/* Tab Content - Unit Forecast Chart (Inventory tab) - matches 1000bananas2.0 Ngoos */}
             {activeTab === 'inventory' && chartBuild && chartBuild.data.length > 0 && (
@@ -1777,49 +1804,49 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       />
                       {chartSegments && (
                         <>
-                          {chartSegments.hasViolet && chartSegments.todayDataPoint && chartSegments.fbaPoint && (
+                          {chartSegments.hasViolet && (
                             <ReferenceArea
-                              x1={chartSegments.todayDataPoint.timestamp}
-                              x2={chartSegments.fbaPoint.timestamp}
+                              x1={chartSegments.todayTs + (8 * 24 * 60 * 60 * 1000)}
+                              x2={chartSegments.fbaTs + (8 * 24 * 60 * 60 * 1000)}
                               fill="#a855f7"
                               fillOpacity={hoveredSegment === 'fba' || hoveredSegment === 'total' || hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
                               yAxisId="left"
                             />
                           )}
-                          {chartSegments.hasGreen && chartSegments.fbaPoint && chartSegments.greenEndTs != null && (
+                          {chartSegments.hasGreen && (
                             <ReferenceArea
-                              x1={chartSegments.fbaPoint.timestamp}
-                              x2={chartSegments.greenEndTs}
+                              x1={chartSegments.fbaTs + (8 * 24 * 60 * 60 * 1000)}
+                              x2={chartSegments.totalTs + (8 * 24 * 60 * 60 * 1000)}
                               fill="#10b981"
                               fillOpacity={hoveredSegment === 'total' || hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
                               yAxisId="left"
                             />
                           )}
-                          {chartSegments.hasBlue && chartSegments.blueStart != null && chartSegments.forecastPoint && (
+                          {chartSegments.hasBlue && (
                             <ReferenceArea
-                              x1={chartSegments.blueStart}
-                              x2={chartSegments.forecastPoint.timestamp}
+                              x1={chartSegments.totalTs + (8 * 24 * 60 * 60 * 1000)}
+                              x2={chartSegments.forecastEndTs + (8 * 24 * 60 * 60 * 1000)}
                               fill="#3b82f6"
                               fillOpacity={hoveredSegment === 'forecast' ? 0.6 : chartSegments.segmentOpacity}
                               yAxisId="left"
                             />
                           )}
-                          {chartSegments.todayDataPoint && (
+                          {chartSegments.todayTs && (
                             <ReferenceLine
-                              x={chartSegments.todayDataPoint.timestamp}
+                              x={chartSegments.todayTs + (8 * 24 * 60 * 60 * 1000)}
                               stroke="#ffffff"
                               strokeDasharray="4 4"
                               strokeWidth={2}
                               strokeOpacity={0.9}
                               yAxisId="left"
-                              label={{ value: 'Today', position: 'top', fill: '#ffffff', fontSize: 12, fontWeight: '600', offset: 8 }}
+                              label={{ value: 'Today', position: 'top', fill: '#ffffff', fontSize: 12, fontWeight: '600', offset: 8, dx: -2 }}
                             />
                           )}
-                          {chartSegments.hasViolet && chartSegments.fbaPoint && (
-                            <ReferenceLine x={chartSegments.fbaPoint.timestamp} stroke="#a855f7" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          {chartSegments.hasViolet && (
+                            <ReferenceLine x={chartSegments.fbaTs + (8 * 24 * 60 * 60 * 1000)} stroke="#a855f7" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
                           )}
-                          {chartSegments.hasGreen && chartSegments.greenEndTs != null && (
-                            <ReferenceLine x={chartSegments.greenEndTs} stroke="#10b981" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          {chartSegments.hasGreen && (
+                            <ReferenceLine x={chartSegments.totalTs + (8 * 24 * 60 * 60 * 1000)} stroke="#10b981" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
                           )}
                           {chartRangeSelection.startTimestamp != null && chartRangeSelection.endTimestamp != null && chartRangeSelection.endTimestamp > chartRangeSelection.startTimestamp && (
                             <ReferenceArea
@@ -1833,8 +1860,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               yAxisId="left"
                             />
                           )}
-                          {chartSegments.hasBlue && chartSegments.forecastPoint && (
-                            <ReferenceLine x={chartSegments.forecastPoint.timestamp} stroke="#3b82f6" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
+                          {chartSegments.hasBlue && (
+                            <ReferenceLine x={chartSegments.forecastEndTs + (8 * 24 * 60 * 60 * 1000)} stroke="#3b82f6" strokeDasharray="3 3" strokeWidth={1} strokeOpacity={0.7} yAxisId="left" />
                           )}
                         </>
                       )}
@@ -1966,6 +1993,676 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 </div>
               </div>
             )}
+
+            {/* Action Items Section - Collapsible */}
+            {activeTab === 'inventory' && (
+              <>
+                {/* Collapsed Action Items Header */}
+                {!actionItemsExpanded && (
+                  <button
+                    onClick={() => setActionItemsExpanded(true)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      marginTop: '0.75rem',
+                      borderRadius: '8px',
+                      border: '1px solid #334155',
+                      backgroundColor: 'transparent',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#212937'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <span style={{
+                      fontSize: '1rem',
+                      fontWeight: '600',
+                      color: '#e2e8f0',
+                      letterSpacing: '0.025em',
+                    }}>
+                      Action Items
+                    </span>
+                    <svg
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        color: '#94a3b8',
+                        transform: 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Expanded Action Items */}
+                {actionItemsExpanded && (
+                  <div style={{
+                    marginTop: '0.75rem',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#0F172A',
+                    overflow: 'hidden',
+                    height: '340px',
+                  }}>
+                    {/* Header with Search and Close */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      borderBottom: '1px solid #334155',
+                      backgroundColor: '#0F172A',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', margin: 0 }}>
+                          Action Items
+                        </h3>
+                        <div style={{ position: 'relative' }}>
+                          <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                          <input
+                            type="text"
+                            placeholder="Search..."
+                            style={{
+                              backgroundColor: '#1a2332',
+                              border: '1px solid #334155',
+                              borderRadius: '6px',
+                              padding: '4px 12px 4px 32px',
+                              color: '#e2e8f0',
+                              fontSize: '0.875rem',
+                              outline: 'none',
+                              width: '180px',
+                              height: '24px',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setActionItemsExpanded(false)}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <svg style={{ width: '18px', height: '18px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Four Column Layout */}
+                    <div style={{
+                      padding: '16px',
+                      overflowX: 'auto',
+                    }} className="scrollbar-hide">
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, minmax(180px, 1fr))',
+                        gap: '12px',
+                        minWidth: 'fit-content',
+                      }}>
+                        {/* Inventory Column */}
+                        <div style={{
+                          backgroundColor: '#1a2332',
+                          borderRadius: '8px',
+                          padding: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          height: '236px',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '10px',
+                          }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Inventory</span>
+                            <span style={{
+                              backgroundColor: '#334155',
+                              color: '#94a3b8',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '9999px',
+                            }}>1</span>
+                          </div>
+                          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
+                            {/* Action Item: Low FBA Available */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'I-123',
+                                title: 'Low FBA Available',
+                                description: 'Stock levels have dropped below 15 days coverage based on current sales velocity of 45 units/day. We need to initiate an immediate restock shipment to FBA to avoid stockout.\n\nPlease check current warehouse inventory and create a shipping plan for at least 1,500 units.\n\n• Current FBA Stock: 420 units\n• Reserved: 85 units\n• Inbound: 0 units\n• Recommended Replenishment: 2,000 units',
+                                status: 'To Do',
+                                category: 'Inventory',
+                                assignedTo: 'Jeff D.',
+                                assignedColor: '#10b981',
+                                dueDate: 'Feb. 24, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 20, 2025',
+                                ticketId: '#I-123',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Low FBA Available</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#10b981',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedCategory('Inventory'); setShowActionItemModal(true); }}
+                            style={{
+                              backgroundColor: '#4B5563',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              color: '#94a3b8',
+                              fontSize: '0.8125rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              width: '100%',
+                              height: '24px',
+                              boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                            }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add action item
+                          </button>
+                        </div>
+
+                        {/* Price Column */}
+                        <div style={{
+                          backgroundColor: '#1a2332',
+                          borderRadius: '8px',
+                          padding: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          height: '236px',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '10px',
+                          }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Price</span>
+                            <span style={{
+                              backgroundColor: '#334155',
+                              color: '#94a3b8',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '9999px',
+                            }}>1</span>
+                          </div>
+                          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
+                            {/* Action Item: Price Edit */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'P-101',
+                                title: 'Price Edit',
+                                description: 'Review and adjust pricing strategy based on competitor analysis.',
+                                status: 'To Do',
+                                category: 'Price',
+                                assignedTo: 'Carlos A.',
+                                assignedColor: '#ef4444',
+                                dueDate: 'Feb. 28, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 18, 2025',
+                                ticketId: '#P-101',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Price Edit</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#ef4444',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedCategory('Price'); setShowActionItemModal(true); }}
+                            style={{
+                              backgroundColor: '#4B5563',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              color: '#94a3b8',
+                              fontSize: '0.8125rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              width: '100%',
+                              height: '24px',
+                              boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                            }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add action item
+                          </button>
+                        </div>
+
+                        {/* Ads Column */}
+                        <div style={{
+                          backgroundColor: '#1a2332',
+                          borderRadius: '8px',
+                          padding: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          height: '236px',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '10px',
+                          }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Ads</span>
+                            <span style={{
+                              backgroundColor: '#334155',
+                              color: '#94a3b8',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '9999px',
+                            }}>3</span>
+                          </div>
+                          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
+                            {/* Action Item: TACOS Too High */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'A-201',
+                                title: 'TACOS Too High',
+                                description: 'Total Advertising Cost of Sales is above target threshold. Review and optimize ad campaigns.',
+                                status: 'To Do',
+                                category: 'Ads',
+                                assignedTo: 'Jeff B.',
+                                assignedColor: '#3b82f6',
+                                dueDate: 'Mar. 1, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 19, 2025',
+                                ticketId: '#A-201',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>TACOS Too High</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            {/* Action Item: Keyword Sweep */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'A-202',
+                                title: 'Keyword Sweep',
+                                description: 'Perform keyword research and update targeting strategy.',
+                                status: 'To Do',
+                                category: 'Ads',
+                                assignedTo: 'Jeff B.',
+                                assignedColor: '#3b82f6',
+                                dueDate: 'Mar. 5, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 19, 2025',
+                                ticketId: '#A-202',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Keyword Sweep</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            {/* Action Item: Check TOS */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'A-203',
+                                title: 'Check TOS',
+                                description: 'Review Terms of Service compliance for current ad campaigns.',
+                                status: 'To Do',
+                                category: 'Ads',
+                                assignedTo: 'Jeff B.',
+                                assignedColor: '#3b82f6',
+                                dueDate: 'Mar. 3, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 19, 2025',
+                                ticketId: '#A-203',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Check TOS</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedCategory('Ads'); setShowActionItemModal(true); }}
+                            style={{
+                              backgroundColor: '#4B5563',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              color: '#94a3b8',
+                              fontSize: '0.8125rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              width: '100%',
+                              height: '24px',
+                              boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                            }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add action item
+                          </button>
+                        </div>
+
+                        {/* PDP Column */}
+                        <div style={{
+                          backgroundColor: '#1a2332',
+                          borderRadius: '8px',
+                          padding: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          height: '236px',
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: '10px',
+                          }}>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>PDP</span>
+                            <span style={{
+                              backgroundColor: '#334155',
+                              color: '#94a3b8',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '9999px',
+                            }}>2</span>
+                          </div>
+                          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
+                            {/* Action Item: Slide Edit */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'D-301',
+                                title: 'Slide Edit',
+                                description: 'Update product image slides with new lifestyle photos.',
+                                status: 'To Do',
+                                category: 'PDP',
+                                assignedTo: 'Jeff B.',
+                                assignedColor: '#3b82f6',
+                                dueDate: 'Mar. 10, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 21, 2025',
+                                ticketId: '#D-301',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Slide Edit</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            {/* Action Item: Change 2nd Bullet */}
+                            <div
+                              onClick={() => setSelectedActionItem({
+                                id: 'D-302',
+                                title: 'Change 2nd Bullet',
+                                description: 'Update second bullet point to highlight new feature benefits.',
+                                status: 'To Do',
+                                category: 'PDP',
+                                assignedTo: 'Jeff B.',
+                                assignedColor: '#3b82f6',
+                                dueDate: 'Mar. 8, 2025',
+                                createdBy: 'Christian R.',
+                                dateCreated: 'Feb. 21, 2025',
+                                ticketId: '#D-302',
+                              })}
+                              style={{
+                                width: '100%',
+                                height: '32px',
+                                backgroundColor: '#1C2634',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                padding: '0 8px',
+                                marginBottom: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Change 2nd Bullet</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#3b82f6',
+                                }} />
+                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                    <circle cx="8" cy="3" r="1.5" />
+                                    <circle cx="8" cy="8" r="1.5" />
+                                    <circle cx="8" cy="13" r="1.5" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedCategory('PDP'); setShowActionItemModal(true); }}
+                            style={{
+                              backgroundColor: '#4B5563',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              color: '#94a3b8',
+                              fontSize: '0.8125rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              width: '100%',
+                              height: '24px',
+                              boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                            }}
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add action item
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             {activeTab === 'inventory' && (!chartBuild || chartBuild.data.length === 0) && (
               <div style={{ marginTop: '2rem', textAlign: 'center', color: '#9CA3AF' }}>
                 <p>No chart data available</p>
@@ -2120,6 +2817,741 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               >
                 Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Item Modal */}
+      {showActionItemModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2400,
+          }}
+          onClick={() => { setShowActionItemModal(false); setSelectedCategory('Inventory'); }}
+        >
+          <div
+            style={{
+              backgroundColor: '#1A2235',
+              borderRadius: '12px',
+              width: '440px',
+              minHeight: '246px',
+              border: '1px solid #334155',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                height: '44px',
+                padding: '12px 16px',
+                borderBottom: '1px solid #334155',
+                backgroundColor: '#1A2235',
+                boxSizing: 'border-box',
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#F9FAFB' }}>
+                New {selectedCategory} Action Item
+              </h2>
+              <button
+                onClick={() => { setShowActionItemModal(false); setSelectedCategory('Inventory'); }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  display: 'flex',
+                  padding: '2px',
+                }}
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ backgroundColor: '#1e2736', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Subject */}
+              <input
+                type="text"
+                placeholder="Enter Subject..."
+                style={{
+                  width: '100%',
+                  height: '31px',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  border: '1px solid #007AFF',
+                  backgroundColor: '#4B5563',
+                  color: '#E5E7EB',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              {/* Description */}
+              <textarea
+                placeholder="Enter Description..."
+                style={{
+                  width: '100%',
+                  height: '52px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                  backgroundColor: '#4B5563',
+                  color: '#E5E7EB',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  resize: 'none',
+                  fontFamily: 'inherit',
+                  boxSizing: 'border-box',
+                }}
+              />
+
+              {/* Assignee + Due Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#4B5563',
+                    color: '#E5E7EB',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    height: '24px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A4.992 4.992 0 0112 15a4.992 4.992 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Select Assignee</span>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#4B5563',
+                    color: '#E5E7EB',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    height: '24px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth={2} />
+                    <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2} />
+                    <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2} />
+                    <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2} />
+                  </svg>
+                  <span>Select Due Date</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                minHeight: '47px',
+                padding: '12px 16px',
+                gap: '10px',
+                backgroundColor: '#141C2D',
+                borderTop: '1px solid #334155',
+                boxSizing: 'border-box',
+              }}
+            >
+              <button
+                onClick={() => { setShowActionItemModal(false); setSelectedCategory('Inventory'); }}
+                style={{
+                  width: '64px',
+                  height: '23px',
+                  borderRadius: '4px',
+                  border: '1px solid #334155',
+                  backgroundColor: '#252F42',
+                  color: '#E5E7EB',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                style={{
+                  width: '63px',
+                  height: '23px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  backgroundColor: 'rgba(0, 122, 255, 0.5)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Item Detail Modal */}
+      {selectedActionItem && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2500,
+          }}
+          onClick={() => setSelectedActionItem(null)}
+        >
+          <div
+            style={{
+              backgroundColor: '#1A2235',
+              borderRadius: '12px',
+              width: '720px',
+              maxHeight: '80vh',
+              border: '1px solid #334155',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header - Breadcrumb */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                padding: '12px 16px',
+                borderBottom: '1px solid #334155',
+                backgroundColor: '#0F172A',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.875rem', color: '#94a3b8' }}>My Tickets</span>
+                <svg width="12" height="12" fill="none" stroke="#64748b" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0' }}>{selectedActionItem.ticketId}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    display: 'flex',
+                    padding: '4px',
+                  }}
+                >
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <circle cx="8" cy="3" r="1.5" />
+                    <circle cx="8" cy="8" r="1.5" />
+                    <circle cx="8" cy="13" r="1.5" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setSelectedActionItem(null)}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#94a3b8',
+                    display: 'flex',
+                    padding: '4px',
+                  }}
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ display: 'flex', flexDirection: 'row', flex: 1, overflow: 'hidden' }}>
+              {/* Left Side - Product & Description */}
+              <div style={{
+                flex: 1,
+                padding: '32px 24px 64px 24px',
+                borderRight: '1px solid #334155',
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '32px',
+              }}>
+                {/* Product Card */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 12px',
+                  background: 'linear-gradient(180deg, #1A2235 0%, #1C2634 100%)',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                  width: '488px',
+                  maxWidth: '100%',
+                  height: '64px',
+                  boxSizing: 'border-box',
+                }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '8px',
+                    backgroundColor: '#1e293b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                  }}>
+                    {selectedProduct?.imageUrl ? (
+                      <img src={selectedProduct.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <svg width="24" height="24" fill="#64748b" viewBox="0 0 24 24">
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      color: '#e2e8f0',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      marginBottom: '4px',
+                    }}>
+                      {selectedProduct?.title || 'Arborvitae Tree Fertilizer for All Arborvitaes, Eve...'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#64748b' }}>
+                      <span>{selectedProduct?.sku || 'B0C73TDZCQ'}</span>
+                      <span>•</span>
+                      <span>{selectedProduct?.brandName || 'TPS Nutrients'}</span>
+                      <span>•</span>
+                      <span>{selectedProduct?.size || '16oz'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subject */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div
+                    onClick={() => {
+                      if (editingField !== 'subject') {
+                        setEditingField('subject');
+                        setEditingValue(selectedActionItem.title);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: editingField === 'subject' ? '1px solid #334155' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { if (editingField !== 'subject') e.currentTarget.style.borderColor = '#334155'; }}
+                    onMouseLeave={(e) => { if (editingField !== 'subject') e.currentTarget.style.borderColor = 'transparent'; }}
+                  >
+                    <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</label>
+                    {editingField === 'subject' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          border: '2px solid #475569',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }} />
+                        <input
+                          type="text"
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          autoFocus
+                          style={{
+                            flex: 1,
+                            backgroundColor: '#0F172A',
+                            border: '1px solid #334155',
+                            borderRadius: '4px',
+                            padding: '8px 12px',
+                            color: '#e2e8f0',
+                            fontSize: '1rem',
+                            fontWeight: 500,
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          border: '2px solid #475569',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }} />
+                        <span style={{ fontSize: '1rem', fontWeight: 500, color: '#e2e8f0' }}>{selectedActionItem.title}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Cancel/Save buttons outside the border */}
+                  {editingField === 'subject' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingRight: '8px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingField(null); setEditingValue(''); }}
+                        style={{
+                          padding: '6px 16px',
+                          backgroundColor: 'transparent',
+                          border: '1px solid #334155',
+                          borderRadius: '4px',
+                          color: '#e2e8f0',
+                          fontSize: '0.875rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedActionItem) {
+                            setSelectedActionItem({ ...selectedActionItem, title: editingValue });
+                          }
+                          setEditingField(null);
+                          setEditingValue('');
+                        }}
+                        style={{
+                          padding: '6px 16px',
+                          backgroundColor: '#3b82f6',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          fontSize: '0.875rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div
+                    onClick={() => {
+                      if (editingField !== 'description') {
+                        setEditingField('description');
+                        setEditingValue(selectedActionItem.description);
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: editingField === 'description' ? '1px solid #334155' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { if (editingField !== 'description') e.currentTarget.style.borderColor = '#334155'; }}
+                    onMouseLeave={(e) => { if (editingField !== 'description') e.currentTarget.style.borderColor = 'transparent'; }}
+                  >
+                    <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
+                    {editingField === 'description' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }} onClick={(e) => e.stopPropagation()}>
+                        {/* Toolbar */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '8px',
+                          backgroundColor: '#0F172A',
+                          borderRadius: '4px 4px 0 0',
+                          border: '1px solid #334155',
+                          borderBottom: 'none',
+                        }}>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontWeight: 700, fontSize: '0.875rem' }}>B</button>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontStyle: 'italic', fontSize: '0.875rem' }}>I</button>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', textDecoration: 'underline', fontSize: '0.875rem' }}>U</button>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', textDecoration: 'line-through', fontSize: '0.875rem' }}>S</button>
+                          <div style={{ width: '1px', height: '16px', backgroundColor: '#334155', margin: '0 4px' }} />
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                            </svg>
+                          </button>
+                          <div style={{ width: '1px', height: '16px', backgroundColor: '#334155', margin: '0 4px' }} />
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </button>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                          <button style={{ padding: '4px 8px', backgroundColor: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                          </button>
+                        </div>
+                        {/* Textarea */}
+                        <textarea
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          autoFocus
+                          style={{
+                            width: '100%',
+                            minHeight: '150px',
+                            backgroundColor: '#0F172A',
+                            border: '1px solid #334155',
+                            borderRadius: '0 0 4px 4px',
+                            padding: '12px',
+                            color: '#cbd5e1',
+                            fontSize: '0.875rem',
+                            lineHeight: '1.6',
+                            outline: 'none',
+                            resize: 'vertical',
+                            fontFamily: 'inherit',
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.875rem', color: '#cbd5e1', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                        {selectedActionItem.description}
+                      </div>
+                    )}
+                  </div>
+                  {/* Cancel/Save buttons outside the border */}
+                  {editingField === 'description' && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingRight: '8px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingField(null); setEditingValue(''); }}
+                        style={{
+                          padding: '6px 16px',
+                          backgroundColor: 'transparent',
+                          border: '1px solid #334155',
+                          borderRadius: '4px',
+                          color: '#e2e8f0',
+                          fontSize: '0.875rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedActionItem) {
+                            setSelectedActionItem({ ...selectedActionItem, description: editingValue });
+                          }
+                          setEditingField(null);
+                          setEditingValue('');
+                        }}
+                        style={{
+                          padding: '6px 16px',
+                          backgroundColor: '#3b82f6',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: '#fff',
+                          fontSize: '0.875rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side - Additional Details */}
+              <div style={{
+                width: '264px',
+                padding: '32px 16px',
+                backgroundColor: '#141C2D',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+              }}>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0', margin: 0 }}>Additional Details</h4>
+
+                {/* Status */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Status</label>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    backgroundColor: '#1a2332',
+                    borderRadius: '6px',
+                    border: '1px solid #334155',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #475569' }} />
+                      <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.status}</span>
+                    </div>
+                    <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Category</label>
+                  <span style={{
+                    display: 'inline-block',
+                    padding: '4px 12px',
+                    backgroundColor: selectedActionItem.category === 'Inventory' ? 'rgba(16, 185, 129, 0.2)' : selectedActionItem.category === 'Price' ? 'rgba(239, 68, 68, 0.2)' : selectedActionItem.category === 'Ads' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                    color: selectedActionItem.category === 'Inventory' ? '#10b981' : selectedActionItem.category === 'Price' ? '#ef4444' : selectedActionItem.category === 'Ads' ? '#3b82f6' : '#3b82f6',
+                    borderRadius: '4px',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    width: 'fit-content',
+                  }}>
+                    {selectedActionItem.category}
+                  </span>
+                </div>
+
+                {/* Assigned To */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Assigned To</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: selectedActionItem.assignedColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.625rem',
+                      fontWeight: 600,
+                      color: '#fff',
+                    }}>
+                      {selectedActionItem.assignedTo.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.assignedTo}</span>
+                  </div>
+                </div>
+
+                {/* Due Date */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Due Date</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.dueDate}</span>
+                  </div>
+                </div>
+
+                {/* Created By */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Created By</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: '#f59e0b',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.625rem',
+                      fontWeight: 600,
+                      color: '#fff',
+                    }}>
+                      CA
+                    </div>
+                    <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.createdBy}</span>
+                  </div>
+                </div>
+
+                {/* Date Created */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Date Created</label>
+                  <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.dateCreated}</span>
+                </div>
+
+                {/* Ticket ID */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Ticket ID</label>
+                  <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.ticketId}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
