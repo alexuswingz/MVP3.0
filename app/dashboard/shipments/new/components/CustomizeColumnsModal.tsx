@@ -161,6 +161,36 @@ export function CustomizeColumnsModal({
 
   return (
     <>
+      {/* CSS for scrollbar hide/show on hover */}
+      <style>{`
+        .customize-columns-scroll::-webkit-scrollbar {
+          width: 8px !important;
+        }
+        .customize-columns-scroll::-webkit-scrollbar-track {
+          background: transparent !important;
+          margin-right: 20px !important;
+        }
+        .customize-columns-scroll::-webkit-scrollbar-thumb {
+          background-color: transparent !important;
+          border-radius: 4px !important;
+          border-right: 20px solid transparent !important;
+          background-clip: padding-box !important;
+        }
+        .customize-columns-scroll:hover::-webkit-scrollbar-thumb {
+          background-color: #4B5563 !important;
+        }
+        .customize-columns-scroll:hover::-webkit-scrollbar-thumb:hover {
+          background-color: #6B7280 !important;
+        }
+        .customize-columns-scroll {
+          scrollbar-width: thin !important;
+          scrollbar-color: transparent transparent !important;
+          padding-right: 20px !important;
+        }
+        .customize-columns-scroll:hover {
+          scrollbar-color: #4B5563 transparent !important;
+        }
+      `}</style>
       <div
         style={{
           position: 'fixed',
@@ -335,7 +365,7 @@ export function CustomizeColumnsModal({
             </div>
 
             {/* Sections */}
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div className="customize-columns-scroll" style={{ overflowY: 'auto', flex: 1 }}>
               {(['product', 'forecast', 'sales', 'inventory'] as const).map((category) => {
                 const optionsInCategory = COLUMN_OPTIONS.filter((c) => c.category === category);
                 const filteredInCategory =

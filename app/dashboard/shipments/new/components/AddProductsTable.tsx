@@ -348,38 +348,87 @@ export function AddProductsTable({
               onMouseEnter={() => setHoveredQtyIndex(index)}
               onMouseLeave={() => setHoveredQtyIndex(null)}
             >
-              <input
-                type="text"
-                inputMode="numeric"
-                value={qtyDisplay}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/,/g, '');
-                  if (v === '' || /^\d+$/.test(v)) {
-                    setQtyValues((prev) => ({ ...prev, [index]: v }));
-                    const parsed = parseInt(v, 10);
-                    const defaultUnits = row.unitsToMake != null ? Number(row.unitsToMake) : 0;
-                    if (!Number.isNaN(parsed) && parsed !== defaultUnits) {
-                      onUnitsOverride?.(String(row.id), parsed);
-                    } else if (v === '' || Number.isNaN(parsed)) {
-                      onUnitsOverride?.(String(row.id), null);
-                    }
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  padding: '8px 28px 8px 6px',
-                  borderRadius: 8,
-                  border: '1px solid #334155',
-                  outline: 'none',
-                  backgroundColor: HEADER_BG,
-                  color: '#FFFFFF',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  textAlign: 'center',
-                  boxSizing: 'border-box',
-                }}
-              />
+              {(() => {
+                const defaultUnits = row.unitsToMake != null ? Number(row.unitsToMake) : 0;
+                const currentUnits = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                const unitsHasChanged = currentUnits !== defaultUnits;
+                return (
+                  <>
+                    {/* Reset icon - inside container on left, only when value changed */}
+                    {unitsHasChanged && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQtyValues((prev) => {
+                            const next = { ...prev };
+                            delete next[index];
+                            return next;
+                          });
+                          onUnitsOverride?.(String(row.id), null);
+                        }}
+                        title="Reset units to default"
+                        style={{
+                          position: 'absolute',
+                          left: 4,
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 20,
+                          height: 20,
+                          border: 'none',
+                          borderRadius: 4,
+                          background: 'transparent',
+                          color: '#9CA3AF',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 0,
+                          outline: 'none',
+                          zIndex: 2,
+                        }}
+                      >
+                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M3 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={qtyDisplay}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/,/g, '');
+                        if (v === '' || /^\d+$/.test(v)) {
+                          setQtyValues((prev) => ({ ...prev, [index]: v }));
+                          const parsed = parseInt(v, 10);
+                          const defUnits = row.unitsToMake != null ? Number(row.unitsToMake) : 0;
+                          if (!Number.isNaN(parsed) && parsed !== defUnits) {
+                            onUnitsOverride?.(String(row.id), parsed);
+                          } else if (v === '' || Number.isNaN(parsed)) {
+                            onUnitsOverride?.(String(row.id), null);
+                          }
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        padding: '8px 28px 8px 24px',
+                        borderRadius: 8,
+                        border: '1px solid #334155',
+                        outline: 'none',
+                        backgroundColor: HEADER_BG,
+                        color: '#FFFFFF',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        textAlign: 'center',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </>
+                );
+              })()}
               {hoveredQtyIndex === index && (
                 <div
                   style={{
@@ -401,8 +450,9 @@ export function AddProductsTable({
                     onClick={(e) => {
                       e.stopPropagation();
                       const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
-                      const increment = getQtyIncrement(row);
-                      const rounded = roundQtyUpToNearestCase(current, row);
+                      const sizeRow = { size: row.variation1, product: row.product };
+                      const increment = getQtyIncrement(sizeRow);
+                      const rounded = roundQtyUpToNearestCase(current, sizeRow);
                       const newVal = rounded === current ? rounded + increment : rounded;
                       setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
                       onUnitsOverride?.(String(row.id), newVal);
@@ -434,8 +484,9 @@ export function AddProductsTable({
                       e.stopPropagation();
                       const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
                       if (current <= 0) return;
-                      const increment = getQtyIncrement(row);
-                      const rounded = roundQtyDownToNearestCase(current, row);
+                      const sizeRow = { size: row.variation1, product: row.product };
+                      const increment = getQtyIncrement(sizeRow);
+                      const rounded = roundQtyDownToNearestCase(current, sizeRow);
                       const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
                       setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
                       onUnitsOverride?.(String(row.id), newVal);
@@ -607,7 +658,7 @@ export function AddProductsTable({
           style={{
             marginTop: '1.25rem',
             position: 'relative',
-            paddingBottom: 97,
+            paddingBottom: 0,
             backgroundColor: HEADER_BG,
             borderRadius: 12,
             flex: 1,
@@ -630,7 +681,7 @@ export function AddProductsTable({
             backgroundColor: HEADER_BG,
           }}
         >
-          <div style={{ paddingBottom: 100, minHeight: '100%' }}>
+          <div style={{ paddingBottom: 80, minHeight: 'auto' }}>
           <table
             style={{
               width: 'max-content',

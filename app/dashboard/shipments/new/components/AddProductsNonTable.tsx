@@ -91,16 +91,21 @@ export function AddProductsNonTable({
   totalWeightLbs = 0,
 }: AddProductsNonTableProps) {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set(initialAddedIds ?? []));
+
+  // Track if user has interacted with add/remove to prevent sync from overwriting
+  const userHasInteracted = useRef(false);
 
   // When parent loads a shipment and sends initialAddedIds (e.g. opening from table), sync so added products are not lost
   useEffect(() => {
     const ids = initialAddedIds ?? [];
-    if (ids.length > 0 && addedIds.size === 0) {
+    // Only sync on initial load, not after user has started interacting
+    if (ids.length > 0 && addedIds.size === 0 && !userHasInteracted.current) {
       setAddedIds(new Set(ids));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only sync when we have IDs and selection is empty
-  }, [initialAddedIds?.length, addedIds.size]);
+  }, [initialAddedIds?.length]);
 
   useEffect(() => {
     onAddedIdsChange?.(Array.from(addedIds));
@@ -133,28 +138,110 @@ export function AddProductsNonTable({
       else next.add(index);
       return next;
     });
+    setLastSelectedIndex(index);
   };
 
   const selectAll = () => {
-    if (selectedIndices.size === rows.length) setSelectedIndices(new Set());
-    else setSelectedIndices(new Set(rows.map((_, i) => i)));
+    if (selectedIndices.size === rows.length) {
+      setSelectedIndices(new Set());
+      setLastSelectedIndex(null);
+    } else {
+      setSelectedIndices(new Set(rows.map((_, i) => i)));
+      setLastSelectedIndex(rows.length - 1);
+    }
   };
 
-  const handleAddClick = (row: NonTableProductRow) => {
-    setAddedIds((prev) => {
-      const next = new Set(prev);
-      const rowIdStr = String(row.id);
-      const wasAdded = next.has(rowIdStr);
-      if (wasAdded) next.delete(rowIdStr);
-      else next.add(rowIdStr);
-      if (!wasAdded) {
-        const startPct = Math.min(100, (Number(row.daysOfInventory) / 100) * 100);
-        const targetPct = Math.min(100, (requiredDoi / 100) * 100);
-        setBarFillAnimation({ rowId: row.id, startPct, targetPct });
-        setBarFillPhase('start');
+  const handleRowClick = (e: React.MouseEvent, index: number) => {
+    if (
+      (e.target as Element).closest('button') ||
+      (e.target as Element).closest('input') ||
+      (e.target as Element).closest('a')
+    ) {
+      return;
+    }
+
+    const isShiftClick = e.shiftKey;
+    const isCmdClick = e.metaKey || e.ctrlKey;
+
+    if (isShiftClick && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const newSelected = new Set(selectedIndices);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(i);
       }
-      return next;
-    });
+      setSelectedIndices(newSelected);
+      setLastSelectedIndex(index);
+    } else if (isCmdClick) {
+      const newSelected = new Set(selectedIndices);
+      if (newSelected.has(index)) {
+        newSelected.delete(index);
+      } else {
+        newSelected.add(index);
+      }
+      setSelectedIndices(newSelected);
+      setLastSelectedIndex(index);
+    } else {
+      setSelectedIndices(new Set([index]));
+      setLastSelectedIndex(index);
+    }
+  };
+
+  const handleAddClick = (row: NonTableProductRow, index: number) => {
+    // Mark that user has interacted to prevent sync from overwriting
+    userHasInteracted.current = true;
+    
+    const rowIdStr = String(row.id);
+    const isRowSelected = selectedIndices.has(index);
+    const hasMultipleSelected = selectedIndices.size > 1;
+
+    if (isRowSelected && hasMultipleSelected) {
+      setAddedIds((prev) => {
+        const next = new Set(prev);
+        // Check if clicked row is currently added (inside callback to get latest state)
+        const clickedRowIsAdded = prev.has(rowIdStr);
+        
+        selectedIndices.forEach((selectedIndex) => {
+          const selectedRow = rows[selectedIndex];
+          if (selectedRow) {
+            const selectedRowIdStr = String(selectedRow.id);
+            if (clickedRowIsAdded) {
+              // Clicked on "Added" button - remove all selected
+              next.delete(selectedRowIdStr);
+            } else {
+              // Clicked on "Add" button - add all selected
+              next.add(selectedRowIdStr);
+            }
+          }
+        });
+        
+        // Trigger animation only when adding
+        if (!clickedRowIsAdded) {
+          const startPct = Math.min(100, (Number(row.daysOfInventory) / 100) * 100);
+          const targetPct = Math.min(100, (requiredDoi / 100) * 100);
+          setBarFillAnimation({ rowId: row.id, startPct, targetPct });
+          setBarFillPhase('start');
+        }
+        
+        return next;
+      });
+    } else {
+      setAddedIds((prev) => {
+        const next = new Set(prev);
+        const clickedRowIsAdded = prev.has(rowIdStr);
+        
+        if (clickedRowIsAdded) {
+          next.delete(rowIdStr);
+        } else {
+          next.add(rowIdStr);
+          const startPct = Math.min(100, (Number(row.daysOfInventory) / 100) * 100);
+          const targetPct = Math.min(100, (requiredDoi / 100) * 100);
+          setBarFillAnimation({ rowId: row.id, startPct, targetPct });
+          setBarFillPhase('start');
+        }
+        return next;
+      });
+    }
   };
 
   const allSelected = rows.length > 0 && selectedIndices.size === rows.length;
@@ -186,6 +273,52 @@ export function AddProductsNonTable({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [shipmentStatsMenuOpen]);
 
+  // Keyboard support for bulk increase/decrease with Arrow Up/Down
+  useEffect(() => {
+    if (selectedIndices.size === 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as Element)?.tagName === 'INPUT' || (e.target as Element)?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const isIncrease = e.key === 'ArrowUp';
+
+        setQtyValues((prev) => {
+          const newValues = { ...prev };
+          selectedIndices.forEach((selectedIndex) => {
+            const selectedRow = rows[selectedIndex];
+            if (selectedRow) {
+              const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
+              const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;
+              const increment = getQtyIncrement(selectedRow);
+
+              if (isIncrease) {
+                const rounded = roundQtyUpToNearestCase(numQty, selectedRow);
+                const newVal = rounded === numQty ? rounded + increment : rounded;
+                newValues[selectedIndex] = String(newVal);
+                onUnitsOverride?.(String(selectedRow.id), newVal);
+              } else {
+                if (numQty > 0) {
+                  const rounded = roundQtyDownToNearestCase(numQty, selectedRow);
+                  const newVal = rounded === numQty ? Math.max(0, rounded - increment) : rounded;
+                  newValues[selectedIndex] = String(newVal);
+                  onUnitsOverride?.(String(selectedRow.id), newVal);
+                }
+              }
+            }
+          });
+          return newValues;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIndices, rows, onUnitsOverride]);
+
   // Footer totals: compute from added rows only (same formulas as page: boxes = units/24, weight = boxes*12, palettes = products*0.5)
   const addedEntries = rows
     .map((row, index) => ({ row, index }))
@@ -204,7 +337,8 @@ export function AddProductsNonTable({
       {/* CSS for row hover effects */}
       <style>{`
         /* Row highlight: same width as separator (30px inset), decreased intensity */
-        .non-table-row:hover .non-table-row-highlight {
+        /* Only apply hover highlight when row is NOT selected */
+        .non-table-row:not(.non-table-row-selected):hover .non-table-row-highlight {
           background-color: #1A2636 !important;
         }
         .non-table-row:hover .pencil-icon-hover {
@@ -214,6 +348,12 @@ export function AddProductsNonTable({
         .non-table-row:hover .analyze-icon-hover {
           opacity: 1 !important;
           pointer-events: auto !important;
+        }
+        .non-table-row {
+          user-select: none;
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
         }
       `}</style>
       <div
@@ -383,7 +523,19 @@ export function AddProductsNonTable({
             return (
               <div
                 key={`${row.id}-${index}`}
-                className="non-table-row"
+                className={`non-table-row${isSelected ? ' non-table-row-selected' : ''}`}
+                onClick={(e) => handleRowClick(e, index)}
+                onDoubleClick={(e) => {
+                  if (
+                    (e.target as Element).closest('button') ||
+                    (e.target as Element).closest('input') ||
+                    (e.target as Element).closest('a')
+                  ) {
+                    return;
+                  }
+                  e.stopPropagation();
+                  onProductClick?.(row);
+                }}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 140px 220px 140px',
@@ -453,26 +605,30 @@ export function AddProductsNonTable({
                     }}
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onProductClick?.(row); }}
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: '#3B82F6',
-                        textDecoration: 'underline',
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word',
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {row.product}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onProductClick?.(row); }}
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: '#3B82F6',
+                          textDecoration: 'underline',
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontFamily: 'inherit',
+                          width: 'fit-content',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        {row.product}
+                      </button>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 12, color: '#9CA3AF', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         {row.asin || 'N/A'}
@@ -738,12 +894,34 @@ export function AddProductsNonTable({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
-                            const increment = getQtyIncrement(row);
-                            const rounded = roundQtyUpToNearestCase(current, row);
-                            const newVal = rounded === current ? rounded + increment : rounded;
-                            setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
-                            onUnitsOverride?.(String(row.id), newVal);
+                            const isRowSelected = selectedIndices.has(index);
+                            const hasMultipleSelected = selectedIndices.size > 1;
+                            
+                            if (isRowSelected && hasMultipleSelected) {
+                              setQtyValues((prev) => {
+                                const newValues = { ...prev };
+                                selectedIndices.forEach((selectedIndex) => {
+                                  const selectedRow = rows[selectedIndex];
+                                  if (selectedRow) {
+                                    const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
+                                    const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;
+                                    const increment = getQtyIncrement(selectedRow);
+                                    const rounded = roundQtyUpToNearestCase(numQty, selectedRow);
+                                    const newVal = rounded === numQty ? rounded + increment : rounded;
+                                    newValues[selectedIndex] = String(newVal);
+                                    onUnitsOverride?.(String(selectedRow.id), newVal);
+                                  }
+                                });
+                                return newValues;
+                              });
+                            } else {
+                              const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                              const increment = getQtyIncrement(row);
+                              const rounded = roundQtyUpToNearestCase(current, row);
+                              const newVal = rounded === current ? rounded + increment : rounded;
+                              setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                              onUnitsOverride?.(String(row.id), newVal);
+                            }
                           }}
                           style={{
                             width: 20,
@@ -770,13 +948,36 @@ export function AddProductsNonTable({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
-                            if (current <= 0) return;
-                            const increment = getQtyIncrement(row);
-                            const rounded = roundQtyDownToNearestCase(current, row);
-                            const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
-                            setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
-                            onUnitsOverride?.(String(row.id), newVal);
+                            const isRowSelected = selectedIndices.has(index);
+                            const hasMultipleSelected = selectedIndices.size > 1;
+                            
+                            if (isRowSelected && hasMultipleSelected) {
+                              setQtyValues((prev) => {
+                                const newValues = { ...prev };
+                                selectedIndices.forEach((selectedIndex) => {
+                                  const selectedRow = rows[selectedIndex];
+                                  if (selectedRow) {
+                                    const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
+                                    const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;
+                                    if (numQty <= 0) return;
+                                    const increment = getQtyIncrement(selectedRow);
+                                    const rounded = roundQtyDownToNearestCase(numQty, selectedRow);
+                                    const newVal = rounded === numQty ? Math.max(0, rounded - increment) : rounded;
+                                    newValues[selectedIndex] = String(newVal);
+                                    onUnitsOverride?.(String(selectedRow.id), newVal);
+                                  }
+                                });
+                                return newValues;
+                              });
+                            } else {
+                              const current = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                              if (current <= 0) return;
+                              const increment = getQtyIncrement(row);
+                              const rounded = roundQtyDownToNearestCase(current, row);
+                              const newVal = rounded === current ? Math.max(0, rounded - increment) : rounded;
+                              setQtyValues((prev) => ({ ...prev, [index]: String(newVal) }));
+                              onUnitsOverride?.(String(row.id), newVal);
+                            }
                           }}
                           style={{
                             width: 20,
@@ -804,7 +1005,11 @@ export function AddProductsNonTable({
                   </div>
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); handleAddClick(row); }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      e.preventDefault();
+                      handleAddClick(row, index); 
+                    }}
                     style={{
                       width: 64,
                       height: 24,
@@ -822,6 +1027,8 @@ export function AddProductsNonTable({
                       justifyContent: 'center',
                       gap: 8,
                       padding: '4px 8px',
+                      position: 'relative',
+                      zIndex: 10,
                     }}
                   >
                     {!isAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
