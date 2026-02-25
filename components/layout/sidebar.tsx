@@ -117,11 +117,26 @@ export function Sidebar() {
                   : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
               )}
             >
-              <Icon className={cn(
-                'w-5 h-5 flex-shrink-0',
-                isActive ? 'text-primary' : 'text-foreground-muted group-hover:text-foreground-secondary'
-              )} />
-              
+              {item.id === 'action-items' ? (
+                <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+                  <Image
+                    src="/rocket.png"
+                    alt=""
+                    width={20}
+                    height={20}
+                    className={cn(
+                      'object-contain',
+                      isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-90'
+                    )}
+                  />
+                </span>
+              ) : (
+                <Icon className={cn(
+                  'w-5 h-5 flex-shrink-0',
+                  isActive ? 'text-primary' : 'text-foreground-muted group-hover:text-foreground-secondary'
+                )} />
+              )}
+
               <AnimatePresence>
                 {!sidebarCollapsed && (
                   <motion.span

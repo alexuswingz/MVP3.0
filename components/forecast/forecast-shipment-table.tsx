@@ -20,6 +20,8 @@ export interface ShipmentTableRow {
   unitsToMake: number;
   daysOfInventory: number;
   doiFba?: number;
+  /** Used for client-side units-to-make recalc when DOI changes. */
+  avgWeeklySales?: number;
   added?: boolean;
 }
 

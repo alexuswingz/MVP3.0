@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Search, Plus, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
-import DoiSettingsPopover from '@/components/forecast/doi-settings-popover';
+import DoiSettingsPopover, { getDefaultDoiSettings } from '@/components/forecast/doi-settings-popover';
 import NGOOSmodal from '@/components/forecast/NGOOSmodal';
 import { useUIStore } from '@/stores/ui-store';
 import { api, type ForecastTableResponse } from '@/lib/api';
+import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
+import type { DoiSettings } from '@/lib/doi-settings';
+import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
 
 function toNgoosSelectedRow(row: ShipmentTableRow) {
   return {
@@ -45,10 +48,11 @@ function transformApiRowToTableRow(apiRow: ForecastTableResponse['rows'][0]): Sh
       createdAt: new Date(),
       updatedAt: new Date(),
     },
-    inventory: apiRow.inventory, // Now an object with breakdown
+    inventory: apiRow.inventory,
     unitsToMake: apiRow.unitsToMake,
     daysOfInventory: apiRow.daysOfInventory,
     doiFba: apiRow.doiFba,
+    avgWeeklySales: apiRow.avgWeeklySales,
   };
 }
 
@@ -72,6 +76,96 @@ export default function ForecastPage() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
+  // Applied DOI for this view (persisted); null = using default. Badge shows when non-null.
+  const [appliedDoiForShipment, setAppliedDoiForShipment] = useState<DoiSettings | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const key = getShipmentDoiStorageKey(null);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { settings: DoiSettings };
+      return parsed?.settings ?? null;
+    } catch {
+      return null;
+    }
+  });
+  const [doiSettingsValues, setDoiSettingsValues] = useState<DoiSettings | null>(null);
+  const manuallyEditedProductIds = useRef<Set<string>>(new Set());
+  const hasRecalcForAppliedDoiRef = useRef(false);
+
+  const runUnitsToMakeRecalc = useCallback((targetDOI: number) => {
+    setTableRows((prev) => {
+      if (prev.length === 0) return prev;
+      const products = prev.map((r) => ({
+        id: r.product.id,
+        daysOfInventory: r.daysOfInventory,
+        avgWeeklySales: r.avgWeeklySales,
+      }));
+      const editedIds = manuallyEditedProductIds.current;
+      const manuallyEditedIndices = new Set(
+        prev.map((_, i) => i).filter((i) => editedIds.has(prev[i].product.id))
+      );
+      const newQtyByIndex = recalculateUnitsToMakeForDoiChange(
+        products,
+        targetDOI,
+        new Set(),
+        manuallyEditedIndices
+      );
+      return prev.map((r, i) =>
+        newQtyByIndex[i] !== undefined ? { ...r, unitsToMake: newQtyByIndex[i]! } : r
+      );
+    });
+  }, []);
+
+  const handleDoiSettingsChange = useCallback(
+    (newSettings: DoiSettings, totalDoi: number, meta: { source: 'initialLoad' | 'apply' | 'saveAsDefault' }) => {
+      setDoiSettingsValues(newSettings);
+      if (meta.source === 'apply') {
+        setAppliedDoiForShipment(newSettings);
+        runUnitsToMakeRecalc(totalDoi);
+        try {
+          const key = getShipmentDoiStorageKey(null);
+          localStorage.setItem(key, JSON.stringify({ settings: newSettings, totalDoi }));
+        } catch (e) {
+          console.warn('Failed to persist applied DOI:', e);
+        }
+      } else if (meta.source === 'saveAsDefault') {
+        setAppliedDoiForShipment(null);
+        hasRecalcForAppliedDoiRef.current = false;
+        try {
+          const key = getShipmentDoiStorageKey(null);
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.warn('Failed to clear applied DOI:', e);
+        }
+      }
+    },
+    [runUnitsToMakeRecalc]
+  );
+
+  const handleRevertDoiToDefault = useCallback(async () => {
+    try {
+      const defaultSettings = await getDefaultDoiSettings();
+      setAppliedDoiForShipment(null);
+      setDoiSettingsValues(defaultSettings);
+      hasRecalcForAppliedDoiRef.current = false;
+      runUnitsToMakeRecalc(calculateDoiTotal(defaultSettings));
+    } catch (e) {
+      const fallback = DEFAULT_DOI_SETTINGS;
+      setAppliedDoiForShipment(null);
+      setDoiSettingsValues(fallback);
+      hasRecalcForAppliedDoiRef.current = false;
+      runUnitsToMakeRecalc(calculateDoiTotal(fallback));
+      console.warn('Failed to fetch default DOI, using fallback:', e);
+    }
+    try {
+      const key = getShipmentDoiStorageKey(null);
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn('Failed to clear applied DOI:', e);
+    }
+  }, [runUnitsToMakeRecalc]);
+
   const fetchForecastData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -85,6 +179,7 @@ export default function ForecastPage() {
       const transformedRows = response.rows.map(transformApiRowToTableRow);
       setTableRows(transformedRows);
       setSummary(response.summary);
+      hasRecalcForAppliedDoiRef.current = false;
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load forecast data');
@@ -100,7 +195,23 @@ export default function ForecastPage() {
     return () => clearTimeout(debounceTimer);
   }, [fetchForecastData]);
 
+  useEffect(() => {
+    if (
+      tableRows.length > 0 &&
+      appliedDoiForShipment != null &&
+      !hasRecalcForAppliedDoiRef.current
+    ) {
+      const targetDOI = calculateDoiTotal(appliedDoiForShipment);
+      runUnitsToMakeRecalc(targetDOI);
+      hasRecalcForAppliedDoiRef.current = true;
+    }
+    if (appliedDoiForShipment == null) {
+      hasRecalcForAppliedDoiRef.current = false;
+    }
+  }, [tableRows.length, appliedDoiForShipment, runUnitsToMakeRecalc]);
+
   const handleQtyChange = useCallback((productId: string, value: number) => {
+    manuallyEditedProductIds.current.add(productId);
     setTableRows((prev) =>
       prev.map((r) =>
         r.product.id === productId ? { ...r, unitsToMake: Math.max(0, value) } : r
@@ -177,7 +288,13 @@ export default function ForecastPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <DoiSettingsPopover />
+          <DoiSettingsPopover
+            isDarkMode={isDarkMode}
+            initialSettings={appliedDoiForShipment ?? doiSettingsValues ?? undefined}
+            onSettingsChange={handleDoiSettingsChange}
+            showCustomDoiBadge={appliedDoiForShipment != null}
+            onRevertDoi={handleRevertDoiToDefault}
+          />
           <div className="relative flex-1 min-w-[180px] max-w-[280px]">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
@@ -360,6 +477,7 @@ export default function ForecastPage() {
           isDarkMode={isDarkMode}
           allProducts={tableRows.map((r) => ({ id: r.product.id }))}
           onNavigate={handleNgoosNavigate}
+          showActionItems
         />
       </motion.div>
     </div>

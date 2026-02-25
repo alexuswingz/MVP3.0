@@ -1,16 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-
-const calculateTotalDOI = (settings: Record<string, string | number>) => {
-  return (
-    (parseInt(String(settings.amazonDoiGoal), 10) || 0) +
-    (parseInt(String(settings.inboundLeadTime), 10) || 0) +
-    (parseInt(String(settings.manufactureLeadTime), 10) || 0)
-  );
-};
-
-const defaultDoiSettings = { amazonDoiGoal: 130, inboundLeadTime: 30, manufactureLeadTime: 7 };
+import {
+  DEFAULT_DOI_SETTINGS,
+  calculateDoiTotal,
+  normalizeDoiSettings,
+} from '@/lib/doi-settings';
 
 export interface ForecastSettingsPayload {
   doiSettings: { amazonDoiGoal: number; inboundLeadTime: number; manufactureLeadTime: number };
@@ -44,14 +39,14 @@ export default function ForecastSettingsModal({
   onApply = undefined,
   onSaveAsDefault = undefined,
 }: ForecastSettingsModalProps) {
-  const toDoiStrings = (s: typeof defaultDoiSettings) => ({
+  const toDoiStrings = (s: typeof DEFAULT_DOI_SETTINGS) => ({
     amazonDoiGoal: String(s.amazonDoiGoal),
     inboundLeadTime: String(s.inboundLeadTime),
     manufactureLeadTime: String(s.manufactureLeadTime),
   });
 
   const [tempDoiSettings, setTempDoiSettings] = useState<Record<string, string>>(() =>
-    toDoiStrings(initialDoiSettings || defaultDoiSettings)
+    toDoiStrings(initialDoiSettings ?? DEFAULT_DOI_SETTINGS)
   );
   const [tempForecastModel, setTempForecastModel] = useState(initialForecastModel);
   const [tempMarketAdjustment, setTempMarketAdjustment] = useState(initialMarketAdjustment);
@@ -59,7 +54,7 @@ export default function ForecastSettingsModal({
 
   useEffect(() => {
     if (isOpen) {
-      setTempDoiSettings(toDoiStrings(initialDoiSettings || defaultDoiSettings));
+      setTempDoiSettings(toDoiStrings(initialDoiSettings ?? DEFAULT_DOI_SETTINGS));
       setTempForecastModel(initialForecastModel);
       setTempMarketAdjustment(initialMarketAdjustment);
       setTempSalesVelocityWeight(initialSalesVelocityWeight);
@@ -67,7 +62,7 @@ export default function ForecastSettingsModal({
   }, [isOpen, initialDoiSettings, initialForecastModel, initialMarketAdjustment, initialSalesVelocityWeight]);
 
   const handleCancel = () => {
-    setTempDoiSettings(toDoiStrings(initialDoiSettings || defaultDoiSettings));
+    setTempDoiSettings(toDoiStrings(initialDoiSettings ?? DEFAULT_DOI_SETTINGS));
     setTempForecastModel(initialForecastModel);
     setTempMarketAdjustment(initialMarketAdjustment);
     setTempSalesVelocityWeight(initialSalesVelocityWeight);
@@ -75,11 +70,7 @@ export default function ForecastSettingsModal({
   };
 
   const buildPayload = (): ForecastSettingsPayload => ({
-    doiSettings: {
-      amazonDoiGoal: parseInt(tempDoiSettings.amazonDoiGoal, 10) || defaultDoiSettings.amazonDoiGoal,
-      inboundLeadTime: parseInt(tempDoiSettings.inboundLeadTime, 10) || defaultDoiSettings.inboundLeadTime,
-      manufactureLeadTime: parseInt(tempDoiSettings.manufactureLeadTime, 10) || defaultDoiSettings.manufactureLeadTime,
-    },
+    doiSettings: normalizeDoiSettings(tempDoiSettings, DEFAULT_DOI_SETTINGS),
     forecastModel: tempForecastModel,
     marketAdjustment: tempMarketAdjustment,
     salesVelocityWeight: tempSalesVelocityWeight,
@@ -331,7 +322,7 @@ export default function ForecastSettingsModal({
                       boxSizing: 'border-box',
                     }}
                   >
-                    {calculateTotalDOI(tempDoiSettings)}
+                    {calculateDoiTotal(tempDoiSettings)}
                   </div>
                 </div>
               </div>

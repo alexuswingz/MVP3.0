@@ -153,6 +153,8 @@ export default function ForecastUnit({
   const [zoomPreviewTimestamp, setZoomPreviewTimestamp] = useState<number | null>(null);
   const [zoomBox, setZoomBox] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartCursorRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const chartTooltipWrapperRef = useRef<HTMLDivElement>(null);
   const zoomBoxDragRef = useRef<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
 
   // Range selection (click-drag when zoom is NOT active)
@@ -446,6 +448,19 @@ export default function ForecastUnit({
       }
       if (rangeSelectingRef.current && t != null) {
         setChartRangeSelection((prev) => (prev.startTimestamp != null ? { ...prev, endTimestamp: t } : prev));
+      }
+      // Update cursor position for tooltip (follow mouse when not zooming/range-dragging)
+      chartCursorRef.current = { clientX: e.clientX, clientY: e.clientY };
+      const wrapper = chartTooltipWrapperRef.current;
+      const container = chartContainerRef.current;
+      if (wrapper) {
+        wrapper.style.left = `${e.clientX}px`;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          wrapper.style.top = `${rect.bottom - 22}px`;
+        } else {
+          wrapper.style.top = `${e.clientY - 250}px`;
+        }
       }
     },
     [zoomToolActive, zoomFirstClickTimestamp, getTimestampFromClientX]
@@ -934,7 +949,7 @@ export default function ForecastUnit({
                 const date = new Date((point?.timestamp as number) ?? 0);
                 const isForecast = (point?.isForecast as boolean) === true;
                 const formatVal = (x: unknown) => (x == null ? '—' : (typeof x === 'number' ? Math.round(x).toLocaleString() : String(x)));
-                return (
+                const inner = (
                   <div
                     style={{
                       backgroundColor: '#1e293b',
@@ -966,6 +981,24 @@ export default function ForecastUnit({
                         </p>
                       </>
                     )}
+                  </div>
+                );
+                const pos = chartCursorRef.current;
+                const container = chartContainerRef.current;
+                const top = container ? container.getBoundingClientRect().bottom - 22 : (pos ? pos.clientY - 250 : 0);
+                return (
+                  <div
+                    ref={chartTooltipWrapperRef}
+                    style={{
+                      position: 'fixed',
+                      left: pos ? `${pos.clientX}px` : 0,
+                      top,
+                      transform: 'translate(-50%, 0)',
+                      zIndex: 10,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {inner}
                   </div>
                 );
               }}

@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ForecastSettingsModal from '@/components/forecast/forecast-settings-modal';
+import {
+  DEFAULT_DOI_SETTINGS,
+  calculateDoiTotal,
+  normalizeDoiSettings,
+  type DoiSettings,
+} from '@/lib/doi-settings';
 
 /**
  * DOI Settings Popover Component
@@ -23,19 +29,9 @@ const LOCAL_API_URL = 'http://127.0.0.1:8000';
 const RAILWAY_API_URL = 'https://web-production-015c7.up.railway.app';
 const FORECAST_API_URL = USE_LOCAL_API ? LOCAL_API_URL : RAILWAY_API_URL;
 
-const DEFAULT_SETTINGS = {
-  amazonDoiGoal: 93,
-  inboundLeadTime: 30,
-  manufactureLeadTime: 7,
-};
-
 const STORAGE_KEY = 'doi_default_settings';
 
-export interface DoiSettings {
-  amazonDoiGoal: number;
-  inboundLeadTime: number;
-  manufactureLeadTime: number;
-}
+export type { DoiSettings };
 
 export const getDefaultDoiSettings = async (): Promise<DoiSettings> => {
   try {
@@ -46,9 +42,9 @@ export const getDefaultDoiSettings = async (): Promise<DoiSettings> => {
     if (response.ok) {
       const data = await response.json();
       return {
-        amazonDoiGoal: data.amazon_doi_goal ?? DEFAULT_SETTINGS.amazonDoiGoal,
-        inboundLeadTime: data.inbound_lead_time ?? DEFAULT_SETTINGS.inboundLeadTime,
-        manufactureLeadTime: data.manufacture_lead_time ?? DEFAULT_SETTINGS.manufactureLeadTime,
+        amazonDoiGoal: data.amazon_doi_goal ?? DEFAULT_DOI_SETTINGS.amazonDoiGoal,
+        inboundLeadTime: data.inbound_lead_time ?? DEFAULT_DOI_SETTINGS.inboundLeadTime,
+        manufactureLeadTime: data.manufacture_lead_time ?? DEFAULT_DOI_SETTINGS.manufactureLeadTime,
       };
     }
   } catch (e) {
@@ -60,7 +56,7 @@ export const getDefaultDoiSettings = async (): Promise<DoiSettings> => {
   } catch (e) {
     console.error('Error loading DOI settings from localStorage:', e);
   }
-  return { ...DEFAULT_SETTINGS };
+  return { ...DEFAULT_DOI_SETTINGS };
 };
 
 type SettingsSource = 'initialLoad' | 'apply' | 'saveAsDefault';
@@ -74,21 +70,13 @@ interface DoiSettingsPopoverProps {
   onRevertDoi?: () => void;
 }
 
-function calculateTotal(settings: DoiSettings | Record<string, string | number>): number {
-  return (
-    (parseInt(String(settings.amazonDoiGoal), 10) || 0) +
-    (parseInt(String(settings.inboundLeadTime), 10) || 0) +
-    (parseInt(String(settings.manufactureLeadTime), 10) || 0)
-  );
-}
-
 export default function DoiSettingsPopover({
   onSettingsChange,
   isDarkMode = true,
   initialSettings = null,
   openByDefault = false,
   showCustomDoiBadge = false,
-  onRevertDoi = null,
+  onRevertDoi,
 }: DoiSettingsPopoverProps) {
   const [isOpen, setIsOpen] = useState(openByDefault);
   const [forecastModalOpen, setForecastModalOpen] = useState(false);
@@ -111,9 +99,9 @@ export default function DoiSettingsPopover({
       if (response.ok) {
         const data = await response.json();
         return {
-          amazonDoiGoal: data.amazon_doi_goal ?? DEFAULT_SETTINGS.amazonDoiGoal,
-          inboundLeadTime: data.inbound_lead_time ?? DEFAULT_SETTINGS.inboundLeadTime,
-          manufactureLeadTime: data.manufacture_lead_time ?? DEFAULT_SETTINGS.manufactureLeadTime,
+          amazonDoiGoal: data.amazon_doi_goal ?? DEFAULT_DOI_SETTINGS.amazonDoiGoal,
+          inboundLeadTime: data.inbound_lead_time ?? DEFAULT_DOI_SETTINGS.inboundLeadTime,
+          manufactureLeadTime: data.manufacture_lead_time ?? DEFAULT_DOI_SETTINGS.manufactureLeadTime,
         };
       }
     } catch (e) {
@@ -125,10 +113,10 @@ export default function DoiSettingsPopover({
     } catch (e) {
       console.error('Error loading DOI settings from localStorage:', e);
     }
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_DOI_SETTINGS };
   };
 
-  const [sessionSettings, setSessionSettings] = useState<DoiSettings>(() => initialSettings ?? DEFAULT_SETTINGS);
+  const [sessionSettings, setSessionSettings] = useState<DoiSettings>(() => initialSettings ?? DEFAULT_DOI_SETTINGS);
   const [formValues, setFormValues] = useState<Record<string, string>>(() =>
     initialSettings
       ? {
@@ -137,9 +125,9 @@ export default function DoiSettingsPopover({
           manufactureLeadTime: String(initialSettings.manufactureLeadTime),
         }
       : {
-          amazonDoiGoal: String(DEFAULT_SETTINGS.amazonDoiGoal),
-          inboundLeadTime: String(DEFAULT_SETTINGS.inboundLeadTime),
-          manufactureLeadTime: String(DEFAULT_SETTINGS.manufactureLeadTime),
+          amazonDoiGoal: String(DEFAULT_DOI_SETTINGS.amazonDoiGoal),
+          inboundLeadTime: String(DEFAULT_DOI_SETTINGS.inboundLeadTime),
+          manufactureLeadTime: String(DEFAULT_DOI_SETTINGS.manufactureLeadTime),
         }
   );
 
@@ -204,7 +192,7 @@ export default function DoiSettingsPopover({
           manufactureLeadTime: String(settings.manufactureLeadTime),
         });
         if (onSettingsChange) {
-          onSettingsChange(settings, calculateTotal(settings), { source: 'initialLoad' });
+          onSettingsChange(settings, calculateDoiTotal(settings), { source: 'initialLoad' });
         }
       } catch (err) {
         console.error('Error loading DOI settings:', err);
@@ -216,7 +204,7 @@ export default function DoiSettingsPopover({
     fetchSettings();
   }, []);
 
-  const totalRequiredDOI = calculateTotal(sessionSettings);
+  const totalRequiredDOI = calculateDoiTotal(sessionSettings);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -244,24 +232,16 @@ export default function DoiSettingsPopover({
   };
 
   const handleApply = () => {
-    const newSettings: DoiSettings = {
-      amazonDoiGoal: parseInt(formValues.amazonDoiGoal, 10) || DEFAULT_SETTINGS.amazonDoiGoal,
-      inboundLeadTime: parseInt(formValues.inboundLeadTime, 10) || DEFAULT_SETTINGS.inboundLeadTime,
-      manufactureLeadTime: parseInt(formValues.manufactureLeadTime, 10) || DEFAULT_SETTINGS.manufactureLeadTime,
-    };
+    const newSettings = normalizeDoiSettings(formValues, DEFAULT_DOI_SETTINGS);
     setSessionSettings(newSettings);
     if (onSettingsChange) {
-      onSettingsChange(newSettings, calculateTotal(newSettings), { source: 'apply' });
+      onSettingsChange(newSettings, calculateDoiTotal(newSettings), { source: 'apply' });
     }
     setIsOpen(false);
   };
 
   const handleSaveAsDefault = async () => {
-    const newSettings: DoiSettings = {
-      amazonDoiGoal: parseInt(formValues.amazonDoiGoal, 10) || DEFAULT_SETTINGS.amazonDoiGoal,
-      inboundLeadTime: parseInt(formValues.inboundLeadTime, 10) || DEFAULT_SETTINGS.inboundLeadTime,
-      manufactureLeadTime: parseInt(formValues.manufactureLeadTime, 10) || DEFAULT_SETTINGS.manufactureLeadTime,
-    };
+    const newSettings = normalizeDoiSettings(formValues, DEFAULT_DOI_SETTINGS);
     setLoading(true);
     setError(null);
     try {
@@ -286,7 +266,7 @@ export default function DoiSettingsPopover({
       }
       setSessionSettings(newSettings);
       if (onSettingsChange) {
-        onSettingsChange(newSettings, calculateTotal(newSettings), { source: 'saveAsDefault' });
+        onSettingsChange(newSettings, calculateDoiTotal(newSettings), { source: 'saveAsDefault' });
       }
       setIsOpen(false);
     } catch (err) {
@@ -418,8 +398,8 @@ export default function DoiSettingsPopover({
                   style={{
                     position: 'fixed',
                     left: tooltipRect.left + tooltipRect.width / 2,
-                    top: tooltipRect.top - 10,
-                    transform: 'translate(-50%, -100%)',
+                    top: tooltipRect.top + tooltipRect.height + 8,
+                    transform: 'translate(-50%, 0)',
                     width: '200px',
                     minHeight: '92px',
                     display: 'flex',
@@ -481,13 +461,13 @@ export default function DoiSettingsPopover({
                     style={{
                       position: 'absolute',
                       left: '50%',
-                      bottom: '-6px',
+                      top: '-6px',
                       transform: 'translateX(-50%)',
                       width: 0,
                       height: 0,
                       borderLeft: '6px solid transparent',
                       borderRight: '6px solid transparent',
-                      borderTop: `6px solid ${theme.popoverBg}`,
+                      borderBottom: `6px solid ${theme.popoverBg}`,
                     }}
                   />
                 </div>,
@@ -635,7 +615,7 @@ export default function DoiSettingsPopover({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '14px', color: theme.textPrimary, fontWeight: 400 }}>Total Required DOI</span>
               <span style={{ fontSize: '14px', fontWeight: 600, color: theme.totalText }}>
-                {calculateTotal(formValues)} days
+                {calculateDoiTotal(formValues)} days
               </span>
             </div>
           </div>
@@ -786,7 +766,7 @@ export default function DoiSettingsPopover({
             inboundLeadTime: String(payload.doiSettings.inboundLeadTime),
             manufactureLeadTime: String(payload.doiSettings.manufactureLeadTime),
           });
-          onSettingsChange?.(payload.doiSettings, calculateTotal(payload.doiSettings), { source: 'apply' });
+          onSettingsChange?.(payload.doiSettings, calculateDoiTotal(payload.doiSettings), { source: 'apply' });
         }}
         onSaveAsDefault={(payload) => {
           setSessionSettings(payload.doiSettings);
@@ -795,7 +775,7 @@ export default function DoiSettingsPopover({
             inboundLeadTime: String(payload.doiSettings.inboundLeadTime),
             manufactureLeadTime: String(payload.doiSettings.manufactureLeadTime),
           });
-          onSettingsChange?.(payload.doiSettings, calculateTotal(payload.doiSettings), { source: 'saveAsDefault' });
+          onSettingsChange?.(payload.doiSettings, calculateDoiTotal(payload.doiSettings), { source: 'saveAsDefault' });
         }}
       />
     </div>

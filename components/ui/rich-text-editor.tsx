@@ -1,6 +1,10 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
+
+export type RichTextEditorHandle = {
+  getContent: () => string;
+};
 
 function ToolbarButton({
   onClick,
@@ -46,7 +50,7 @@ export interface RichTextEditorProps {
   autoFocus?: boolean;
 }
 
-export function RichTextEditor({
+export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor({
   value = '',
   onChange,
   placeholder = 'Write something...',
@@ -57,15 +61,27 @@ export function RichTextEditor({
   background = '#1A202C',
   expandToFit = false,
   autoFocus = false,
-}: RichTextEditorProps) {
+}: RichTextEditorProps, ref) {
   const editorRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const isInternalUpdate = useRef(false);
   const [isFocused, setIsFocused] = useState(autoFocus);
-  const [showFontSizeDropdown, setShowFontSizeDropdown] = useState(false);
-  const fontSizeRef = useRef<HTMLDivElement>(null);
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const fontSizeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getContent: () => {
+      const html = editorRef.current?.innerHTML ?? '';
+      if (onChange) {
+        isInternalUpdate.current = true;
+        onChange(html);
+        isInternalUpdate.current = false;
+      }
+      return html;
+    },
+  }), [onChange]);
 
   const exec = useCallback((cmd: string, cmdValue?: string) => {
     editorRef.current?.focus();
@@ -120,9 +136,11 @@ export function RichTextEditor({
     [exec, handleInput]
   );
 
-  // Sync value from props (e.g. switching tickets) - only when different to avoid cursor jumps
+  // Sync value from props (e.g. switching tickets) - only when different to avoid cursor jumps.
+  // When focused, do NOT overwrite DOM so we don't wipe the user's current typing (parent may
+  // still have stale value); when switching tickets the editor will have blurred first.
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editorRef.current || isFocused) return;
     const el = editorRef.current;
     const html = value || '';
     if (el.innerHTML !== html) {
@@ -130,7 +148,7 @@ export function RichTextEditor({
       el.innerHTML = html || '';
       isInternalUpdate.current = false;
     }
-  }, [value]);
+  }, [value, isFocused]);
 
   // Auto-focus the editor on mount when autoFocus is true
   useEffect(() => {
@@ -141,29 +159,22 @@ export function RichTextEditor({
     }
   }, [autoFocus]);
 
-  // Close font size dropdown when clicking outside
-  useEffect(() => {
-    if (!showFontSizeDropdown) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (fontSizeRef.current && !fontSizeRef.current.contains(e.target as Node)) {
-        setShowFontSizeDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFontSizeDropdown]);
-
-  const setFontSize = useCallback((size: string) => {
-    editorRef.current?.focus();
-    exec('fontSize', size);
-    setTimeout(() => handleInput(), 0);
-    setShowFontSizeDropdown(false);
-  }, [exec, handleInput]);
 
   const handleContentFocus = useCallback(() => {
     setIsFocused(true);
     onFocusChange?.(true);
   }, [onFocusChange]);
+
+  const handleContentClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as Node;
+    const anchor = (target as Element).closest?.('a') ?? (target.nodeName === 'A' ? target : null);
+    if (anchor && anchor instanceof HTMLAnchorElement && anchor.href) {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(anchor.href, '_blank', 'noopener,noreferrer');
+    }
+  }, []);
   const handleContentBlur = useCallback(() => {
     setTimeout(() => {
       if (!wrapperRef.current?.contains(document.activeElement)) {
@@ -172,6 +183,17 @@ export function RichTextEditor({
       }
     }, 0);
   }, [onFocusChange]);
+
+  useEffect(() => {
+    if (!fontSizeOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fontSizeDropdownRef.current && !fontSizeDropdownRef.current.contains(e.target as Node)) {
+        setFontSizeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [fontSizeOpen]);
 
   const handleFormat = useCallback(
     (cmd: string) => () => {
@@ -183,6 +205,16 @@ export function RichTextEditor({
       }, 0);
     },
     [exec, handleInput]
+  );
+
+  const applyFontSize = useCallback(
+    (size: number) => {
+      editorRef.current?.focus();
+      document.execCommand('fontSize', false, String(Math.min(7, Math.max(1, size))));
+      handleInput();
+      setFontSizeOpen(false);
+    },
+    [handleInput]
   );
 
   return (
@@ -200,7 +232,7 @@ export function RichTextEditor({
       {/* Toolbar - only visible when editor is focused (clicked) */}
       {isFocused && (
       <div
-        className="flex items-center flex-wrap box-border"
+        className="flex items-center flex-wrap box-border relative"
         style={{
           width: 488,
           height: 44,
@@ -211,6 +243,49 @@ export function RichTextEditor({
           marginBottom: 8,
         }}
       >
+        {/* Font size adjuster - first icon with dropdown */}
+        <div className="relative flex items-center" ref={fontSizeDropdownRef}>
+          <ToolbarButton
+            onClick={() => setFontSizeOpen((v) => !v)}
+            title="Font size"
+          >
+            <span className="inline-flex items-center gap-0.5">
+              <span className="flex items-baseline leading-none">
+                <span className="text-[10px] font-normal">T</span>
+                <span className="text-sm font-semibold">T</span>
+              </span>
+              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </span>
+          </ToolbarButton>
+          {fontSizeOpen && (
+            <div
+              className="absolute left-0 top-full mt-1 z-10 py-0.5 rounded shadow-lg min-w-[70px] max-h-[180px] overflow-y-auto"
+              style={{ background: '#1E293B' }}
+            >
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyFontSize(n)}
+                  className="w-full text-left px-2 py-0.5 text-xs text-gray-200 hover:bg-white/10"
+                >
+                  {n === 1 && 'Small'}
+                  {n === 2 && '12px'}
+                  {n === 3 && 'Normal'}
+                  {n === 4 && '16px'}
+                  {n === 5 && '18px'}
+                  {n === 6 && '20px'}
+                  {n === 7 && 'Large'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <ToolbarDivider />
+
         <ToolbarButton onClick={handleFormat('bold')} title="Bold">
           <span className="text-sm font-bold">B</span>
         </ToolbarButton>
@@ -223,62 +298,7 @@ export function RichTextEditor({
         <ToolbarButton onClick={handleFormat('strikeThrough')} title="Strikethrough">
           <span className="text-sm line-through">S</span>
         </ToolbarButton>
-        {/* Font Size Dropdown */}
-        <div ref={fontSizeRef} className="relative">
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setShowFontSizeDropdown(!showFontSizeDropdown)}
-            title="Text Size"
-            className="p-1.5 rounded hover:bg-white/10 transition-colors text-gray-400 flex items-center gap-0.5"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h8m-8 6h16" />
-            </svg>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showFontSizeDropdown && (
-            <div 
-              className="absolute top-full left-0 mt-1 bg-[#1e293b] border border-gray-600 rounded-md shadow-lg z-50 py-1 min-w-[100px]"
-              style={{ zIndex: 9999 }}
-            >
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFontSize('1')}
-                className="w-full px-3 py-1 text-left text-xs text-gray-300 hover:bg-white/10"
-              >
-                Small
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFontSize('3')}
-                className="w-full px-3 py-1 text-left text-sm text-gray-300 hover:bg-white/10"
-              >
-                Normal
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFontSize('5')}
-                className="w-full px-3 py-1 text-left text-base text-gray-300 hover:bg-white/10"
-              >
-                Large
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFontSize('7')}
-                className="w-full px-3 py-1 text-left text-lg text-gray-300 hover:bg-white/10"
-              >
-                Extra Large
-              </button>
-            </div>
-          )}
-        </div>
+        <ToolbarDivider />
         <ToolbarButton onClick={handleFormat('insertUnorderedList')} title="Bullet List">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -289,6 +309,8 @@ export function RichTextEditor({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m-4 4h10" />
           </svg>
         </ToolbarButton>
+        <ToolbarDivider />
+
         <ToolbarButton onClick={insertLink} title="Link">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -327,8 +349,9 @@ export function RichTextEditor({
         data-placeholder={placeholder}
         onFocus={handleContentFocus}
         onBlur={(e) => { handleInput(); handleContentBlur(); }}
+        onClick={handleContentClick}
         onInput={handleInput}
-        className={`rich-text-editor-content min-h-[120px] px-3 py-2 text-sm text-gray-300 focus:outline-none rounded-b-lg transition-colors duration-150 hover:bg-white/[0.08] [&:empty::before]:content-[attr(data-placeholder)] [&:empty::before]:text-gray-500 ${expandToFit ? 'overflow-visible min-h-fit-content' : 'overflow-auto'} ${contentClassName}`}
+        className={`rich-text-editor-content min-h-[120px] px-3 py-2 text-sm text-gray-300 focus:outline-none rounded-b-lg transition-colors duration-150 hover:bg-white/[0.08] [&:empty::before]:content-[attr(data-placeholder)] [&:empty::before]:text-gray-500 ${expandToFit ? 'overflow-visible min-h-fit-content' : 'flex-1 min-h-0 overflow-auto'} ${contentClassName}`}
         style={{ background }}
         suppressContentEditableWarning
       />
@@ -349,4 +372,4 @@ export function RichTextEditor({
       `}} />
     </div>
   );
-}
+});
