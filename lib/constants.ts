@@ -27,6 +27,16 @@ export const NAV_ITEMS = [
     ]
   },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
+  { 
+    id: 'settings', 
+    label: 'Settings', 
+    icon: 'Settings', 
+    path: '/dashboard/settings',
+    children: [
+      { id: 'amazon-connection', label: 'Amazon Connection', path: '/dashboard/settings/amazon' },
+      { id: 'general-settings', label: 'General', path: '/dashboard/settings' },
+    ]
+  },
 ] as const;
 
 // Shipment Statuses

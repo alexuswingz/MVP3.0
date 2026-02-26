@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Settings,
@@ -30,10 +31,18 @@ const TABS = [
   { id: 'security', label: 'Security', icon: Shield },
 ];
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('amazon');
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(tabFromUrl || 'amazon');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (tabFromUrl) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
   const [doiSettings, setDoiSettings] = useState({
     amazonDOIGoal: 120,
@@ -362,5 +371,13 @@ export default function SettingsPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64">Loading...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }
