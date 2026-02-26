@@ -265,8 +265,8 @@ class SalesSyncService:
             if '403' in str(e) or 'forbidden' in str(e).lower():
                 # Orders report not permitted, try Sales & Traffic report
                 logger.warning("Orders report access denied (need 'Direct-to-Consumer Shipping' role)")
-                logger.info("Falling back to GET_SALES_AND_TRAFFIC_REPORT (~6 months history)...")
-                return self._sync_via_sales_traffic_report(min(days_back, 180))
+                logger.info("Falling back to GET_SALES_AND_TRAFFIC_REPORT (up to 2 years history)...")
+                return self._sync_via_sales_traffic_report(days_back)  # Full 730 days supported
             raise
         
         # Process orders report - wait for it to be ready
@@ -409,15 +409,16 @@ class SalesSyncService:
         
         return created, updated, 0
     
-    def _sync_via_sales_traffic_report(self, days_back: int = 60) -> Tuple[int, int, int]:
+    def _sync_via_sales_traffic_report(self, days_back: int = 730) -> Tuple[int, int, int]:
         """
         Sync sales using GET_SALES_AND_TRAFFIC_REPORT.
         
         This report provides daily sales by ASIN and is available to most accounts.
-        Limitation: Max ~60 days per request, so we batch requests for longer periods.
+        Supports up to 730 days (2 years) of historical data.
+        We batch requests in 30-day chunks to stay within API limits.
         
         Args:
-            days_back: Days of history (will batch if > 60)
+            days_back: Days of history (default 730 = 2 years)
             
         Returns:
             Tuple of (created, updated, failed) counts

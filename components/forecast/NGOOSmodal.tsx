@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Copy, Settings, Loader2 } from 'lucide-react';
+import { X, Copy, Settings, Loader2, Upload } from 'lucide-react';
 import ForecastUnit from './forecast-unit';
 import DoiSettingsPopover from '@/components/forecast/doi-settings-popover';
 import { api, type ProductForecastResponse } from '@/lib/api';
@@ -82,6 +82,9 @@ function transformForecastData(data: ProductForecastResponse) {
   const activeAlgo = data.active_algorithm as '0-6m' | '6-18m' | '18m+';
   const algoResult = data.algorithms[activeAlgo];
   
+  // Check if this algorithm needs seasonality data but doesn't have it
+  const needsSeasonality = algoResult?.needs_seasonality ?? false;
+  
   return {
     inventoryData: {
       fba: {
@@ -117,6 +120,7 @@ function transformForecastData(data: ProductForecastResponse) {
     salesHistory: data.sales_history ?? [],
     algorithm: activeAlgo,
     product: data.product,
+    needsSeasonality,
   };
 }
 
@@ -362,6 +366,8 @@ interface NgoosContentProps {
   forecasts?: Array<{ week_end: string; forecast: number; units_needed: number }>;
   salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;
   isLoading?: boolean;
+  needsSeasonality?: boolean;
+  onUploadSeasonality?: () => void;
 }
 
 function ActionItemCard({ title, tagBgColor = '#10b981', tagText = 'INV' }: { title: string; tagBgColor?: string; tagText?: string }) {
@@ -422,6 +428,8 @@ function NgoosContent({
   forecasts = [],
   salesHistory = [],
   isLoading = false,
+  needsSeasonality = false,
+  onUploadSeasonality,
 }: NgoosContentProps) {
   const [activeTab, setActiveTab] = useState('forecast');
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -509,125 +517,157 @@ function NgoosContent({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <DoiSettingsPopover isDarkMode={isDarkMode} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
-              <div
+            {needsSeasonality ? (
+              <button
+                type="button"
+                onClick={onUploadSeasonality}
                 style={{
-                  position: 'relative',
-                  width: '110px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  backgroundColor: isDarkMode ? '#2C3544' : '#F3F4F6',
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  boxSizing: 'border-box',
+                  gap: '8px',
+                  padding: '6px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #F59E0B',
+                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)',
+                  color: '#F59E0B',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                  height: '28px',
                 }}
-                onMouseEnter={() => setHoveredUnitsContainer(true)}
-                onMouseLeave={() => setHoveredUnitsContainer(false)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.25)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)';
+                }}
               >
+                <Upload className="w-4 h-4" />
+                Upload Seasonality
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
                 <div
                   style={{
-                    width: '100%',
-                    height: '100%',
+                    position: 'relative',
+                    width: '110px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: isDarkMode ? '#2C3544' : '#F3F4F6',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: isDarkMode ? '#E5E7EB' : '#111827',
-                    fontSize: '15px',
-                    fontWeight: 500,
-                    padding: '0 28px',
                     boxSizing: 'border-box',
                   }}
+                  onMouseEnter={() => setHoveredUnitsContainer(true)}
+                  onMouseLeave={() => setHoveredUnitsContainer(false)}
                 >
-                  {Number(displayedUnits).toLocaleString()}
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: isDarkMode ? '#E5E7EB' : '#111827',
+                      fontSize: '15px',
+                      fontWeight: 500,
+                      padding: '0 28px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {Number(displayedUnits).toLocaleString()}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDisplayUnitsOverride(displayedUnits + increment)}
+                    style={{
+                      position: 'absolute',
+                      right: '4px',
+                      top: '2px',
+                      width: '20px',
+                      height: '10px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: isDarkMode ? '#9CA3AF' : '#6B7280',
+                      cursor: 'pointer',
+                      display: hoveredUnitsContainer ? 'flex' : 'none',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                      outline: 'none',
+                      zIndex: 1,
+                      transition: 'color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
+                    aria-label="Increase units"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 4L6 1L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDisplayUnitsOverride(Math.max(0, displayedUnits - increment))}
+                    style={{
+                      position: 'absolute',
+                      right: '4px',
+                      bottom: '2px',
+                      width: '20px',
+                      height: '10px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      color: isDarkMode ? '#9CA3AF' : '#6B7280',
+                      cursor: 'pointer',
+                      display: hoveredUnitsContainer ? 'flex' : 'none',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                      outline: 'none',
+                      zIndex: 1,
+                      transition: 'color 0.2s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
+                    aria-label="Decrease units"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDisplayUnitsOverride(displayedUnits + increment)}
+                  disabled={isAlreadyAdded}
+                  onClick={() => onAddUnits(displayedUnits)}
                   style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '2px',
-                    width: '20px',
-                    height: '10px',
+                    padding: '4px 12px',
                     borderRadius: '4px',
                     border: 'none',
-                    backgroundColor: 'transparent',
-                    color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                    cursor: 'pointer',
-                    display: hoveredUnitsContainer ? 'flex' : 'none',
+                    backgroundColor: isAlreadyAdded ? '#059669' : '#2563EB',
+                    color: '#FFFFFF',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    height: '23px',
+                    display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: 0,
-                    outline: 'none',
-                    zIndex: 1,
-                    transition: 'color 0.2s',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                    cursor: isAlreadyAdded ? 'default' : 'pointer',
+                    opacity: isAlreadyAdded ? 0.9 : 1,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
-                  aria-label="Increase units"
                 >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M3 4L6 1L9 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDisplayUnitsOverride(Math.max(0, displayedUnits - increment))}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    bottom: '2px',
-                    width: '20px',
-                    height: '10px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: isDarkMode ? '#9CA3AF' : '#6B7280',
-                    cursor: 'pointer',
-                    display: hoveredUnitsContainer ? 'flex' : 'none',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: 0,
-                    outline: 'none',
-                    zIndex: 1,
-                    transition: 'color 0.2s',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = '#D1D5DB'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = isDarkMode ? '#9CA3AF' : '#6B7280'; }}
-                  aria-label="Decrease units"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M3 8L6 11L9 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  {isAlreadyAdded ? <span>Added</span> : <><span style={{ fontSize: '1rem' }}>+</span><span>Add</span></>}
                 </button>
               </div>
-              <button
-                type="button"
-                disabled={isAlreadyAdded}
-                onClick={() => onAddUnits(displayedUnits)}
-                style={{
-                  padding: '4px 12px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  backgroundColor: isAlreadyAdded ? '#059669' : '#2563EB',
-                  color: '#FFFFFF',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  height: '23px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  whiteSpace: 'nowrap',
-                  cursor: isAlreadyAdded ? 'default' : 'pointer',
-                  opacity: isAlreadyAdded ? 0.9 : 1,
-                }}
-              >
-                {isAlreadyAdded ? <span>Added</span> : <><span style={{ fontSize: '1rem' }}>+</span><span>Add</span></>}
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -1235,6 +1275,11 @@ export default function NGOOSmodal({
               forecasts={forecastData?.forecasts ?? []}
               salesHistory={forecastData?.salesHistory ?? []}
               isLoading={isLoading}
+              needsSeasonality={forecastData?.needsSeasonality ?? false}
+              onUploadSeasonality={() => {
+                // TODO: Implement seasonality upload modal
+                console.log('Upload seasonality for product:', selectedRow?.id);
+              }}
             />
           )}
         </div>

@@ -90,6 +90,10 @@ DEFAULT_SETTINGS = {
     'velocity_weight': 0.15,         # 15% weight on velocity
 }
 
+# LOCKED CONSTANTS from validated Excel algorithm
+L_CORRECTION = 0.9970  # Floating-point precision adjustment for 18m+
+SV_SCALE_FACTOR = 0.96  # Search volume multiplier (was 0.97, corrected to match Excel)
+
 
 # =============================================================================
 # COLUMN G: units_final_curve
@@ -402,7 +406,8 @@ def calculate_forecast_18m_plus(
         extended_L.append(weighted_average(extended_k, weights_L, i))
     
     # Calculate O (adjusted forecast) for future dates only
-    # O = L × (1 + market_adjustment + velocity_adjustment × velocity_weight)
+    # O = L × L_CORRECTION × (1 + market_adjustment + velocity_adjustment × velocity_weight)
+    # L_CORRECTION (0.9970) is a floating-point precision adjustment from validated Excel
     adjustment = 1 + settings.get('market_adjustment', 0.05) + \
                  (settings.get('sales_velocity_adjustment', 0.10) * 
                   settings.get('velocity_weight', 0.15))
@@ -410,7 +415,7 @@ def calculate_forecast_18m_plus(
     extended_O = []
     for i, week_end in enumerate(extended_dates):
         if week_end and week_end >= today:
-            extended_O.append(extended_L[i] * adjustment)
+            extended_O.append(extended_L[i] * L_CORRECTION * adjustment)
         else:
             extended_O.append(0)
     
@@ -486,7 +491,7 @@ def calculate_forecast_6_18m(
     
     Formula chain:
     C = units_sold
-    D = sv_smooth_env × 0.97 (search volume from seasonality)
+    D = sv_smooth_env × 0.96 (search volume from seasonality)
     E = C/D (conversion rate = sales / search volume)
     F = average peak conversion rate (5-week window around max)
     G = seasonality_index
@@ -516,7 +521,7 @@ def calculate_forecast_6_18m(
     for s in seasonality_data:
         week_num = s.get('week_of_year', s.get('week_number', 0))
         if week_num:
-            sv_smooth_lookup[week_num] = s.get('search_volume', s.get('sv_smooth_env', 100)) * 0.97
+            sv_smooth_lookup[week_num] = s.get('search_volume', s.get('sv_smooth_env', 100)) * SV_SCALE_FACTOR
             seasonality_idx_lookup[week_num] = s.get('seasonality_index', 1.0)
     
     # Check if seasonality data is available

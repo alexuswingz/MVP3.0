@@ -53,6 +53,7 @@ function transformApiRowToTableRow(apiRow: ForecastTableResponse['rows'][0]): Sh
     daysOfInventory: apiRow.daysOfInventory,
     doiFba: apiRow.doiFba,
     avgWeeklySales: apiRow.avgWeeklySales,
+    needsSeasonality: apiRow.needsSeasonality,
   };
 }
 
@@ -458,6 +459,10 @@ export default function ForecastPage() {
           onQtyChange={handleQtyChange}
           onClear={() => console.log('Clear')}
           onExport={() => console.log('Export')}
+          onUploadSeasonality={(productId) => {
+            // TODO: Implement seasonality upload modal
+            console.log('Upload seasonality for product:', productId);
+          }}
           totalProducts={tableRows.length}
           totalPalettes={totalPallets}
           totalBoxes={92}

@@ -547,14 +547,15 @@ interface ForecastTableRow {
     imageUrl: string;
   };
   inventory: InventoryBreakdown;
-  unitsToMake: number;
-  daysOfInventory: number;
-  doiFba: number;
+  unitsToMake: number | null;
+  daysOfInventory: number | null;
+  doiFba: number | null;
   runoutDate: string | null;
-  totalUnitsNeeded: number;
+  totalUnitsNeeded: number | null;
   weeksOfData: number;
   avgWeeklySales: number;
   algorithm: string;
+  needsSeasonality: boolean;
 }
 
 interface ForecastTableResponse {

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy } from 'lucide-react';
+import { Copy, Upload } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import type { Product } from '@/types';
 import { IconGroupOpenNgoos } from './banana-icon-open-ngoos';
@@ -17,12 +17,14 @@ export interface InventoryBreakdown {
 export interface ShipmentTableRow {
   product: Product;
   inventory: number | InventoryBreakdown;
-  unitsToMake: number;
-  daysOfInventory: number;
-  doiFba?: number;
+  unitsToMake: number | null;
+  daysOfInventory: number | null;
+  doiFba?: number | null;
   /** Used for client-side units-to-make recalc when DOI changes. */
   avgWeeklySales?: number;
   added?: boolean;
+  /** True if the product needs seasonality data for accurate forecasting */
+  needsSeasonality?: boolean;
 }
 
 interface NewShipmentTableProps {
@@ -34,6 +36,7 @@ interface NewShipmentTableProps {
   onEdit?: (row: ShipmentTableRow) => void;
   onClear?: () => void;
   onExport?: () => void;
+  onUploadSeasonality?: (productId: string) => void;
   totalPalettes?: number;
   totalProducts?: number;
   totalBoxes?: number;
@@ -137,6 +140,47 @@ function UnitsToMakeInput({
   );
 }
 
+function UploadSeasonalityButton({
+  productId,
+  isDarkMode,
+  onUploadSeasonality,
+}: {
+  productId: string;
+  isDarkMode: boolean;
+  onUploadSeasonality?: (productId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onUploadSeasonality?.(productId)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        border: '1px solid #F59E0B',
+        backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)',
+        color: '#F59E0B',
+        fontSize: '12px',
+        fontWeight: 500,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.2s',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.25)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)';
+      }}
+    >
+      <Upload className="w-3.5 h-3.5" />
+      Upload Seasonality
+    </button>
+  );
+}
+
 export function NewShipmentTable({
   rows,
   requiredDoi = 150,
@@ -146,6 +190,7 @@ export function NewShipmentTable({
   onEdit,
   onClear,
   onExport,
+  onUploadSeasonality,
   totalPalettes = 0,
   totalProducts = 0,
   totalBoxes = 0,
@@ -301,12 +346,12 @@ export function NewShipmentTable({
           const fbaAvailable = typeof inventoryData === 'number'
             ? Math.round(inventoryData * 0.6) // Estimate if not provided
             : (inventoryData?.fbaAvailable ?? 0);
-          const doiValue = row.daysOfInventory;
+          const doiValue = row.daysOfInventory ?? 0;
           const doiFba = row.doiFba ?? Math.round(doiValue * 0.6);
           const fbaDays = doiFba;
           const unitsToMake = row.unitsToMake;
-          const displayDoi = doiValue;
-          const doiColor = getDoiColor(displayDoi);
+          const displayDoi = row.needsSeasonality ? null : doiValue;
+          const doiColor = displayDoi !== null ? getDoiColor(displayDoi) : '#9CA3AF';
           const fbaDaysColor = getDoiColor(fbaDays);
           const baseWidth = 100;
           const fbaBarWidthPx = fbaDays <= 30 ? baseWidth : baseWidth * (fbaDays / 30);
@@ -496,12 +541,20 @@ export function NewShipmentTable({
                   }}
                 >
                   <div className="flex justify-center">
-                    <UnitsToMakeInput
-                      productId={id}
-                      value={unitsToMake}
-                      isDarkMode={isDarkMode}
-                      onQtyChange={onQtyChange}
-                    />
+                    {row.needsSeasonality ? (
+                      <UploadSeasonalityButton
+                        productId={id}
+                        isDarkMode={isDarkMode}
+                        onUploadSeasonality={onUploadSeasonality}
+                      />
+                    ) : (
+                      <UnitsToMakeInput
+                        productId={id}
+                        value={unitsToMake ?? 0}
+                        isDarkMode={isDarkMode}
+                        onQtyChange={onQtyChange}
+                      />
+                    )}
                   </div>
                 </td>
                 {/* DAYS OF INVENTORY Column */}
@@ -559,14 +612,16 @@ export function NewShipmentTable({
                               overflow: 'hidden',
                             }}
                           >
-                            <BarFill
-                              widthPct={Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}
-                              backgroundColor="#0275FC"
-                              durationSec={0.6}
-                            />
+                            {displayDoi !== null ? (
+                              <BarFill
+                                widthPct={Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}
+                                backgroundColor="#0275FC"
+                                durationSec={0.6}
+                              />
+                            ) : null}
                           </div>
                           <span style={{ fontSize: showFbaBar ? 14 : '0.875rem', fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
-                            {displayDoi}
+                            {displayDoi !== null ? displayDoi : '--'}
                           </span>
                         </div>
                       )}

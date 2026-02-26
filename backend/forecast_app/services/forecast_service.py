@@ -174,28 +174,40 @@ class ForecastService:
     
     def determine_algorithm(self, product: Product) -> str:
         """
-        Determine which algorithm to use based on product launch date.
+        Determine which algorithm to use based on product age.
         
-        - 0-6m: Product launched less than 6 months ago
-        - 6-18m: Product launched 6-18 months ago
-        - 18m+: Product launched more than 18 months ago
+        Product age is calculated from:
+        1. First sale date (MIN week_ending WHERE units_sold > 0), OR
+        2. launch_date as fallback
+        
+        Age formula: (today - first_sale_date).days / 30.44
+        
+        - 0-6m: Product age < 6 months
+        - 6-18m: Product age 6-18 months
+        - 18m+: Product age >= 18 months
         """
-        if not product.launch_date:
-            # No launch date, check sales history
-            first_sale = WeeklySales.objects.filter(product=product).order_by('week_ending').first()
-            if first_sale:
-                launch_date = first_sale.week_ending
-            else:
-                return '18m+'  # Default to most mature algorithm
+        DAYS_PER_MONTH = 30.44  # Constant from locked algorithm
+        
+        # Priority: First sale with units > 0, then launch_date
+        first_sale = WeeklySales.objects.filter(
+            product=product,
+            units_sold__gt=0  # Only count weeks with actual sales
+        ).order_by('week_ending').first()
+        
+        if first_sale:
+            first_sale_date = first_sale.week_ending
+        elif product.launch_date:
+            first_sale_date = product.launch_date
         else:
-            launch_date = product.launch_date
+            return '18m+'  # Default to most mature algorithm if no date available
         
         today = date.today()
-        months_since_launch = (today.year - launch_date.year) * 12 + (today.month - launch_date.month)
+        days_since = (today - first_sale_date).days
+        age_months = days_since / DAYS_PER_MONTH  # Use precise day-based calculation
         
-        if months_since_launch < 6:
+        if age_months < 6:
             return '0-6m'
-        elif months_since_launch < 18:
+        elif age_months < 18:
             return '6-18m'
         else:
             return '18m+'
@@ -312,14 +324,14 @@ class ForecastService:
             'image_url': product.image_url if product.image_url else None,
         }
         
-        # Add historical sales data for chart visualization
+        # Add historical sales data for chart visualization (all history for "All Time" view)
         result['sales_history'] = [
             {
                 'week_end': s['week_end'].isoformat() if hasattr(s['week_end'], 'isoformat') else str(s['week_end']),
                 'units_sold': s['units_sold'],
                 'revenue': s.get('revenue', 0),
             }
-            for s in units_data[-52:]  # Last 52 weeks
+            for s in units_data  # Full history for chart
         ]
         
         # Add data availability info

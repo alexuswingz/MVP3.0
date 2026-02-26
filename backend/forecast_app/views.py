@@ -297,7 +297,6 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         - status: Filter by product status
         - sort_by: Sort field (doi, units_to_make, inventory, name)
         - sort_order: asc or desc
-        - limit: Max number of products to return (default 100)
         """
         start_time = time.time()
         
@@ -307,7 +306,6 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         product_status = request.query_params.get('status')
         sort_by = request.query_params.get('sort_by', 'doi')
         sort_order = request.query_params.get('sort_order', 'asc')
-        limit = int(request.query_params.get('limit', 100))
         
         # Get user's DOI settings
         doi_settings = DOISettings.objects.filter(
@@ -343,7 +341,14 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         }
         
         # Get products with aggregated sales data in a single query
-        from django.db.models import Max, Min, Avg, Count as DjCount
+        from django.db.models import Max, Min, Avg, Count as DjCount, Subquery, OuterRef
+        from analytics_app.models import WeeklySales
+        
+        # Subquery to get first week with actual sales (units_sold > 0)
+        first_sale_subquery = WeeklySales.objects.filter(
+            product=OuterRef('pk'),
+            units_sold__gt=0
+        ).order_by('week_ending').values('week_ending')[:1]
         
         products_with_sales = Product.objects.filter(
             user=request.user,
@@ -352,7 +357,7 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related('brand').annotate(
             weeks_of_data=DjCount('weekly_sales'),
             latest_week=Max('weekly_sales__week_ending'),
-            first_sale_week=Min('weekly_sales__week_ending'),
+            first_sale_week=Subquery(first_sale_subquery),  # First week with units_sold > 0
             avg_weekly_sales=Avg('weekly_sales__units_sold'),
             total_sales=Sum('weekly_sales__units_sold'),
         ).distinct()
@@ -369,27 +374,43 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         if product_status:
             products_with_sales = products_with_sales.filter(status=product_status)
         
-        # Limit the query
-        products_with_sales = products_with_sales[:limit]
+        # No pagination - load all products
         
-        # Prefetch weekly sales data for all products
-        product_ids = [p.id for p in products_with_sales]
-        weekly_sales_data = {}
-        for sale in WeeklySales.objects.filter(product_id__in=product_ids).order_by('product_id', 'week_ending'):
-            if sale.product_id not in weekly_sales_data:
-                weekly_sales_data[sale.product_id] = []
-            weekly_sales_data[sale.product_id].append({
-                'week_end': sale.week_ending,
-                'units_sold': sale.units_sold,
-            })
+        # Convert to list for multiple iterations
+        products_list = list(products_with_sales)
+        product_ids = [p.id for p in products_list]
         
-        # Build forecast rows using the actual algorithms
+        # Prefetch seasonality data for all products in one query (fixes N+1)
+        from analytics_app.models import ProductSeasonality
+        products_with_seasonality = set(
+            ProductSeasonality.objects.filter(product_id__in=product_ids)
+            .values_list('product_id', flat=True)
+        )
+        
+        # Prefetch weekly sales count per product (for has_prior_year_data check)
+        # Only fetch full data for 18m+ products that need it
+        weekly_sales_counts = {}
+        for sale in WeeklySales.objects.filter(product_id__in=product_ids).values('product_id').annotate(
+            count=DjCount('id')
+        ):
+            weekly_sales_counts[sale['product_id']] = sale['count']
+        
+        # Build forecast rows using optimized calculations
         forecast_rows = []
         today = date.today()
+        DAYS_PER_MONTH = 30.44
         
         from datetime import timedelta
         
-        for product in products_with_sales:
+        # Pre-calculate common values
+        market_adj = settings.get('market_adjustment', 0.05)
+        velocity_adj = settings.get('velocity_weight', 0.15) * 0.10
+        lead_time_weeks = doi_threshold / 7
+        
+        # Products that need full weekly data for 18m+ algorithm
+        products_needing_weekly_data = []
+        
+        for product in products_list:
             # Get inventory data
             inv = current_inventory.get(product.id, {})
             total_inventory = inv.get('total_inventory', 0)
@@ -398,75 +419,55 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
             awd_available = inv.get('awd_available', 0)
             awd_total = inv.get('awd_total', 0)
             
-            # Determine algorithm based on product age (launch date or first sale)
-            launch_date = product.launch_date or product.first_sale_week
-            if launch_date:
-                months_since_launch = (today.year - launch_date.year) * 12 + (today.month - launch_date.month)
-                if months_since_launch < 6:
+            # Determine algorithm based on product age
+            first_sale_date = product.first_sale_week or product.launch_date
+            if first_sale_date:
+                days_since = (today - first_sale_date).days
+                age_months = days_since / DAYS_PER_MONTH
+                if age_months < 6:
                     algorithm = '0-6m'
-                elif months_since_launch < 18:
+                elif age_months < 18:
                     algorithm = '6-18m'
                 else:
                     algorithm = '18m+'
             else:
-                algorithm = '18m+'  # Default to most mature algorithm
+                algorithm = '18m+'
             
-            # Get product's weekly sales data
-            units_data = weekly_sales_data.get(product.id, [])
             avg_weekly = product.avg_weekly_sales or 0
+            weeks_count = weekly_sales_counts.get(product.id, 0)
+            has_prior_year_data = weeks_count >= 52
             
-            # Prepare settings for algorithm
-            algo_settings = {
-                **settings,
-                'total_inventory': total_inventory,
-                'fba_available': fba_available,
-            }
+            # Check seasonality using prefetched data (no DB query!)
+            needs_seasonality = False
+            if algorithm in ['0-6m', '6-18m']:
+                needs_seasonality = product.id not in products_with_seasonality
             
-            # Check if we have enough historical data for 18m+ algorithm
-            # 18m+ requires 52+ weeks of data to use prior year pattern matching
-            has_prior_year_data = len(units_data) >= 52
+            # Initialize forecast values
+            doi_total = None
+            doi_fba = None
+            total_units_needed = None
+            units_to_make = None
+            runout_date = None
             
-            # Use full 18m+ algorithm only if we have prior year data
-            if has_prior_year_data and algorithm == '18m+':
-                try:
-                    forecast_result = calculate_forecast_18m_plus(
-                        units_data, today, algo_settings
-                    )
-                    units_to_make = forecast_result['units_to_make']
-                    doi_total = forecast_result['doi_total_days']
-                    doi_fba = forecast_result['doi_fba_days']
-                    total_units_needed = forecast_result['total_units_needed']
-                    runout_date = forecast_result.get('runout_date_total')
-                    if runout_date:
-                        runout_date = runout_date.isoformat() if hasattr(runout_date, 'isoformat') else str(runout_date)
-                except Exception:
-                    # Fallback to velocity-based calculation
-                    has_prior_year_data = False
-            
+            # For products that need seasonality, skip forecast calculation
+            if needs_seasonality:
+                pass  # Keep values as None
+            # For 18m+ with prior year data, mark for batch processing
+            elif has_prior_year_data and algorithm == '18m+':
+                products_needing_weekly_data.append(product.id)
             # For products without prior year data, use velocity-based forecast
-            # This applies the market adjustment to average sales velocity
-            if not has_prior_year_data:
-                # Apply market adjustment to average weekly sales
-                market_adj = settings.get('market_adjustment', 0.05)
-                velocity_adj = settings.get('velocity_weight', 0.15) * 0.10  # velocity_weight * sales_velocity_adjustment
+            else:
                 adjusted_weekly = avg_weekly * (1 + market_adj + velocity_adj)
                 
                 if adjusted_weekly > 0:
-                    # DOI = inventory / daily sales rate
                     daily_sales = adjusted_weekly / 7
                     doi_total = int(total_inventory / daily_sales) if daily_sales > 0 else 365
                     doi_fba = int(fba_total / daily_sales) if daily_sales > 0 and fba_total > 0 else 0
-                    
-                    # Units needed during lead time
-                    lead_time_weeks = doi_threshold / 7
                     total_units_needed = int(adjusted_weekly * lead_time_weeks)
                     units_to_make = max(0, total_units_needed - total_inventory)
-                    
-                    # Runout date
                     days_until_runout = total_inventory / daily_sales if daily_sales > 0 else 365
                     runout_date = (today + timedelta(days=days_until_runout)).isoformat()
                 else:
-                    # No sales data - use defaults
                     doi_total = 365
                     doi_fba = 365
                     total_units_needed = 0
@@ -474,6 +475,86 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
                     runout_date = None
             
             forecast_rows.append({
+                '_product_id': product.id,  # Temporary field for batch processing
+                '_algorithm': algorithm,
+                '_has_prior_year_data': has_prior_year_data,
+                '_inv': inv,
+                'product': product,
+                'needs_seasonality': needs_seasonality,
+                'doi_total': doi_total,
+                'doi_fba': doi_fba,
+                'total_units_needed': total_units_needed,
+                'units_to_make': units_to_make,
+                'runout_date': runout_date,
+                'avg_weekly': avg_weekly,
+            })
+        
+        # Batch fetch weekly data only for products that need 18m+ algorithm
+        if products_needing_weekly_data:
+            weekly_sales_data = {}
+            for sale in WeeklySales.objects.filter(
+                product_id__in=products_needing_weekly_data
+            ).order_by('product_id', 'week_ending'):
+                if sale.product_id not in weekly_sales_data:
+                    weekly_sales_data[sale.product_id] = []
+                weekly_sales_data[sale.product_id].append({
+                    'week_end': sale.week_ending,
+                    'units_sold': sale.units_sold,
+                })
+            
+            # Process 18m+ products with full algorithm
+            for row in forecast_rows:
+                if row['_product_id'] in products_needing_weekly_data:
+                    product_id = row['_product_id']
+                    inv = row['_inv']
+                    units_data = weekly_sales_data.get(product_id, [])
+                    
+                    algo_settings = {
+                        **settings,
+                        'total_inventory': inv.get('total_inventory', 0),
+                        'fba_available': inv.get('fba_available', 0),
+                    }
+                    
+                    try:
+                        forecast_result = calculate_forecast_18m_plus(
+                            units_data, today, algo_settings
+                        )
+                        row['units_to_make'] = forecast_result['units_to_make']
+                        row['doi_total'] = forecast_result['doi_total_days']
+                        row['doi_fba'] = forecast_result['doi_fba_days']
+                        row['total_units_needed'] = forecast_result['total_units_needed']
+                        runout = forecast_result.get('runout_date_total')
+                        row['runout_date'] = runout.isoformat() if runout and hasattr(runout, 'isoformat') else str(runout) if runout else None
+                    except Exception:
+                        # Fallback to velocity-based
+                        avg_weekly = row['avg_weekly']
+                        total_inventory = inv.get('total_inventory', 0)
+                        fba_total = inv.get('fba_total', 0)
+                        adjusted_weekly = avg_weekly * (1 + market_adj + velocity_adj)
+                        
+                        if adjusted_weekly > 0:
+                            daily_sales = adjusted_weekly / 7
+                            row['doi_total'] = int(total_inventory / daily_sales) if daily_sales > 0 else 365
+                            row['doi_fba'] = int(fba_total / daily_sales) if daily_sales > 0 and fba_total > 0 else 0
+                            row['total_units_needed'] = int(adjusted_weekly * lead_time_weeks)
+                            row['units_to_make'] = max(0, row['total_units_needed'] - total_inventory)
+                            days_until_runout = total_inventory / daily_sales if daily_sales > 0 else 365
+                            row['runout_date'] = (today + timedelta(days=days_until_runout)).isoformat()
+                        else:
+                            row['doi_total'] = 365
+                            row['doi_fba'] = 365
+                            row['total_units_needed'] = 0
+                            row['units_to_make'] = 0
+                            row['runout_date'] = None
+        
+        # Build final response rows
+        final_rows = []
+        for row in forecast_rows:
+            product = row['product']
+            inv = row['_inv']
+            first_sale_date = product.first_sale_week or product.launch_date
+            
+            final_rows.append({
                 'product': {
                     'id': str(product.id),
                     'asin': product.asin,
@@ -484,61 +565,66 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
                     'category': product.category or '',
                     'status': product.status,
                     'imageUrl': product.image_url or '',
-                    'launchDate': launch_date.isoformat() if launch_date else None,
+                    'launchDate': first_sale_date.isoformat() if first_sale_date else None,
                 },
-                # Inventory breakdown
                 'inventory': {
-                    'total': total_inventory,
-                    'fbaAvailable': fba_available,
-                    'fbaTotal': fba_total,
-                    'awdAvailable': awd_available,
-                    'awdTotal': awd_total,
+                    'total': inv.get('total_inventory', 0),
+                    'fbaAvailable': inv.get('fba_available', 0),
+                    'fbaTotal': inv.get('fba_total', 0),
+                    'awdAvailable': inv.get('awd_available', 0),
+                    'awdTotal': inv.get('awd_total', 0),
                 },
-                # Forecast results from algorithm
-                'unitsToMake': units_to_make,
-                'daysOfInventory': doi_total,
-                'doiFba': doi_fba,
-                'runoutDate': runout_date,
-                'totalUnitsNeeded': total_units_needed,
+                'unitsToMake': row['units_to_make'],
+                'daysOfInventory': row['doi_total'],
+                'doiFba': row['doi_fba'],
+                'runoutDate': row['runout_date'],
+                'totalUnitsNeeded': row['total_units_needed'],
                 'weeksOfData': product.weeks_of_data or 0,
-                'avgWeeklySales': round(avg_weekly, 1) if avg_weekly else 0,
-                'algorithm': algorithm,
+                'avgWeeklySales': round(row['avg_weekly'], 1) if row['avg_weekly'] else 0,
+                'algorithm': row['_algorithm'],
+                'needsSeasonality': row['needs_seasonality'],
             })
         
-        # Sort results
+        # Sort results (handle None values by putting them at the end)
         if sort_by == 'doi':
-            forecast_rows.sort(key=lambda x: x['daysOfInventory'], reverse=(sort_order == 'desc'))
+            default_val = float('inf') if sort_order == 'asc' else float('-inf')
+            final_rows.sort(key=lambda x: x['daysOfInventory'] if x['daysOfInventory'] is not None else default_val, reverse=(sort_order == 'desc'))
         elif sort_by == 'units_to_make':
-            forecast_rows.sort(key=lambda x: x['unitsToMake'], reverse=(sort_order == 'desc'))
+            default_val = float('inf') if sort_order == 'asc' else float('-inf')
+            final_rows.sort(key=lambda x: x['unitsToMake'] if x['unitsToMake'] is not None else default_val, reverse=(sort_order == 'desc'))
         elif sort_by == 'inventory':
-            forecast_rows.sort(key=lambda x: x['inventory']['total'], reverse=(sort_order == 'desc'))
+            final_rows.sort(key=lambda x: x['inventory']['total'], reverse=(sort_order == 'desc'))
         elif sort_by == 'name':
-            forecast_rows.sort(key=lambda x: x['product']['name'].lower(), reverse=(sort_order == 'desc'))
+            final_rows.sort(key=lambda x: x['product']['name'].lower(), reverse=(sort_order == 'desc'))
         
-        # Calculate summary stats
-        total_units_to_make = sum(r['unitsToMake'] for r in forecast_rows)
-        avg_doi = sum(r['daysOfInventory'] for r in forecast_rows) / len(forecast_rows) if forecast_rows else 0
-        products_at_risk = sum(1 for r in forecast_rows if r['daysOfInventory'] < doi_threshold)
+        # Calculate summary stats (exclude None values)
+        rows_with_forecast = [r for r in final_rows if r['unitsToMake'] is not None]
+        total_units_to_make = sum(r['unitsToMake'] for r in rows_with_forecast)
         
-        # Calculate total DOI (inventory-weighted average)
-        total_inventory_all = sum(r['inventory']['total'] for r in forecast_rows)
+        rows_with_doi = [r for r in final_rows if r['daysOfInventory'] is not None]
+        avg_doi = sum(r['daysOfInventory'] for r in rows_with_doi) / len(rows_with_doi) if rows_with_doi else 0
+        products_at_risk = sum(1 for r in rows_with_doi if r['daysOfInventory'] < doi_threshold)
+        
+        # Calculate total DOI (inventory-weighted average, excluding None values)
+        total_inventory_all = sum(r['inventory']['total'] for r in rows_with_doi)
         if total_inventory_all > 0:
-            # Weight DOI by inventory amount
-            weighted_doi = sum(r['daysOfInventory'] * r['inventory']['total'] for r in forecast_rows) / total_inventory_all
+            weighted_doi = sum(r['daysOfInventory'] * r['inventory']['total'] for r in rows_with_doi) / total_inventory_all
             total_doi = round(weighted_doi)
         else:
             total_doi = round(avg_doi)
         
-        # Get case dimensions for products (for pallet calculation)
-        product_ids = [int(r['product']['id']) for r in forecast_rows]
+        # Get case dimensions for pallet calculation
+        final_product_ids = [int(r['product']['id']) for r in final_rows]
         extended_data = {
             pe.product_id: pe 
-            for pe in ProductExtended.objects.filter(product_id__in=product_ids)
+            for pe in ProductExtended.objects.filter(product_id__in=final_product_ids)
         }
         
-        # Calculate total pallets needed across all products
+        # Calculate total pallets needed
         total_pallets = 0
-        for row in forecast_rows:
+        for row in final_rows:
+            if row['unitsToMake'] is None:
+                continue
             product_id = int(row['product']['id'])
             ext = extended_data.get(product_id)
             
@@ -556,9 +642,9 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         calculation_time = time.time() - start_time
         
         return Response({
-            'rows': forecast_rows,
+            'rows': final_rows,
             'summary': {
-                'totalProducts': len(forecast_rows),
+                'totalProducts': len(final_rows),
                 'totalUnitsToMake': total_units_to_make,
                 'avgDaysOfInventory': round(avg_doi),
                 'totalDaysOfInventory': total_doi,
