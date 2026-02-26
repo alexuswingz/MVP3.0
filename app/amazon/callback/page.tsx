@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle, Loader2, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function AmazonCallbackPage() {
+function AmazonCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -21,7 +21,6 @@ export default function AmazonCallbackPage() {
       setStatus('success');
       setMessage('Your Amazon seller account has been connected successfully!');
       
-      // Redirect to settings after a brief moment
       setTimeout(() => {
         router.push('/dashboard/settings?tab=amazon');
       }, 2000);
@@ -29,11 +28,9 @@ export default function AmazonCallbackPage() {
       setStatus('error');
       setMessage(getErrorMessage(amazonError));
     } else {
-      // If no params, might be direct visit or in-progress
       setStatus('loading');
       setMessage('Completing authorization with Amazon...');
       
-      // Wait a bit then redirect if nothing happens
       setTimeout(() => {
         if (status === 'loading') {
           setStatus('error');
@@ -60,74 +57,102 @@ export default function AmazonCallbackPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background-primary p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="max-w-md w-full text-center"
-      >
-        <div className="bg-background-secondary border border-border rounded-2xl p-8 shadow-lg">
-          {/* Amazon Logo */}
-          <div className="flex justify-center mb-6">
-            <div className={`p-4 rounded-2xl ${
-              status === 'success' ? 'bg-success/10' :
-              status === 'error' ? 'bg-danger/10' :
-              'bg-[#FF9900]/10'
-            }`}>
-              {status === 'loading' && (
-                <Loader2 className="w-12 h-12 text-[#FF9900] animate-spin" />
-              )}
-              {status === 'success' && (
-                <CheckCircle2 className="w-12 h-12 text-success" />
-              )}
-              {status === 'error' && (
-                <XCircle className="w-12 h-12 text-danger" />
-              )}
-            </div>
-          </div>
-
-          {/* Status Message */}
-          <h1 className={`text-xl font-semibold mb-2 ${
-            status === 'success' ? 'text-success' :
-            status === 'error' ? 'text-danger' :
-            'text-foreground-primary'
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="max-w-md w-full text-center"
+    >
+      <div className="bg-background-secondary border border-border rounded-2xl p-8 shadow-lg">
+        <div className="flex justify-center mb-6">
+          <div className={`p-4 rounded-2xl ${
+            status === 'success' ? 'bg-success/10' :
+            status === 'error' ? 'bg-danger/10' :
+            'bg-[#FF9900]/10'
           }`}>
-            {status === 'loading' && 'Connecting to Amazon'}
-            {status === 'success' && 'Connection Successful!'}
-            {status === 'error' && 'Connection Failed'}
-          </h1>
-
-          <p className="text-foreground-secondary mb-6">
-            {message}
-          </p>
-
-          {/* Actions */}
-          {status === 'success' && (
-            <div className="text-sm text-foreground-muted">
-              Redirecting to settings...
-            </div>
-          )}
-
-          {status === 'error' && (
-            <Button onClick={handleRetry} className="w-full gap-2">
-              <ShoppingCart className="w-4 h-4" />
-              Try Again
-            </Button>
-          )}
-
-          {status === 'loading' && (
-            <div className="flex items-center justify-center gap-2 text-sm text-foreground-muted">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Please wait...
-            </div>
-          )}
+            {status === 'loading' && (
+              <Loader2 className="w-12 h-12 text-[#FF9900] animate-spin" />
+            )}
+            {status === 'success' && (
+              <CheckCircle2 className="w-12 h-12 text-success" />
+            )}
+            {status === 'error' && (
+              <XCircle className="w-12 h-12 text-danger" />
+            )}
+          </div>
         </div>
 
-        {/* Security Note */}
-        <p className="mt-4 text-xs text-foreground-muted">
-          Your credentials are securely encrypted and never stored in plain text.
+        <h1 className={`text-xl font-semibold mb-2 ${
+          status === 'success' ? 'text-success' :
+          status === 'error' ? 'text-danger' :
+          'text-foreground-primary'
+        }`}>
+          {status === 'loading' && 'Connecting to Amazon'}
+          {status === 'success' && 'Connection Successful!'}
+          {status === 'error' && 'Connection Failed'}
+        </h1>
+
+        <p className="text-foreground-secondary mb-6">
+          {message}
         </p>
-      </motion.div>
+
+        {status === 'success' && (
+          <div className="text-sm text-foreground-muted">
+            Redirecting to settings...
+          </div>
+        )}
+
+        {status === 'error' && (
+          <Button onClick={handleRetry} className="w-full gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Try Again
+          </Button>
+        )}
+
+        {status === 'loading' && (
+          <div className="flex items-center justify-center gap-2 text-sm text-foreground-muted">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Please wait...
+          </div>
+        )}
+      </div>
+
+      <p className="mt-4 text-xs text-foreground-muted">
+        Your credentials are securely encrypted and never stored in plain text.
+      </p>
+    </motion.div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="max-w-md w-full text-center">
+      <div className="bg-background-secondary border border-border rounded-2xl p-8 shadow-lg">
+        <div className="flex justify-center mb-6">
+          <div className="p-4 rounded-2xl bg-[#FF9900]/10">
+            <Loader2 className="w-12 h-12 text-[#FF9900] animate-spin" />
+          </div>
+        </div>
+        <h1 className="text-xl font-semibold mb-2 text-foreground-primary">
+          Connecting to Amazon
+        </h1>
+        <p className="text-foreground-secondary mb-6">
+          Processing authorization...
+        </p>
+        <div className="flex items-center justify-center gap-2 text-sm text-foreground-muted">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Please wait...
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AmazonCallbackPage() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background-primary p-4">
+      <Suspense fallback={<LoadingFallback />}>
+        <AmazonCallbackContent />
+      </Suspense>
     </div>
   );
 }
