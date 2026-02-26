@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState, useImperativeHandle, forwardR
 
 export type RichTextEditorHandle = {
   getContent: () => string;
+  blur: () => void;
 };
 
 function ToolbarButton({
@@ -81,6 +82,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
       }
       return html;
     },
+    blur: () => editorRef.current?.blur(),
   }), [onChange]);
 
   const exec = useCallback((cmd: string, cmdValue?: string) => {
