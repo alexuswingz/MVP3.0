@@ -201,10 +201,12 @@ export default function NewShipmentAddProductsPage() {
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
   const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const doiButtonRef = useRef<HTMLButtonElement>(null);
   const requiredDoiTooltipRef = useRef<HTMLDivElement>(null);
 
@@ -280,6 +282,7 @@ export default function NewShipmentAddProductsPage() {
     const handleClickOutside = (e: MouseEvent) => {
       if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
       if (headerDropdownRef.current && !headerDropdownRef.current.contains(e.target as Node)) setShowHeaderDropdown(false);
+      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(e.target as Node)) setShowSettingsDropdown(false);
       if (requiredDoiTooltipRef.current && !requiredDoiTooltipRef.current.contains(e.target as Node)) setShowRequiredDoiTooltip(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -601,54 +604,75 @@ export default function NewShipmentAddProductsPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: '#FFFFFF' }}>Table Mode</span>
+          <div ref={settingsDropdownRef} style={{ position: 'relative' }}>
             <button
               type="button"
-              onClick={() => setTableMode((v) => !v)}
+              onClick={() => setShowSettingsDropdown((v) => !v)}
               style={{
-                width: 33.33,
-                height: 20,
-                borderRadius: 10,
-                backgroundColor: tableMode ? '#3B82F6' : 'rgba(255,255,255,0.3)',
+                width: 24,
+                height: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                position: 'relative',
-                padding: 0,
+                color: '#9CA3AF',
               }}
+              aria-label="Settings"
             >
+              <img src="/assets/Icon%20Button.png" alt="" width={24} height={24} style={{ display: 'block' }} />
+            </button>
+            {showSettingsDropdown && (
               <div
                 style={{
-                  width: 16,
-                  height: 16,
-                  borderRadius: '50%',
-                  backgroundColor: '#FFFFFF',
                   position: 'absolute',
-                  top: 2,
-                  left: tableMode ? 15.33 : 2,
-                  transition: 'left 0.2s',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 8,
+                  backgroundColor: CARD_BG,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                  minWidth: 180,
+                  zIndex: 50,
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                 }}
-              />
-            </button>
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: tableMode ? '#3B82F6' : '#FFFFFF' }}>Table Mode</span>
+                  <button
+                    type="button"
+                    onClick={() => setTableMode((v) => !v)}
+                    style={{
+                      width: 33.33,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: tableMode ? '#3B82F6' : 'rgba(255,255,255,0.3)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      padding: 0,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        backgroundColor: '#FFFFFF',
+                        position: 'absolute',
+                        top: 2,
+                        left: tableMode ? 15.33 : 2,
+                        transition: 'left 0.2s',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                      }}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <button
-            type="button"
-            style={{
-              width: 24,
-              height: 24,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#9CA3AF',
-            }}
-            aria-label="Settings"
-          >
-            <img src="/assets/Icon%20Button.png" alt="" width={24} height={24} style={{ display: 'block' }} />
-          </button>
           <div ref={headerDropdownRef} style={{ position: 'relative' }}>
             <button
               type="button"

@@ -31,6 +31,18 @@ function getPackagingFromProduct(product: { asin: string; sku: string; size?: st
   };
 }
 
+// Price fields for Essential Info (mock data for now)
+function getPriceFromProduct() {
+  return {
+    listPrice: '$29.99',
+    salePrice: '$24.99',
+    mapPrice: '$27.99',
+    costPerUnit: '$8.50',
+    margin: '66%',
+    roi: '194%',
+  };
+}
+
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -41,6 +53,7 @@ export default function ProductDetailPage() {
 
   const product = useMemo(() => products.find((p) => p.id === id), [products, id]);
   const packaging = product ? getPackagingFromProduct(product) : null;
+  const pricing = product ? getPriceFromProduct() : null;
 
   if (!id) {
     router.replace('/dashboard/products');
@@ -164,7 +177,7 @@ export default function ProductDetailPage() {
           </section>
 
           {/* Packaging */}
-          <section>
+          <section className="mb-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: textPrimary }}>
               Packaging
             </h2>
@@ -183,6 +196,19 @@ export default function ProductDetailPage() {
                 <InfoField label="Case Length (in)" value={packaging.caseLengthIn} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
                 <InfoField label="Case Width (in)" value={packaging.caseWidthIn} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
                 <InfoField label="Case Height (in)" value={packaging.caseHeightIn} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
+              </div>
+            )}
+          </section>
+
+          {/* Price */}
+          <section>
+            <h2 className="text-sm font-semibold uppercase tracking-wide mb-3" style={{ color: textPrimary }}>
+              Price
+            </h2>
+            <div style={{ height: 1, backgroundColor: dividerColor, marginBottom: 24 }} />
+            {pricing && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <InfoField label="List Price" value={pricing.listPrice} bg={fieldBg} border={fieldBorder} textColor={textPrimary} labelColor={fieldLabelColor} />
               </div>
             )}
           </section>

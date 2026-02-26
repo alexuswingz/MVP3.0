@@ -1,10 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
+
+// Footer stats configuration - shared with AddProductsTable
+type FooterStatKey = 'products' | 'palettes' | 'boxes' | 'weight';
+const DEFAULT_FOOTER_STATS_ORDER: FooterStatKey[] = ['products', 'palettes', 'boxes', 'weight'];
+const FOOTER_STATS_STORAGE_KEY = 'addProductsFooterStatsOrder';
+
+interface FooterStatConfig {
+  key: FooterStatKey;
+  label: string;
+  visibilityKey: 'products' | 'palettes' | 'boxes' | 'weightLbs';
+}
 
 export interface NonTableProductRow {
   id: string;
@@ -127,6 +138,35 @@ export function AddProductsNonTable({
     boxes: true,
     weightLbs: true,
   });
+  
+  // Footer stats drag-and-drop state
+  const [footerStatsOrder, setFooterStatsOrder] = useState<FooterStatKey[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(FOOTER_STATS_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as FooterStatKey[];
+          if (Array.isArray(parsed) && parsed.length === 4) {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return DEFAULT_FOOTER_STATS_ORDER;
+  });
+  const [draggedStat, setDraggedStat] = useState<FooterStatKey | null>(null);
+  const [hoveredStat, setHoveredStat] = useState<FooterStatKey | null>(null);
+  const [dragOverStat, setDragOverStat] = useState<FooterStatKey | null>(null);
+  const dragStartIndexRef = useRef<number | null>(null);
+  
+  // Save footer stats order to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(FOOTER_STATS_STORAGE_KEY, JSON.stringify(footerStatsOrder));
+    }
+  }, [footerStatsOrder]);
 
   const getLabelsAvailable = (row: NonTableProductRow) =>
     row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
@@ -331,6 +371,91 @@ export function AddProductsNonTable({
   const addedTotalBoxes = totalUnitsAdded / 24;
   const addedTotalWeightLbs = addedTotalBoxes * 12;
   const addedTotalPalettes = addedProductCount * 0.5;
+
+  // Footer stat configs
+  const footerStatConfigs: Record<FooterStatKey, FooterStatConfig> = {
+    products: { key: 'products', label: 'PRODUCTS', visibilityKey: 'products' },
+    palettes: { key: 'palettes', label: 'PALETTES', visibilityKey: 'palettes' },
+    boxes: { key: 'boxes', label: 'BOXES', visibilityKey: 'boxes' },
+    weight: { key: 'weight', label: 'WEIGHT (LBS)', visibilityKey: 'weightLbs' },
+  };
+  
+  const getStatValue = useCallback((key: FooterStatKey): string => {
+    if (addedIds.size === 0) return '0';
+    switch (key) {
+      case 'products':
+        return String(addedProductCount);
+      case 'palettes':
+        return addedTotalPalettes.toFixed(2);
+      case 'boxes':
+        return Math.ceil(addedTotalBoxes).toLocaleString();
+      case 'weight':
+        return Math.round(addedTotalWeightLbs).toLocaleString();
+      default:
+        return '0';
+    }
+  }, [addedIds.size, addedProductCount, addedTotalPalettes, addedTotalBoxes, addedTotalWeightLbs]);
+  
+  const handleStatDragStart = (e: React.DragEvent<HTMLDivElement>, key: FooterStatKey) => {
+    setDraggedStat(key);
+    dragStartIndexRef.current = footerStatsOrder.indexOf(key);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', key);
+    
+    // Create custom drag image
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
+    const dragImage = target.cloneNode(true) as HTMLElement;
+    dragImage.style.position = 'absolute';
+    dragImage.style.top = '-1000px';
+    dragImage.style.left = '-1000px';
+    dragImage.style.opacity = '0.8';
+    dragImage.style.backgroundColor = '#1e293b';
+    dragImage.style.border = '1px solid #3b82f6';
+    dragImage.style.borderRadius = '8px';
+    dragImage.style.padding = '8px 16px';
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, rect.width / 2, rect.height / 2);
+    setTimeout(() => document.body.removeChild(dragImage), 0);
+  };
+  
+  const handleStatDragOver = (e: React.DragEvent<HTMLDivElement>, key: FooterStatKey) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (key !== draggedStat) {
+      setDragOverStat(key);
+    }
+  };
+  
+  const handleStatDragLeave = () => {
+    setDragOverStat(null);
+  };
+  
+  const handleStatDrop = (e: React.DragEvent<HTMLDivElement>, targetKey: FooterStatKey) => {
+    e.preventDefault();
+    if (!draggedStat || draggedStat === targetKey) {
+      setDraggedStat(null);
+      setDragOverStat(null);
+      return;
+    }
+    
+    const newOrder = [...footerStatsOrder];
+    const draggedIndex = newOrder.indexOf(draggedStat);
+    const targetIndex = newOrder.indexOf(targetKey);
+    
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedStat);
+    
+    setFooterStatsOrder(newOrder);
+    setDraggedStat(null);
+    setDragOverStat(null);
+  };
+  
+  const handleStatDragEnd = () => {
+    setDraggedStat(null);
+    setDragOverStat(null);
+    dragStartIndexRef.current = null;
+  };
 
   return (
     <>
@@ -1305,80 +1430,111 @@ export function AddProductsNonTable({
           transform: 'translateX(-50%)',
           width: 'fit-content',
           minWidth: 'min-content',
-          height: 65,
-          backgroundColor: 'rgba(31, 41, 55, 0.85)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid #374151',
-          borderRadius: 32,
-          padding: '16px 24px',
+          backgroundColor: '#1A2235',
+          border: '1px solid #334155',
+          borderRadius: 16,
+          padding: 8,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 32,
+          gap: 64,
           zIndex: 1000,
           transition: 'left 300ms cubic-bezier(0.4, 0, 0.2, 1)',
           boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
         }}
       >
-        <div style={{ display: 'flex', gap: 48, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {footerStatsVisibility.products && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PRODUCTS</span>
-              {addedIds.size > 0 && (
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedProductCount}</span>
-              )}
-            </div>
-          )}
-          {footerStatsVisibility.palettes && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>PALETTES</span>
-              {addedIds.size > 0 && (
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{addedTotalPalettes.toFixed(2)}</span>
-              )}
-            </div>
-          )}
-          {footerStatsVisibility.boxes && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center' }}>BOXES</span>
-              {addedIds.size > 0 && (
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.ceil(addedTotalBoxes).toLocaleString()}</span>
-              )}
-            </div>
-          )}
-          {footerStatsVisibility.weightLbs && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-              <span style={{ fontSize: 12, fontWeight: 400, color: '#9CA3AF', textAlign: 'center', whiteSpace: 'nowrap' }}>WEIGHT (LBS)</span>
-              {addedIds.size > 0 && (
-                <span style={{ fontSize: 18, fontWeight: 700, color: '#FFFFFF', textAlign: 'center' }}>{Math.round(addedTotalWeightLbs).toLocaleString()}</span>
-              )}
-            </div>
-          )}
-        </div>
-        {(onClear != null || onExport != null) && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
-            {onClear != null && (
-              <button
-                type="button"
-                onClick={onClear}
+        <div style={{ display: 'flex', width: 464, gap: 8, alignItems: 'center', justifyContent: 'flex-start', flexShrink: 0 }}>
+          {footerStatsOrder.map((statKey) => {
+            const config = footerStatConfigs[statKey];
+            const isVisible = footerStatsVisibility[config.visibilityKey];
+            if (!isVisible) return null;
+            
+            const isHovered = hoveredStat === statKey;
+            const isDragging = draggedStat === statKey;
+            const isDragOver = dragOverStat === statKey && draggedStat !== statKey;
+            
+            return (
+              <div
+                key={statKey}
+                draggable
+                onDragStart={(e) => handleStatDragStart(e, statKey)}
+                onDragOver={(e) => handleStatDragOver(e, statKey)}
+                onDragLeave={handleStatDragLeave}
+                onDrop={(e) => handleStatDrop(e, statKey)}
+                onDragEnd={handleStatDragEnd}
+                onMouseEnter={() => setHoveredStat(statKey)}
+                onMouseLeave={() => setHoveredStat(null)}
                 style={{
-                  height: 31,
-                  padding: '0 16px',
-                  borderRadius: 6,
-                  border: 'none',
-                  backgroundColor: 'transparent',
-                  color: '#9CA3AF',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: 'pointer',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  flexDirection: 'column',
+                  gap: 2,
+                  alignItems: 'flex-start',
+                  width: 110,
+                  minWidth: 110,
+                  padding: '6px 8px',
+                  borderRadius: 8,
+                  cursor: 'grab',
+                  transition: 'all 150ms ease',
+                  border: isDragOver 
+                    ? '1px solid #3b82f6' 
+                    : '1px solid transparent',
+                  backgroundColor: isDragOver 
+                    ? 'rgba(59, 130, 246, 0.1)' 
+                    : isHovered 
+                      ? '#0F172A' 
+                      : '#1E293B',
+                  opacity: isDragging ? 0.5 : 1,
+                  boxSizing: 'border-box',
+                  boxShadow: isHovered 
+                    ? '0 2px 2px 0 rgba(0, 0, 0, 0.2)' 
+                    : 'none',
                 }}
               >
-                Clear
-              </button>
-            )}
+                <span style={{ 
+                  fontSize: 11, 
+                  fontWeight: 400, 
+                  color: '#6B7280', 
+                  textAlign: 'left',
+                  whiteSpace: 'nowrap',
+                  userSelect: 'none',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.025em',
+                }}>{config.label}</span>
+                <span style={{ 
+                  fontSize: 16, 
+                  fontWeight: 600, 
+                  color: '#FFFFFF', 
+                  textAlign: 'left',
+                  userSelect: 'none',
+                }}>{getStatValue(statKey)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => {
+              setAddedIds(new Set());
+              if (onClear) onClear();
+            }}
+            style={{
+              height: 31,
+              padding: '0 16px',
+              borderRadius: 6,
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: '#9CA3AF',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            Clear
+          </button>
             {onExport != null && (
               <>
                 <button
@@ -1425,8 +1581,7 @@ export function AddProductsNonTable({
                 </button>
               </>
             )}
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Shipment Stats popup - above footer (same as 1000bananas2.0) */}

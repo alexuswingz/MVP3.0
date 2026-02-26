@@ -113,13 +113,30 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const [actionItemsExpanded, setActionItemsExpanded] = useState(false);
+  const [actionItemsMenuOpen, setActionItemsMenuOpen] = useState(false);
+  const [showCompletedItems, setShowCompletedItems] = useState(false);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
   const [showActionItemModal, setShowActionItemModal] = useState(false);
+  const [showDueDateCalendar, setShowDueDateCalendar] = useState(false);
+  const [newActionItemDueDate, setNewActionItemDueDate] = useState<Date | null>(null);
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const [newActionItemAssignee, setNewActionItemAssignee] = useState<{ name: string; color: string } | null>(null);
+  const [newActionItemSubject, setNewActionItemSubject] = useState('');
+  const [newActionItemDescription, setNewActionItemDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Inventory');
   const [editingField, setEditingField] = useState<'subject' | 'description' | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [descriptionHtml, setDescriptionHtml] = useState('');
   
   // Store all action items with their edits
+  type AttachmentType = {
+    id: string;
+    name: string;
+    type: 'image' | 'document';
+    url: string;
+    uploadedDate: string;
+  };
+  
   type ActionItemType = {
     id: string;
     title: string;
@@ -133,6 +150,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     createdBy: string;
     dateCreated: string;
     ticketId: string;
+    attachments?: AttachmentType[];
   };
   
   // Default action items data
@@ -141,7 +159,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
       id: 'I-123',
       title: 'Low FBA Available',
       description: 'Stock levels have dropped below 15 days coverage based on current sales velocity of 45 units/day. We need to initiate an immediate restock shipment to FBA to avoid stockout.\n\nPlease check current warehouse inventory and create a shipping plan for at least 1,500 units.\n\n• Current FBA Stock: 420 units\n• Reserved: 85 units\n• Inbound: 0 units\n• Recommended Replenishment: 2,000 units',
-      status: 'To Do',
+      status: 'Completed',
       category: 'Inventory',
       assignedTo: 'Jeff D.',
       assignedColor: '#10b981',
@@ -227,6 +245,58 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
       createdBy: 'Christian R.',
       dateCreated: 'Feb. 17, 2025',
       ticketId: '#D-302',
+    },
+    'I-124': {
+      id: 'I-124',
+      title: 'Restock Complete',
+      description: 'Successfully restocked 2,000 units to FBA warehouse.',
+      status: 'Completed',
+      category: 'Inventory',
+      assignedTo: 'Jeff D.',
+      assignedColor: '#10b981',
+      dueDate: 'Feb. 15, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 10, 2025',
+      ticketId: '#I-124',
+    },
+    'P-102': {
+      id: 'P-102',
+      title: 'Competitor Analysis',
+      description: 'Completed competitor pricing analysis for Q1.',
+      status: 'Completed',
+      category: 'Price',
+      assignedTo: 'Carlos A.',
+      assignedColor: '#ef4444',
+      dueDate: 'Feb. 10, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 1, 2025',
+      ticketId: '#P-102',
+    },
+    'A-204': {
+      id: 'A-204',
+      title: 'Budget Optimization',
+      description: 'Optimized ad budget allocation across campaigns.',
+      status: 'Completed',
+      category: 'Ads',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Feb. 12, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 5, 2025',
+      ticketId: '#A-204',
+    },
+    'D-303': {
+      id: 'D-303',
+      title: 'Main Image Update',
+      description: 'Updated main product image with new photography.',
+      status: 'Completed',
+      category: 'PDP',
+      assignedTo: 'Jeff B.',
+      assignedColor: '#3b82f6',
+      dueDate: 'Feb. 8, 2025',
+      createdBy: 'Christian R.',
+      dateCreated: 'Feb. 1, 2025',
+      ticketId: '#D-303',
     },
   };
   
@@ -2223,23 +2293,156 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             }}
                           />
                         </div>
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setActionItemsMenuOpen(!actionItemsMenuOpen)}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <svg style={{ width: '18px', height: '18px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <circle cx="12" cy="5" r="1.5" fill="currentColor" />
+                              <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                              <circle cx="12" cy="19" r="1.5" fill="currentColor" />
+                            </svg>
+                          </button>
+                          {actionItemsMenuOpen && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: '-170px',
+                                marginTop: '4px',
+                                backgroundColor: '#1e293b',
+                                border: '1px solid #334155',
+                                borderRadius: '8px',
+                                padding: '8px 0',
+                                minWidth: '180px',
+                                zIndex: 50,
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                              }}
+                            >
+                              <button
+                                onClick={() => {
+                                  setShowCompletedItems(!showCompletedItems);
+                                  setActionItemsMenuOpen(false);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  padding: '8px 12px',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#e2e8f0',
+                                  fontSize: '0.875rem',
+                                  textAlign: 'left',
+                                }}
+                              >
+                                <div style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  border: '1px solid #64748b',
+                                  borderRadius: '3px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  backgroundColor: showCompletedItems ? '#3b82f6' : 'transparent',
+                                }}>
+                                  {showCompletedItems && (
+                                    <svg style={{ width: '12px', height: '12px', color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </div>
+                                Show completed
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSortDirection('asc');
+                                  setActionItemsMenuOpen(false);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '8px 12px',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#e2e8f0',
+                                  fontSize: '0.875rem',
+                                  textAlign: 'left',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                                  </svg>
+                                  Sort ascending
+                                </div>
+                                <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSortDirection('desc');
+                                  setActionItemsMenuOpen(false);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '8px 12px',
+                                  backgroundColor: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#e2e8f0',
+                                  fontSize: '0.875rem',
+                                  textAlign: 'left',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                                  </svg>
+                                  Sort descending
+                                </div>
+                                <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <button
-                        onClick={() => setActionItemsExpanded(false)}
-                        style={{
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <svg style={{ width: '18px', height: '18px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                          onClick={() => setActionItemsExpanded(false)}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <svg style={{ width: '18px', height: '18px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                     </div>
 
                     {/* Four Column Layout */}
@@ -2276,44 +2479,76 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               fontWeight: '600',
                               padding: '0.125rem 0.5rem',
                               borderRadius: '9999px',
-                            }}>1</span>
+                            }}>{Object.values(actionItemsData).filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {/* Action Item: Low FBA Available */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['I-123'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
+                            {Object.values(actionItemsData)
+                              .filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed'))
+                              .map(item => {
+                                const isCompleted = item.status === 'Completed';
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => setSelectedActionItem(item)}
+                                    style={{
+                                      width: '100%',
+                                      height: '32px',
+                                      backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.1)' : '#1C2634',
+                                      border: isCompleted ? '1px solid #10b981' : '1px solid #334155',
+                                      borderRadius: '4px',
+                                      padding: '0 8px',
+                                      marginBottom: '8px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '0.875rem', color: isCompleted ? '#10b981' : '#e2e8f0', fontWeight: '500' }}>{item.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: item.assignedColor,
+                                      }} />
+                                      <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                          <circle cx="8" cy="3" r="1.5" />
+                                          <circle cx="8" cy="8" r="1.5" />
+                                          <circle cx="8" cy="13" r="1.5" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {Object.values(actionItemsData).filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed')).length === 0 && (
+                              <div style={{
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Low FBA Available</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#10b981',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
+                                justifyContent: 'center',
+                                height: '100%',
+                                color: '#64748b',
+                                fontSize: '0.75rem',
+                                textAlign: 'center',
+                                padding: '8px',
+                              }}>
+                                {Object.values(actionItemsData).filter(item => item.category === 'Inventory' && item.status === 'Completed').length > 0 ? (
+                                  <>
+                                    <svg style={{ width: '24px', height: '24px', marginBottom: '6px', color: '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span style={{ color: '#94a3b8' }}>{Object.values(actionItemsData).filter(item => item.category === 'Inventory' && item.status === 'Completed').length} completed</span>
+                                    <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Use menu to show</span>
+                                  </>
+                                ) : (
+                                  <span>No items</span>
+                                )}
                               </div>
-                            </div>
+                            )}
                           </div>
                           <button
                             onClick={() => { setSelectedCategory('Inventory'); setShowActionItemModal(true); }}
@@ -2364,44 +2599,76 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               fontWeight: '600',
                               padding: '0.125rem 0.5rem',
                               borderRadius: '9999px',
-                            }}>1</span>
+                            }}>{Object.values(actionItemsData).filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {/* Action Item: Price Edit */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['P-101'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
+                            {Object.values(actionItemsData)
+                              .filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed'))
+                              .map(item => {
+                                const isCompleted = item.status === 'Completed';
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => setSelectedActionItem(item)}
+                                    style={{
+                                      width: '100%',
+                                      height: '32px',
+                                      backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.1)' : '#1C2634',
+                                      border: isCompleted ? '1px solid #10b981' : '1px solid #334155',
+                                      borderRadius: '4px',
+                                      padding: '0 8px',
+                                      marginBottom: '8px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '0.875rem', color: isCompleted ? '#10b981' : '#e2e8f0', fontWeight: '500' }}>{item.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: item.assignedColor,
+                                      }} />
+                                      <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                          <circle cx="8" cy="3" r="1.5" />
+                                          <circle cx="8" cy="8" r="1.5" />
+                                          <circle cx="8" cy="13" r="1.5" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {Object.values(actionItemsData).filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed')).length === 0 && (
+                              <div style={{
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Price Edit</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#ef4444',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
+                                justifyContent: 'center',
+                                height: '100%',
+                                color: '#64748b',
+                                fontSize: '0.75rem',
+                                textAlign: 'center',
+                                padding: '8px',
+                              }}>
+                                {Object.values(actionItemsData).filter(item => item.category === 'Price' && item.status === 'Completed').length > 0 ? (
+                                  <>
+                                    <svg style={{ width: '24px', height: '24px', marginBottom: '6px', color: '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span style={{ color: '#94a3b8' }}>{Object.values(actionItemsData).filter(item => item.category === 'Price' && item.status === 'Completed').length} completed</span>
+                                    <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Use menu to show</span>
+                                  </>
+                                ) : (
+                                  <span>No items</span>
+                                )}
                               </div>
-                            </div>
+                            )}
                           </div>
                           <button
                             onClick={() => { setSelectedCategory('Price'); setShowActionItemModal(true); }}
@@ -2452,114 +2719,76 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               fontWeight: '600',
                               padding: '0.125rem 0.5rem',
                               borderRadius: '9999px',
-                            }}>3</span>
+                            }}>{Object.values(actionItemsData).filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {/* Action Item: TACOS Too High */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['A-201'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
+                            {Object.values(actionItemsData)
+                              .filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed'))
+                              .map(item => {
+                                const isCompleted = item.status === 'Completed';
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => setSelectedActionItem(item)}
+                                    style={{
+                                      width: '100%',
+                                      height: '32px',
+                                      backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.1)' : '#1C2634',
+                                      border: isCompleted ? '1px solid #10b981' : '1px solid #334155',
+                                      borderRadius: '4px',
+                                      padding: '0 8px',
+                                      marginBottom: '8px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '0.875rem', color: isCompleted ? '#10b981' : '#e2e8f0', fontWeight: '500' }}>{item.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: item.assignedColor,
+                                      }} />
+                                      <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                          <circle cx="8" cy="3" r="1.5" />
+                                          <circle cx="8" cy="8" r="1.5" />
+                                          <circle cx="8" cy="13" r="1.5" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {Object.values(actionItemsData).filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed')).length === 0 && (
+                              <div style={{
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>TACOS Too High</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#3b82f6',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
+                                justifyContent: 'center',
+                                height: '100%',
+                                color: '#64748b',
+                                fontSize: '0.75rem',
+                                textAlign: 'center',
+                                padding: '8px',
+                              }}>
+                                {Object.values(actionItemsData).filter(item => item.category === 'Ads' && item.status === 'Completed').length > 0 ? (
+                                  <>
+                                    <svg style={{ width: '24px', height: '24px', marginBottom: '6px', color: '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span style={{ color: '#94a3b8' }}>{Object.values(actionItemsData).filter(item => item.category === 'Ads' && item.status === 'Completed').length} completed</span>
+                                    <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Use menu to show</span>
+                                  </>
+                                ) : (
+                                  <span>No items</span>
+                                )}
                               </div>
-                            </div>
-                            {/* Action Item: Keyword Sweep */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['A-202'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Keyword Sweep</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#3b82f6',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                            {/* Action Item: Check TOS */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['A-203'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Check TOS</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#3b82f6',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
+                            )}
                           </div>
                           <button
                             onClick={() => { setSelectedCategory('Ads'); setShowActionItemModal(true); }}
@@ -2610,79 +2839,76 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               fontWeight: '600',
                               padding: '0.125rem 0.5rem',
                               borderRadius: '9999px',
-                            }}>2</span>
+                            }}>{Object.values(actionItemsData).filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {/* Action Item: Slide Edit */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['D-301'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
+                            {Object.values(actionItemsData)
+                              .filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed'))
+                              .map(item => {
+                                const isCompleted = item.status === 'Completed';
+                                return (
+                                  <div
+                                    key={item.id}
+                                    onClick={() => setSelectedActionItem(item)}
+                                    style={{
+                                      width: '100%',
+                                      height: '32px',
+                                      backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.1)' : '#1C2634',
+                                      border: isCompleted ? '1px solid #10b981' : '1px solid #334155',
+                                      borderRadius: '4px',
+                                      padding: '0 8px',
+                                      marginBottom: '8px',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '0.875rem', color: isCompleted ? '#10b981' : '#e2e8f0', fontWeight: '500' }}>{item.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <div style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        backgroundColor: item.assignedColor,
+                                      }} />
+                                      <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
+                                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                          <circle cx="8" cy="3" r="1.5" />
+                                          <circle cx="8" cy="8" r="1.5" />
+                                          <circle cx="8" cy="13" r="1.5" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            {Object.values(actionItemsData).filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed')).length === 0 && (
+                              <div style={{
                                 display: 'flex',
+                                flexDirection: 'column',
                                 alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Slide Edit</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#3b82f6',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
+                                justifyContent: 'center',
+                                height: '100%',
+                                color: '#64748b',
+                                fontSize: '0.75rem',
+                                textAlign: 'center',
+                                padding: '8px',
+                              }}>
+                                {Object.values(actionItemsData).filter(item => item.category === 'PDP' && item.status === 'Completed').length > 0 ? (
+                                  <>
+                                    <svg style={{ width: '24px', height: '24px', marginBottom: '6px', color: '#10b981' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span style={{ color: '#94a3b8' }}>{Object.values(actionItemsData).filter(item => item.category === 'PDP' && item.status === 'Completed').length} completed</span>
+                                    <span style={{ color: '#64748b', fontSize: '0.7rem' }}>Use menu to show</span>
+                                  </>
+                                ) : (
+                                  <span>No items</span>
+                                )}
                               </div>
-                            </div>
-                            {/* Action Item: Change 2nd Bullet */}
-                            <div
-                              onClick={() => setSelectedActionItem(actionItemsData['D-302'])}
-                              style={{
-                                width: '100%',
-                                height: '32px',
-                                backgroundColor: '#1C2634',
-                                border: '1px solid #334155',
-                                borderRadius: '4px',
-                                padding: '0 8px',
-                                marginBottom: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxShadow: '0 2px 2px 0 rgba(0, 0, 0, 0.25)',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <span style={{ fontSize: '0.875rem', color: '#e2e8f0', fontWeight: '500' }}>Change 2nd Bullet</span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '50%',
-                                  backgroundColor: '#3b82f6',
-                                }} />
-                                <button onClick={(e) => e.stopPropagation()} style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem', display: 'flex', color: '#64748b' }}>
-                                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
+                            )}
                           </div>
                           <button
                             onClick={() => { setSelectedCategory('PDP'); setShowActionItemModal(true); }}
@@ -2947,6 +3173,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               <input
                 type="text"
                 placeholder="Enter Subject..."
+                value={newActionItemSubject}
+                onChange={(e) => setNewActionItemSubject(e.target.value)}
                 style={{
                   width: '100%',
                   height: '31px',
@@ -2964,6 +3192,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               {/* Description */}
               <textarea
                 placeholder="Enter Description..."
+                value={newActionItemDescription}
+                onChange={(e) => setNewActionItemDescription(e.target.value)}
                 style={{
                   width: '100%',
                   height: '52px',
@@ -2982,50 +3212,212 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
               {/* Assignee + Due Date */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    border: '1px solid #334155',
-                    backgroundColor: '#4B5563',
-                    color: '#E5E7EB',
-                    fontSize: '0.875rem',
-                    cursor: 'pointer',
-                    height: '24px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A4.992 4.992 0 0112 15a4.992 4.992 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span>Select Assignee</span>
+                <div style={{ position: 'relative' }}>
+                  <div
+                    onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid #334155',
+                      backgroundColor: '#4B5563',
+                      color: '#E5E7EB',
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      height: '24px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {newActionItemAssignee ? (
+                      <>
+                        <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: newActionItemAssignee.color }} />
+                        <span>{newActionItemAssignee.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A4.992 4.992 0 0112 15a4.992 4.992 0 016.879 2.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>Select Assignee</span>
+                      </>
+                    )}
+                  </div>
+                  {showAssigneeDropdown && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '0',
+                        right: '0',
+                        marginBottom: '4px',
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '5px',
+                        padding: '8.5px 6px',
+                        zIndex: 100,
+                        boxShadow: '0 -10px 25px -5px rgba(0, 0, 0, 0.4)',
+                      }}
+                    >
+                      {[
+                        { name: 'Jeff D.', color: '#10b981' },
+                        { name: 'Carlos A.', color: '#ef4444' },
+                        { name: 'Jeff B.', color: '#3b82f6' },
+                        { name: 'Christian R.', color: '#f59e0b' },
+                      ].map((assignee) => (
+                        <div
+                          key={assignee.name}
+                          onClick={() => {
+                            setNewActionItemAssignee(assignee);
+                            setShowAssigneeDropdown(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 8px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            backgroundColor: newActionItemAssignee?.name === assignee.name ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                          }}
+                        >
+                          <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: assignee.color }} />
+                          <span style={{ color: '#e2e8f0', fontSize: '0.75rem' }}>{assignee.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    border: '1px solid #334155',
-                    backgroundColor: '#4B5563',
-                    color: '#E5E7EB',
-                    fontSize: '0.875rem',
-                    cursor: 'pointer',
-                    height: '24px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth={2} />
-                    <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2} />
-                    <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2} />
-                    <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2} />
-                  </svg>
-                  <span>Select Due Date</span>
+                <div style={{ position: 'relative' }}>
+                  <div
+                    onClick={() => setShowDueDateCalendar(!showDueDateCalendar)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid #334155',
+                      backgroundColor: '#4B5563',
+                      color: '#E5E7EB',
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      height: '24px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" strokeWidth={2} />
+                      <line x1="16" y1="2" x2="16" y2="6" strokeWidth={2} />
+                      <line x1="8" y1="2" x2="8" y2="6" strokeWidth={2} />
+                      <line x1="3" y1="10" x2="21" y2="10" strokeWidth={2} />
+                    </svg>
+                    <span>{newActionItemDueDate ? newActionItemDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Select Due Date'}</span>
+                  </div>
+                  {showDueDateCalendar && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: '0',
+                        right: '0',
+                        marginBottom: '4px',
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: '5px',
+                        padding: '8.5px 6px',
+                        zIndex: 100,
+                        boxShadow: '0 -10px 25px -5px rgba(0, 0, 0, 0.4)',
+                      }}
+                    >
+                      {(() => {
+                        const today = new Date();
+                        const currentMonth = newActionItemDueDate ? newActionItemDueDate.getMonth() : today.getMonth();
+                        const currentYear = newActionItemDueDate ? newActionItemDueDate.getFullYear() : today.getFullYear();
+                        const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+                        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        
+                        return (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newDate = new Date(currentYear, currentMonth - 1, 1);
+                                  setNewActionItemDueDate(newDate);
+                                }}
+                                style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '1px' }}
+                              >
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                              </button>
+                              <span style={{ color: '#e2e8f0', fontWeight: '600', fontSize: '0.65rem' }}>
+                                {monthNames[currentMonth]} {currentYear}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newDate = new Date(currentYear, currentMonth + 1, 1);
+                                  setNewActionItemDueDate(newDate);
+                                }}
+                                style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '1px' }}
+                              >
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0px', marginBottom: '2px' }}>
+                              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                                <div key={`${day}-${idx}`} style={{ textAlign: 'center', color: '#64748b', fontSize: '0.55rem', padding: '1px', fontWeight: '500' }}>
+                                  {day}
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0px' }}>
+                              {Array.from({ length: firstDay }).map((_, i) => (
+                                <div key={`empty-${i}`} style={{ padding: '2px' }} />
+                              ))}
+                              {Array.from({ length: daysInMonth }).map((_, i) => {
+                                const day = i + 1;
+                                const isSelected = newActionItemDueDate && 
+                                  newActionItemDueDate.getDate() === day && 
+                                  newActionItemDueDate.getMonth() === currentMonth && 
+                                  newActionItemDueDate.getFullYear() === currentYear;
+                                const isToday = today.getDate() === day && today.getMonth() === currentMonth && today.getFullYear() === currentYear;
+                                return (
+                                  <button
+                                    key={day}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setNewActionItemDueDate(new Date(currentYear, currentMonth, day));
+                                      setShowDueDateCalendar(false);
+                                    }}
+                                    style={{
+                                      padding: '2px',
+                                      textAlign: 'center',
+                                      backgroundColor: isSelected ? '#3b82f6' : 'transparent',
+                                      color: isSelected ? 'white' : isToday ? '#3b82f6' : '#e2e8f0',
+                                      border: isToday && !isSelected ? '1px solid #3b82f6' : 'none',
+                                      borderRadius: '2px',
+                                      cursor: 'pointer',
+                                      fontSize: '0.6rem',
+                                      fontWeight: isSelected || isToday ? '600' : '400',
+                                    }}
+                                  >
+                                    {day}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -3047,7 +3439,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               }}
             >
               <button
-                onClick={() => { setShowActionItemModal(false); setSelectedCategory('Inventory'); }}
+                onClick={() => { setShowActionItemModal(false); setSelectedCategory('Inventory'); setNewActionItemDueDate(null); setShowDueDateCalendar(false); setNewActionItemAssignee(null); setShowAssigneeDropdown(false); setNewActionItemSubject(''); setNewActionItemDescription(''); }}
                 style={{
                   width: '64px',
                   height: '23px',
@@ -3067,16 +3459,58 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 Cancel
               </button>
               <button
+                onClick={() => {
+                  if (!newActionItemSubject.trim()) return;
+                  
+                  const categoryPrefix = selectedCategory === 'Inventory' ? 'I' : selectedCategory === 'Price' ? 'P' : selectedCategory === 'Ads' ? 'A' : 'D';
+                  const existingIds = Object.keys(actionItemsData).filter(id => id.startsWith(categoryPrefix)).map(id => parseInt(id.split('-')[1]));
+                  const newIdNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 100;
+                  const newId = `${categoryPrefix}-${newIdNum}`;
+                  
+                  const today = new Date();
+                  const dateCreated = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '.');
+                  const dueDate = newActionItemDueDate 
+                    ? newActionItemDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '.')
+                    : today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '.');
+                  
+                  const newItem: ActionItemType = {
+                    id: newId,
+                    title: newActionItemSubject.trim(),
+                    description: newActionItemDescription.trim(),
+                    status: 'To Do',
+                    category: selectedCategory,
+                    assignedTo: newActionItemAssignee?.name || 'Unassigned',
+                    assignedColor: newActionItemAssignee?.color || '#6b7280',
+                    dueDate: dueDate,
+                    createdBy: 'Christian R.',
+                    dateCreated: dateCreated,
+                    ticketId: `#${newId}`,
+                  };
+                  
+                  setActionItemsData(prev => ({
+                    ...prev,
+                    [newId]: newItem,
+                  }));
+                  
+                  setShowActionItemModal(false);
+                  setSelectedCategory('Inventory');
+                  setNewActionItemDueDate(null);
+                  setShowDueDateCalendar(false);
+                  setNewActionItemAssignee(null);
+                  setShowAssigneeDropdown(false);
+                  setNewActionItemSubject('');
+                  setNewActionItemDescription('');
+                }}
                 style={{
                   width: '63px',
                   height: '23px',
                   borderRadius: '4px',
                   border: 'none',
-                  backgroundColor: 'rgba(0, 122, 255, 0.5)',
+                  backgroundColor: newActionItemSubject.trim() ? '#007AFF' : 'rgba(0, 122, 255, 0.5)',
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: '0.875rem',
-                  cursor: 'pointer',
+                  cursor: newActionItemSubject.trim() ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3300,15 +3734,31 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
-                          border: '2px solid #475569',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }} />
+                        {selectedActionItem.status === 'Completed' ? (
+                          <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            backgroundColor: '#10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <svg width="12" height="12" fill="none" stroke="white" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            border: '2px solid #475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }} />
+                        )}
                         <span style={{ fontSize: '1rem', fontWeight: 500, color: '#e2e8f0' }}>{selectedActionItem.title}</span>
                       </div>
                     )}
@@ -3467,6 +3917,134 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                     </div>
                   )}
                 </div>
+
+                {/* Attachments */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachments</label>
+                    <input
+                      type="file"
+                      id="attachment-input"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (files && files.length > 0 && selectedActionItem) {
+                          const newAttachments: AttachmentType[] = [];
+                          Array.from(files).forEach((file) => {
+                            const isImage = file.type.startsWith('image/');
+                            const url = URL.createObjectURL(file);
+                            const today = new Date();
+                            const uploadedDate = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '.');
+                            newAttachments.push({
+                              id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                              name: file.name,
+                              type: isImage ? 'image' : 'document',
+                              url: url,
+                              uploadedDate: `Uploaded ${uploadedDate}`,
+                            });
+                          });
+                          const updatedItem = {
+                            ...selectedActionItem,
+                            attachments: [...(selectedActionItem.attachments || []), ...newAttachments],
+                          };
+                          setSelectedActionItem(updatedItem);
+                          updateActionItem(updatedItem);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      onClick={() => document.getElementById('attachment-input')?.click()}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: '#3b82f6',
+                        fontSize: '0.875rem',
+                        cursor: 'pointer',
+                        padding: '4px 8px',
+                      }}
+                    >
+                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Attachment
+                    </button>
+                  </div>
+                  {selectedActionItem.attachments && selectedActionItem.attachments.length > 0 && (
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      {selectedActionItem.attachments.map((attachment) => (
+                        <div
+                          key={attachment.id}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            position: 'relative',
+                          }}
+                        >
+                          <div style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '8px',
+                            backgroundColor: attachment.type === 'image' ? '#1e293b' : '#374151',
+                            border: '1px solid #334155',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative',
+                          }}>
+                            {attachment.type === 'image' ? (
+                              <img src={attachment.url} alt={attachment.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase' }}>
+                                {attachment.name.split('.').pop()}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => {
+                                if (selectedActionItem) {
+                                  const updatedItem = {
+                                    ...selectedActionItem,
+                                    attachments: selectedActionItem.attachments?.filter(a => a.id !== attachment.id) || [],
+                                  };
+                                  setSelectedActionItem(updatedItem);
+                                  updateActionItem(updatedItem);
+                                }
+                              }}
+                              style={{
+                                position: 'absolute',
+                                top: '4px',
+                                right: '4px',
+                                width: '18px',
+                                height: '18px',
+                                borderRadius: '50%',
+                                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <svg width="10" height="10" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                          <span style={{ fontSize: '0.625rem', color: '#64748b', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachment.name}</span>
+                          <span style={{ fontSize: '0.625rem', color: '#475569' }}>{attachment.uploadedDate}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Right Side - Additional Details */}
@@ -3488,13 +4066,19 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '8px 12px',
-                    backgroundColor: '#1a2332',
+                    backgroundColor: selectedActionItem.status === 'Completed' ? 'rgba(16, 185, 129, 0.15)' : '#1a2332',
                     borderRadius: '6px',
-                    border: '1px solid #334155',
+                    border: selectedActionItem.status === 'Completed' ? '1px solid #10b981' : '1px solid #334155',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #475569' }} />
-                      <span style={{ fontSize: '0.875rem', color: '#e2e8f0' }}>{selectedActionItem.status}</span>
+                      {selectedActionItem.status === 'Completed' ? (
+                        <svg width="16" height="16" fill="none" stroke="#10b981" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #475569' }} />
+                      )}
+                      <span style={{ fontSize: '0.875rem', color: selectedActionItem.status === 'Completed' ? '#10b981' : '#e2e8f0' }}>{selectedActionItem.status}</span>
                     </div>
                     <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

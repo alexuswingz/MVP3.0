@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -14,6 +15,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,10 +39,28 @@ export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const { logout, user } = useAuthStore();
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
+    products: true,
+    production: true,
+  });
 
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const toggleExpanded = (itemId: string) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId],
+    }));
+  };
+
+  const isChildActive = (item: typeof NAV_ITEMS[number]) => {
+    if ('children' in item && item.children) {
+      return item.children.some(child => pathname.startsWith(child.path));
+    }
+    return false;
   };
 
   return (
@@ -99,11 +119,92 @@ export function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
         {NAV_ITEMS.map((item) => {
           const Icon = iconMap[item.icon];
+          const hasChildren = 'children' in item && item.children && item.children.length > 0;
+          const isExpanded = expandedItems[item.id];
           const isActive = item.path === '/dashboard'
             ? pathname === '/dashboard' || pathname === '/dashboard/'
-            : pathname.startsWith(item.path);
+            : !hasChildren && pathname.startsWith(item.path);
+          const childActive = isChildActive(item);
           const itemWithBadge = item as NavItem;
           const hasBadge = itemWithBadge.badge && itemWithBadge.badge > 0;
+
+          if (hasChildren) {
+            return (
+              <div key={item.id}>
+                <button
+                  onClick={() => toggleExpanded(item.id)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg',
+                    'transition-all duration-200 group',
+                    childActive
+                      ? 'text-foreground-primary'
+                      : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
+                  )}
+                >
+                  <Icon className={cn(
+                    'w-5 h-5 flex-shrink-0',
+                    childActive ? 'text-foreground-primary' : 'text-foreground-muted group-hover:text-foreground-secondary'
+                  )} />
+                  
+                  <AnimatePresence>
+                    {!sidebarCollapsed && (
+                      <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex-1 font-medium text-sm whitespace-nowrap overflow-hidden text-left"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+
+                  {!sidebarCollapsed && (
+                    <ChevronDown className={cn(
+                      'w-4 h-4 transition-transform duration-200',
+                      isExpanded ? 'rotate-180' : ''
+                    )} />
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isExpanded && !sidebarCollapsed && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-6 pl-3 border-l border-border space-y-1 mt-1">
+                        {item.children!.map((child) => {
+                          const isChildItemActive = pathname === child.path || 
+                            (child.path !== '/dashboard/products' && child.path !== '/dashboard/forecast' && pathname.startsWith(child.path));
+                          
+                          return (
+                            <Link
+                              key={child.id}
+                              href={child.path}
+                              className={cn(
+                                'flex items-center gap-3 px-3 py-2 rounded-lg',
+                                'transition-all duration-200',
+                                isChildItemActive
+                                  ? 'text-primary'
+                                  : 'text-foreground-muted hover:bg-background-tertiary hover:text-foreground-primary'
+                              )}
+                            >
+                              <span className="text-sm">{child.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          }
 
           return (
             <Link

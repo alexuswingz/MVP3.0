@@ -5,13 +5,28 @@ export const APP_TAGLINE = 'Manage your products with peel';
 
 // Navigation Items
 export const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/dashboard' },
-  { id: 'products', label: 'Products', icon: 'Package', path: '/dashboard/products' },
-  { id: 'forecast', label: 'Forecast', icon: 'TrendingUp', path: '/dashboard/forecast' },
-  { id: 'shipments', label: 'Shipments', icon: 'Truck', path: '/dashboard/shipments' },
+  { id: 'home', label: 'Home', icon: 'LayoutDashboard', path: '/dashboard' },
+  { 
+    id: 'products', 
+    label: 'Products', 
+    icon: 'Package', 
+    path: '/dashboard/products',
+    children: [
+      { id: 'my-products', label: 'My Products', path: '/dashboard/products' },
+      { id: 'vine', label: 'Vine', path: '/dashboard/vines' },
+    ]
+  },
+  { 
+    id: 'production', 
+    label: 'Production', 
+    icon: 'TrendingUp', 
+    path: '/dashboard/forecast',
+    children: [
+      { id: 'forecast', label: 'Forecast', path: '/dashboard/forecast' },
+      { id: 'shipments', label: 'Shipments', path: '/dashboard/shipments' },
+    ]
+  },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
-  { id: 'vines', label: 'Vines', icon: 'Sprout', path: '/dashboard/vines' },
-  { id: 'settings', label: 'Settings', icon: 'Settings', path: '/dashboard/settings' },
 ] as const;
 
 // Shipment Statuses
