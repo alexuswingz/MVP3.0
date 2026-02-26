@@ -23,13 +23,18 @@ DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-# Add Railway domain automatically if present
+# Add Railway domains automatically
 RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
 if RAILWAY_PUBLIC_DOMAIN:
     ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
 
+RAILWAY_PRIVATE_DOMAIN = os.environ.get('RAILWAY_PRIVATE_DOMAIN')
+if RAILWAY_PRIVATE_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PRIVATE_DOMAIN)
+
 # Allow all hosts in production for Railway (they handle routing)
-if os.environ.get('RAILWAY_ENVIRONMENT'):
+# Also check for DATABASE_URL as indicator of Railway environment
+if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PUBLIC_DOMAIN') or 'railway' in os.environ.get('DATABASE_URL', ''):
     ALLOWED_HOSTS = ['*']
 
 # Application definition
