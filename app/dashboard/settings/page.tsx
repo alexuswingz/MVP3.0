@@ -14,12 +14,15 @@ import {
   Clock,
   Factory,
   Ship,
+  ShoppingCart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { AmazonAccountConnect } from '@/components/settings/AmazonAccountConnect';
 
 const TABS = [
+  { id: 'amazon', label: 'Amazon Accounts', icon: ShoppingCart },
   { id: 'doi', label: 'DOI Settings', icon: Target },
   { id: 'forecast', label: 'Forecast', icon: TrendingUp },
   { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -28,7 +31,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('doi');
+  const [activeTab, setActiveTab] = useState('amazon');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -55,6 +58,9 @@ export default function SettingsPage() {
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'amazon':
+        return <AmazonAccountConnect />;
+        
       case 'doi':
         return (
           <div className="space-y-6">

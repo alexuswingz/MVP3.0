@@ -431,6 +431,98 @@ class ExtendedApiClient extends ApiClient {
   async getShipmentStats(): Promise<ShipmentStats> {
     return this.request<ShipmentStats>('/shipments/stats/');
   }
+
+  // Amazon Account API methods
+  async getAmazonAuthUrl(
+    marketplaceId: string = 'ATVPDKIKX0DER',
+    draftMode: boolean = false
+  ): Promise<AmazonAuthUrlResponse> {
+    return this.request<AmazonAuthUrlResponse>('/amazon/auth-url/', {
+      method: 'POST',
+      body: JSON.stringify({
+        marketplace_id: marketplaceId,
+        draft_mode: draftMode,
+      }),
+    });
+  }
+
+  async connectSelfAuthorized(
+    marketplaceId: string = 'ATVPDKIKX0DER',
+    accountName: string = 'My Amazon Account'
+  ): Promise<{ message: string; account: AmazonAccount }> {
+    return this.request<{ message: string; account: AmazonAccount }>('/amazon/connect-self/', {
+      method: 'POST',
+      body: JSON.stringify({
+        marketplace_id: marketplaceId,
+        account_name: accountName,
+      }),
+    });
+  }
+
+  async getAmazonAccounts(): Promise<AmazonAccount[]> {
+    const response = await this.request<AmazonAccount[] | { results: AmazonAccount[] }>(
+      '/amazon/accounts/'
+    );
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return response.results || [];
+  }
+
+  async getAmazonAccount(id: number): Promise<AmazonAccount> {
+    return this.request<AmazonAccount>(`/amazon/accounts/${id}/`);
+  }
+
+  async updateAmazonAccount(
+    id: number,
+    data: { account_name?: string; is_active?: boolean }
+  ): Promise<AmazonAccount> {
+    return this.request<AmazonAccount>(`/amazon/accounts/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async disconnectAmazonAccount(id: number): Promise<void> {
+    return this.request(`/amazon/accounts/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async syncAmazonAccount(
+    id: number,
+    operation: 'products' | 'inventory' | 'orders' | 'sales' | 'sales_full' | 'full' = 'full'
+  ): Promise<SyncTriggerResponse> {
+    return this.request<SyncTriggerResponse>(`/amazon/accounts/${id}/sync/`, {
+      method: 'POST',
+      body: JSON.stringify({ operation }),
+    });
+  }
+
+  async getAmazonAccountLogs(id: number): Promise<SyncLog[]> {
+    return this.request<SyncLog[]>(`/amazon/accounts/${id}/logs/`);
+  }
+
+  async getAmazonMarketplaces(): Promise<Marketplace[]> {
+    return this.request<Marketplace[]>('/amazon/accounts/marketplaces/');
+  }
+
+  async getAmazonSyncStatus(id: number): Promise<SyncStatusResponse> {
+    return this.request<SyncStatusResponse>(`/amazon/accounts/${id}/sync_status/`);
+  }
+}
+
+interface SyncStatusResponse {
+  sync_status: 'pending' | 'syncing' | 'completed' | 'failed';
+  sync_error: string;
+  current_step: 'idle' | 'products' | 'inventory' | 'sales' | 'images';
+  steps: {
+    products: boolean;
+    inventory: boolean;
+    sales: boolean;
+    images: boolean;
+  };
+  last_sync_at: string | null;
 }
 
 // Forecast types
@@ -681,6 +773,52 @@ interface ShipmentStats {
   total_units_in_transit: number;
 }
 
+// Amazon Account types
+interface AmazonAccount {
+  id: number;
+  seller_id: string;
+  marketplace_id: string;
+  marketplace_name: string;
+  account_name: string;
+  is_active: boolean;
+  authorized_at: string;
+  last_sync_at: string | null;
+  sync_status: 'pending' | 'syncing' | 'completed' | 'failed';
+  sync_error: string;
+  needs_token_refresh: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AmazonAuthUrlResponse {
+  authorization_url: string;
+  state: string;
+  expires_in_seconds: number;
+}
+
+interface Marketplace {
+  id: string;
+  name: string;
+}
+
+interface SyncLog {
+  id: number;
+  operation: 'products' | 'inventory' | 'orders' | 'full';
+  status: 'started' | 'completed' | 'failed';
+  started_at: string;
+  completed_at: string | null;
+  records_processed: number;
+  records_created: number;
+  records_updated: number;
+  records_failed: number;
+  error_message: string;
+}
+
+interface SyncTriggerResponse {
+  message: string;
+  sync_log_id: number;
+}
+
 export const api = new ExtendedApiClient();
 export type { 
   UserResponse, 
@@ -705,4 +843,9 @@ export type {
   ShipmentCreateInput,
   ShipmentBookInput,
   ShipmentStats,
+  AmazonAccount,
+  AmazonAuthUrlResponse,
+  Marketplace,
+  SyncLog,
+  SyncTriggerResponse,
 };

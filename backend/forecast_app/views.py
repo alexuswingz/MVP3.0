@@ -22,6 +22,11 @@ from .serializers import (
     ForecastCacheSerializer
 )
 from .services import ForecastService, DEFAULT_SETTINGS
+from .services.algorithms import (
+    calculate_forecast_18m_plus,
+    calculate_forecast_6_18m,
+    calculate_forecast_0_6m,
+)
 from analytics_app.models import WeeklySales
 from inventory_app.models import LabelInventory, CurrentInventory
 
@@ -347,6 +352,7 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related('brand').annotate(
             weeks_of_data=DjCount('weekly_sales'),
             latest_week=Max('weekly_sales__week_ending'),
+            first_sale_week=Min('weekly_sales__week_ending'),
             avg_weekly_sales=Avg('weekly_sales__units_sold'),
             total_sales=Sum('weekly_sales__units_sold'),
         ).distinct()
@@ -366,7 +372,18 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         # Limit the query
         products_with_sales = products_with_sales[:limit]
         
-        # Build forecast rows using simplified calculation
+        # Prefetch weekly sales data for all products
+        product_ids = [p.id for p in products_with_sales]
+        weekly_sales_data = {}
+        for sale in WeeklySales.objects.filter(product_id__in=product_ids).order_by('product_id', 'week_ending'):
+            if sale.product_id not in weekly_sales_data:
+                weekly_sales_data[sale.product_id] = []
+            weekly_sales_data[sale.product_id].append({
+                'week_end': sale.week_ending,
+                'units_sold': sale.units_sold,
+            })
+        
+        # Build forecast rows using the actual algorithms
         forecast_rows = []
         today = date.today()
         
@@ -381,28 +398,80 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
             awd_available = inv.get('awd_available', 0)
             awd_total = inv.get('awd_total', 0)
             
-            # Simplified DOI calculation based on average weekly sales
+            # Determine algorithm based on product age (launch date or first sale)
+            launch_date = product.launch_date or product.first_sale_week
+            if launch_date:
+                months_since_launch = (today.year - launch_date.year) * 12 + (today.month - launch_date.month)
+                if months_since_launch < 6:
+                    algorithm = '0-6m'
+                elif months_since_launch < 18:
+                    algorithm = '6-18m'
+                else:
+                    algorithm = '18m+'
+            else:
+                algorithm = '18m+'  # Default to most mature algorithm
+            
+            # Get product's weekly sales data
+            units_data = weekly_sales_data.get(product.id, [])
             avg_weekly = product.avg_weekly_sales or 0
-            if avg_weekly > 0:
-                # DOI Total = total inventory / daily average
-                doi_total = int((total_inventory / avg_weekly) * 7)  # Convert weeks to days
-                # DOI FBA = FBA total / daily average
-                doi_fba = int((fba_total / avg_weekly) * 7) if fba_total > 0 else 0
-            else:
-                doi_total = 365
-                doi_fba = 365
             
-            # Calculate units to make (simplified)
-            lead_time_weeks = doi_threshold / 7
-            units_needed_in_lead_time = int(avg_weekly * lead_time_weeks)
-            units_to_make = max(0, units_needed_in_lead_time - total_inventory)
+            # Prepare settings for algorithm
+            algo_settings = {
+                **settings,
+                'total_inventory': total_inventory,
+                'fba_available': fba_available,
+            }
             
-            # Calculate runout date
-            if avg_weekly > 0:
-                weeks_until_runout = total_inventory / avg_weekly
-                runout_date = (today + timedelta(weeks=weeks_until_runout)).isoformat()
-            else:
-                runout_date = None
+            # Check if we have enough historical data for 18m+ algorithm
+            # 18m+ requires 52+ weeks of data to use prior year pattern matching
+            has_prior_year_data = len(units_data) >= 52
+            
+            # Use full 18m+ algorithm only if we have prior year data
+            if has_prior_year_data and algorithm == '18m+':
+                try:
+                    forecast_result = calculate_forecast_18m_plus(
+                        units_data, today, algo_settings
+                    )
+                    units_to_make = forecast_result['units_to_make']
+                    doi_total = forecast_result['doi_total_days']
+                    doi_fba = forecast_result['doi_fba_days']
+                    total_units_needed = forecast_result['total_units_needed']
+                    runout_date = forecast_result.get('runout_date_total')
+                    if runout_date:
+                        runout_date = runout_date.isoformat() if hasattr(runout_date, 'isoformat') else str(runout_date)
+                except Exception:
+                    # Fallback to velocity-based calculation
+                    has_prior_year_data = False
+            
+            # For products without prior year data, use velocity-based forecast
+            # This applies the market adjustment to average sales velocity
+            if not has_prior_year_data:
+                # Apply market adjustment to average weekly sales
+                market_adj = settings.get('market_adjustment', 0.05)
+                velocity_adj = settings.get('velocity_weight', 0.15) * 0.10  # velocity_weight * sales_velocity_adjustment
+                adjusted_weekly = avg_weekly * (1 + market_adj + velocity_adj)
+                
+                if adjusted_weekly > 0:
+                    # DOI = inventory / daily sales rate
+                    daily_sales = adjusted_weekly / 7
+                    doi_total = int(total_inventory / daily_sales) if daily_sales > 0 else 365
+                    doi_fba = int(fba_total / daily_sales) if daily_sales > 0 and fba_total > 0 else 0
+                    
+                    # Units needed during lead time
+                    lead_time_weeks = doi_threshold / 7
+                    total_units_needed = int(adjusted_weekly * lead_time_weeks)
+                    units_to_make = max(0, total_units_needed - total_inventory)
+                    
+                    # Runout date
+                    days_until_runout = total_inventory / daily_sales if daily_sales > 0 else 365
+                    runout_date = (today + timedelta(days=days_until_runout)).isoformat()
+                else:
+                    # No sales data - use defaults
+                    doi_total = 365
+                    doi_fba = 365
+                    total_units_needed = 0
+                    units_to_make = 0
+                    runout_date = None
             
             forecast_rows.append({
                 'product': {
@@ -415,6 +484,7 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
                     'category': product.category or '',
                     'status': product.status,
                     'imageUrl': product.image_url or '',
+                    'launchDate': launch_date.isoformat() if launch_date else None,
                 },
                 # Inventory breakdown
                 'inventory': {
@@ -424,15 +494,15 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
                     'awdAvailable': awd_available,
                     'awdTotal': awd_total,
                 },
-                # Forecast results
+                # Forecast results from algorithm
                 'unitsToMake': units_to_make,
                 'daysOfInventory': doi_total,
                 'doiFba': doi_fba,
                 'runoutDate': runout_date,
-                'totalUnitsNeeded': units_needed_in_lead_time,
+                'totalUnitsNeeded': total_units_needed,
                 'weeksOfData': product.weeks_of_data or 0,
                 'avgWeeklySales': round(avg_weekly, 1) if avg_weekly else 0,
-                'algorithm': '18m+',
+                'algorithm': algorithm,
             })
         
         # Sort results

@@ -31,6 +31,14 @@ class Product(models.Model):
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
+    amazon_account = models.ForeignKey(
+        'amazon_integration.AmazonSellerAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+        help_text='The Amazon seller account this product belongs to'
+    )
     
     # Core identifiers (from SP-API)
     asin = models.CharField(max_length=20, blank=True, db_index=True)

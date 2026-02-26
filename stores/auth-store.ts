@@ -8,6 +8,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  _hasHydrated: boolean;
 }
 
 interface AuthActions {
@@ -18,6 +19,7 @@ interface AuthActions {
   setSessionExpired: () => void;
   checkAuth: () => Promise<void>;
   clearError: () => void;
+  setHasHydrated: (state: boolean) => void;
 }
 
 const mapUserResponse = (response: UserResponse): User => ({
@@ -40,6 +42,11 @@ export const useAuthStore = create<AuthState & AuthActions>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      _hasHydrated: false,
+
+      setHasHydrated: (state: boolean) => {
+        set({ _hasHydrated: state });
+      },
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -131,6 +138,9 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         user: state.user, 
         isAuthenticated: state.isAuthenticated 
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

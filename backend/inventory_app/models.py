@@ -173,6 +173,14 @@ class Shipment(models.Model):
     ]
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipments')
+    amazon_account = models.ForeignKey(
+        'amazon_integration.AmazonSellerAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='shipments',
+        help_text='The Amazon seller account this shipment belongs to'
+    )
     
     # Identifiers
     shipment_id = models.CharField(max_length=100, blank=True, db_index=True)

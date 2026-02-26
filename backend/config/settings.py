@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'analytics_app',
     'inventory_app',
     'rest_api_app',
+    'amazon_integration',
 ]
 
 SITE_ID = 1
@@ -280,5 +281,39 @@ LOGGING = {
             'level': 'WARNING',  # Set to DEBUG to see SQL queries
             'propagate': False,
         },
+        'amazon_integration': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
+
+# Amazon SP-API Settings
+AMAZON_SP_API = {
+    'CLIENT_ID': os.environ.get('AMAZON_SP_API_CLIENT_ID', ''),
+    'CLIENT_SECRET': os.environ.get('AMAZON_SP_API_CLIENT_SECRET', ''),
+    'APP_ID': os.environ.get('AMAZON_SP_API_APP_ID', ''),
+    'REFRESH_TOKEN': os.environ.get('AMAZON_SP_API_REFRESH_TOKEN', ''),  # Self-authorized token
+    'REDIRECT_URI': os.environ.get(
+        'AMAZON_OAUTH_REDIRECT_URI',
+        'http://localhost:8000/api/v1/amazon/callback/'
+    ),
+    'LWA_TOKEN_URL': 'https://api.amazon.com/auth/o2/token',
+    'SELLER_CENTRAL_URLS': {
+        'NA': 'https://sellercentral.amazon.com',
+        'EU': 'https://sellercentral-europe.amazon.com',
+        'FE': 'https://sellercentral.amazon.co.jp',
+    },
+    'SP_API_ENDPOINTS': {
+        'NA': 'https://sellingpartnerapi-na.amazon.com',
+        'EU': 'https://sellingpartnerapi-eu.amazon.com',
+        'FE': 'https://sellingpartnerapi-fe.amazon.com',
+    },
+}
+
+# Token encryption key for Amazon refresh tokens
+TOKEN_ENCRYPTION_KEY = os.environ.get('TOKEN_ENCRYPTION_KEY', '')
+
+# Frontend URL for OAuth redirects
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')

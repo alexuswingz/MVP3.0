@@ -1209,7 +1209,20 @@ export default function NGOOSmodal({
             </div>
           ) : (
             <NgoosContent
-              data={selectedRow ?? {}}
+              data={{
+                ...(selectedRow ?? {}),
+                // Merge product data from API if available
+                ...(forecastData?.product ? {
+                  product: forecastData.product,
+                  name: forecastData.product.name,
+                  size: forecastData.product.size,
+                  asin: forecastData.product.asin,
+                  sku: forecastData.product.sku,
+                  brand: forecastData.product.brand,
+                  image_url: forecastData.product.image_url,
+                  mainImage: forecastData.product.image_url,
+                } : {}),
+              }}
               inventoryOnly
               isDarkMode={isDarkMode}
               isAlreadyAdded={false}

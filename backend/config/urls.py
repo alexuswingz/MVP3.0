@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/v1/auth/', include('authentication_app.urls')),
     path('api/v1/', include('forecast_app.urls')),
     path('api/v1/', include('inventory_app.urls')),
+    path('api/v1/amazon/', include('amazon_integration.urls')),
 ]
 
 if settings.DEBUG:
