@@ -118,9 +118,18 @@ export default function ProductsPage() {
             <Image src="/box.png" alt="My Products" width={20} height={20} className="object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-foreground-primary">My Products</h1>
-          <div className="flex items-center rounded-lg border border-border bg-background-secondary overflow-hidden">
+          <div
+            className="flex items-center overflow-hidden"
+            style={{
+              height: 32,
+              borderRadius: 4,
+              border: '1px solid #334155',
+              backgroundColor: '#1E293B',
+              gap: 10,
+            }}
+          >
             <select
-              className="h-9 pl-3 pr-8 bg-transparent text-foreground-primary text-sm focus:outline-none focus:ring-1 focus:ring-primary border-0 cursor-pointer appearance-none"
+              className="h-full pl-3 pr-8 bg-transparent text-foreground-primary text-sm focus:outline-none border-0 cursor-pointer appearance-none"
               defaultValue="Amazon"
             >
               <option value="Amazon">Amazon</option>
@@ -130,30 +139,30 @@ export default function ProductsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground-muted" />
             <input
               type="search"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 pl-9 pr-4 w-48 rounded-lg border border-border bg-background-secondary text-foreground-primary text-sm placeholder:text-foreground-muted focus:outline-none focus:ring-1 focus:ring-primary"
+              className="text-foreground-primary text-sm placeholder:text-foreground-muted focus:outline-none"
+              style={{
+                height: 32,
+                width: 204,
+                paddingLeft: 32,
+                paddingRight: 8,
+                borderRadius: 6,
+                border: '1px solid #334155',
+                backgroundColor: '#4B5563',
+              }}
             />
           </div>
           <button
             type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background-secondary text-foreground-secondary hover:text-foreground-primary hover:bg-background-tertiary transition-colors disabled:opacity-50"
-            aria-label="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            type="button"
-            className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-background-secondary text-foreground-secondary hover:text-foreground-primary hover:bg-background-tertiary transition-colors"
+            className="flex items-center justify-center hover:opacity-80 transition-opacity"
             aria-label="Settings"
           >
-            <Settings className="w-4 h-4" />
+            <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
           </button>
         </div>
       </motion.div>
@@ -352,11 +361,12 @@ export default function ProductsPage() {
                           style={{
                             position: 'relative',
                             display: 'inline-flex',
+                            alignItems: 'center',
                             height: 24,
                             width: 44,
                             flexShrink: 0,
                             borderRadius: 9999,
-                            border: '2px solid transparent',
+                            padding: 2,
                             backgroundColor: isActive ? '#3B82F6' : isDarkMode ? '#374151' : '#E5E7EB',
                             cursor: 'pointer',
                             transition: 'background-color 0.2s',
@@ -364,15 +374,13 @@ export default function ProductsPage() {
                         >
                           <span
                             style={{
-                              position: 'absolute',
-                              top: 2,
-                              left: isActive ? 22 : 2,
                               width: 20,
                               height: 20,
                               borderRadius: '50%',
                               backgroundColor: '#FFFFFF',
                               boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                              transition: 'left 0.2s',
+                              transition: 'transform 0.2s',
+                              transform: isActive ? 'translateX(20px)' : 'translateX(0)',
                             }}
                           />
                         </button>
