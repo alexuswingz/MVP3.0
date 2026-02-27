@@ -42,6 +42,8 @@ const statusConfig: Record<ShipmentStatus, { label: string }> = {
 const typeConfig: Record<ShipmentType, { label: string }> = {
   awd: { label: 'AWD' },
   fba: { label: 'FBA' },
+  mfg: { label: 'MFG' },
+  hazmat: { label: 'Hazmat' },
 };
 
 /** Map Shipment status (and booking, item count) to ADD PRODUCTS / BOOK SHIPMENT for the table.

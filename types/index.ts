@@ -106,7 +106,7 @@ export interface SeasonalityData {
 
 // Shipments
 export type ShipmentStatus = 'planning' | 'ready' | 'shipped' | 'received' | 'archived';
-export type ShipmentType = 'awd' | 'fba';
+export type ShipmentType = 'awd' | 'fba' | 'mfg' | 'hazmat';
 
 export interface Shipment {
   id: string;

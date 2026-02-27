@@ -483,7 +483,8 @@ export function BookShipmentForm({
         }));
 
       // Map shipment type to API format
-      const shipmentType: ShipmentType = formData.shipmentType.toLowerCase() === 'awd' ? 'awd' : 'fba';
+      const rawType = formData.shipmentType.toLowerCase();
+      const shipmentType: ShipmentType = rawType === 'fba' ? 'fba' : rawType === 'manufacturing order' || rawType === 'mfg' ? 'mfg' : rawType === 'hazmat' ? 'hazmat' : 'awd';
 
       if (existingShipmentId) {
         // Book existing shipment
@@ -600,7 +601,8 @@ export function BookShipmentForm({
             <option value="">Select Shipment Type</option>
             <option value="FBA">FBA</option>
             <option value="AWD">AWD</option>
-            <option value="Parcel">Parcel</option>
+            <option value="Manufacturing Order">Manufacturing Order</option>
+            <option value="Hazmat">Hazmat</option>
           </select>
         </div>
       </div>

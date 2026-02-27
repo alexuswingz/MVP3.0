@@ -52,6 +52,8 @@ export const SHIPMENT_STATUSES = [
 export const SHIPMENT_TYPES = [
   { value: 'awd', label: 'AWD', description: 'Amazon Warehousing & Distribution' },
   { value: 'fba', label: 'FBA', description: 'Fulfillment by Amazon' },
+  { value: 'mfg', label: 'Manufacturing Order', description: 'Manufacturing Order' },
+  { value: 'hazmat', label: 'Hazmat', description: 'Hazmat Shipment' },
 ] as const;
 
 // Forecast Models

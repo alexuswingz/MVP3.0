@@ -170,6 +170,8 @@ class Shipment(models.Model):
     TYPE_CHOICES = [
         ('fba', 'FBA'),
         ('awd', 'AWD'),
+        ('mfg', 'Manufacturing Order'),
+        ('hazmat', 'Hazmat'),
     ]
     
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipments')

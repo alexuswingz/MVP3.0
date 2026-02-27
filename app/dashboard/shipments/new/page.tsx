@@ -70,7 +70,8 @@ function saveCompletedShipmentToStorage(
   if (typeof window === 'undefined') return;
   try {
     const name = form?.shipmentName || `${dateStr} ${typeStr}`;
-    const type = form?.shipmentType?.toLowerCase() === 'fba' ? 'fba' : 'awd';
+    const rawType = form?.shipmentType?.toLowerCase() || 'awd';
+    const type = rawType === 'fba' ? 'fba' : rawType === 'manufacturing order' || rawType === 'mfg' ? 'mfg' : rawType === 'hazmat' ? 'hazmat' : 'awd';
     const [y, m, d] = dateStr.split('.').map(Number);
     const plannedDate = new Date(y, m - 1, d);
     const now = new Date();
@@ -389,7 +390,8 @@ export default function NewShipmentAddProductsPage() {
     setIsCreatingDraft(true);
     try {
       const name = (shipmentData?.shipmentName || `${dateStr} ${typeStr}`).trim() || 'New Shipment';
-      const shipmentType = (shipmentData?.shipmentType?.toLowerCase() === 'fba' ? 'fba' : 'awd') as 'fba' | 'awd';
+      const rawType = shipmentData?.shipmentType?.toLowerCase() || 'awd';
+      const shipmentType = (rawType === 'fba' ? 'fba' : rawType === 'manufacturing order' || rawType === 'mfg' ? 'mfg' : rawType === 'hazmat' ? 'hazmat' : 'awd') as 'fba' | 'awd' | 'mfg' | 'hazmat';
       const items = tableRows
         .filter((r) => addedProductIds.has(String(r.id)))
         .map((r) => ({
@@ -1558,6 +1560,8 @@ export default function NewShipmentAddProductsPage() {
         preSelectedType={
           shipmentData?.shipmentType?.toUpperCase() === 'FBA' ? 'fba' :
           shipmentData?.shipmentType?.toUpperCase() === 'AWD' ? 'awd' :
+          shipmentData?.shipmentType?.toUpperCase() === 'MANUFACTURING ORDER' || shipmentData?.shipmentType?.toUpperCase() === 'MFG' ? 'mfg' :
+          shipmentData?.shipmentType?.toUpperCase() === 'HAZMAT' ? 'hazmat' :
           null
         }
         products={tableRows

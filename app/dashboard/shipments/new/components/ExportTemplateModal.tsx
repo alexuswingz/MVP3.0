@@ -6,10 +6,10 @@ import { Loader2 } from 'lucide-react';
 interface ExportTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport?: (selectedType: 'fba' | 'awd' | 'production-order') => void;
+  onExport?: (selectedType: 'fba' | 'awd' | 'mfg' | 'hazmat') => void;
   onBeginNextStep?: () => void;
   /** When set, skip the type selection and directly export with this type */
-  preSelectedType?: 'fba' | 'awd' | null;
+  preSelectedType?: 'fba' | 'awd' | 'mfg' | 'hazmat' | null;
   products: Array<{
     id: string;
     childSku?: string;
@@ -38,7 +38,7 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
   products,
   shipmentData,
 }) => {
-  const [selectedType, setSelectedType] = useState<'fba' | 'awd' | 'production-order' | null>(null);
+  const [selectedType, setSelectedType] = useState<'fba' | 'awd' | 'production-order' | 'hazmat' | null>(null);
   const [showExportComplete, setShowExportComplete] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +50,8 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
       const t = String(shipmentData.shipmentType).trim().toUpperCase();
       if (t === 'FBA') setSelectedType('fba');
       else if (t === 'AWD') setSelectedType('awd');
-      else if (t === 'PRODUCTION ORDER' || t === 'PRODUCTION-ORDER') setSelectedType('production-order');
+      else if (t === 'PRODUCTION ORDER' || t === 'PRODUCTION-ORDER' || t === 'MANUFACTURING ORDER' || t === 'MFG') setSelectedType('production-order');
+      else if (t === 'HAZMAT') setSelectedType('hazmat');
     }
     if (!isOpen) {
       setSelectedType(null);
@@ -65,7 +66,8 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
     if (isOpen && preSelectedType && !autoExportTriggered && !showExportComplete) {
       setAutoExportTriggered(true);
       setIsExporting(true);
-      setSelectedType(preSelectedType);
+      const internalType = preSelectedType === 'mfg' ? 'production-order' : preSelectedType;
+      setSelectedType(internalType);
       
       const doAutoExport = async () => {
         try {
@@ -316,12 +318,22 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
     },
     {
       id: 'production-order' as const,
-      label: 'Production Order',
+      label: 'MFG Order',
       icon: (
         <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="8" y="32" width="34" height="10" fill="currentColor" rx="1"/>
           <rect x="12" y="23" width="26" height="10" fill="currentColor" rx="1"/>
           <rect x="16" y="14" width="18" height="10" fill="currentColor" rx="1"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'hazmat' as const,
+      label: 'Hazmat',
+      icon: (
+        <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M25 5L45 40H5L25 5Z" stroke="currentColor" strokeWidth="3" fill="none"/>
+          <text x="25" y="32" textAnchor="middle" fill="currentColor" fontSize="16" fontWeight="bold">!</text>
         </svg>
       ),
     },
@@ -334,8 +346,9 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
         setError(null);
         
         // Update shipment type in parent component before exporting
-        if (onExport && (selectedType === 'fba' || selectedType === 'awd')) {
-          onExport(selectedType);
+        if (onExport && (selectedType === 'fba' || selectedType === 'awd' || selectedType === 'production-order' || selectedType === 'hazmat')) {
+          const typeToExport = selectedType === 'production-order' ? 'mfg' : selectedType;
+          onExport(typeToExport);
         }
         
         // Call server API to generate Excel (exceljs runs only on server)

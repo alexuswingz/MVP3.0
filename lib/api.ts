@@ -676,7 +676,7 @@ interface GenerateForecastsResponse {
 
 // Shipment types
 type ShipmentStatus = 'planning' | 'ready' | 'shipped' | 'in_transit' | 'receiving' | 'received' | 'cancelled';
-type ShipmentType = 'fba' | 'awd';
+type ShipmentType = 'fba' | 'awd' | 'mfg' | 'hazmat';
 
 interface ShipmentItem {
   id: number;
