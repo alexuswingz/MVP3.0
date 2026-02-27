@@ -116,6 +116,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [actionItemsMenuOpen, setActionItemsMenuOpen] = useState(false);
   const [showCompletedItems, setShowCompletedItems] = useState(false);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
+  const [sortBy, setSortBy] = useState<'date_created' | 'due_date' | 'assignee'>('due_date');
+  const [sortSubmenuOpen, setSortSubmenuOpen] = useState<'asc' | 'desc' | null>(null);
   const [showActionItemModal, setShowActionItemModal] = useState(false);
   const [showDueDateCalendar, setShowDueDateCalendar] = useState(false);
   const [newActionItemDueDate, setNewActionItemDueDate] = useState<Date | null>(null);
@@ -127,6 +129,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [editingField, setEditingField] = useState<'subject' | 'description' | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [descriptionHtml, setDescriptionHtml] = useState('');
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   
   // Store all action items with their edits
   type AttachmentType = {
@@ -314,10 +317,33 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     return defaultActionItemsData;
   };
   
-  const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItemType>>(getInitialActionItems);
+const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItemType>>(getInitialActionItems);
   
   const [selectedActionItem, setSelectedActionItem] = useState<ActionItemType | null>(null);
-  
+
+  // Helper function to sort action items
+  const sortActionItems = (items: ActionItemType[]): ActionItemType[] => {
+    if (!sortDirection) return items;
+    
+    return [...items].sort((a, b) => {
+      let comparison = 0;
+      
+      if (sortBy === 'date_created') {
+        const dateA = new Date(a.dateCreated).getTime();
+        const dateB = new Date(b.dateCreated).getTime();
+        comparison = dateA - dateB;
+      } else if (sortBy === 'due_date') {
+        const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+        const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+        comparison = dateA - dateB;
+      } else if (sortBy === 'assignee') {
+        comparison = (a.assignedTo || '').localeCompare(b.assignedTo || '');
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  };
+
   // Save action items to localStorage whenever they change
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -390,7 +416,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     rangeDragRef.current = null;
   }, [isOpen, selectedProduct?.asin]);
 
-  // Add CSS for hiding scrollbar
+  // Add CSS for hiding scrollbar and stable scrollbar
   React.useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
@@ -794,8 +820,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
         style={{
           width: '90vw',
           maxWidth: '1009px',
-          height: 'auto',
-          minHeight: '722px',
+          height: '90vh',
           maxHeight: '90vh',
           borderRadius: '12px',
           boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
@@ -864,9 +889,10 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
         {/* Main content */}
         <div
+          className="scrollbar-hide"
           style={{
             flex: 1,
-            minHeight: '662px',
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             backgroundColor: '#1A2235',
@@ -1104,8 +1130,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
               </div>
             </div>
 
-            {/* Horizontal Scrolling Container - Hidden when Action Items expanded */}
-            {!actionItemsExpanded && (
+            {/* Horizontal Scrolling Container */}
             <div
               style={{
                 display: 'flex',
@@ -1360,10 +1385,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 </div>
               </div>
             </div>
-            )}
 
-            {/* Three Large Metric Cards - Hidden when Action Items expanded */}
-            {!actionItemsExpanded && (
+            {/* Three Large Metric Cards */}
             <div
               style={{
                 display: 'grid',
@@ -1478,7 +1501,6 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 </div>
               </div>
             </div>
-            )}
 
             {/* Tab Content - Unit Forecast Chart (Inventory tab) - matches 1000bananas2.0 Ngoos */}
             {activeTab === 'inventory' && chartBuild && chartBuild.data.length > 0 && (
@@ -2280,7 +2302,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             type="text"
                             placeholder="Search..."
                             style={{
-                              backgroundColor: '#1a2332',
+                              backgroundColor: '#1A2235',
                               border: '1px solid #334155',
                               borderRadius: '6px',
                               padding: '4px 12px 4px 32px',
@@ -2317,15 +2339,15 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                               style={{
                                 position: 'absolute',
                                 top: '100%',
-                                left: '-170px',
+                                right: 0,
                                 marginTop: '4px',
-                                backgroundColor: '#1e293b',
+                                backgroundColor: '#0F172A',
                                 border: '1px solid #334155',
                                 borderRadius: '8px',
-                                padding: '8px 0',
-                                minWidth: '180px',
+                                padding: '4px 0',
+                                width: '174px',
                                 zIndex: 50,
-                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
                               }}
                             >
                               <button
@@ -2334,18 +2356,24 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                                   setActionItemsMenuOpen(false);
                                 }}
                                 style={{
-                                  width: '100%',
+                                  width: 'calc(100% - 8px)',
+                                  margin: '0 4px',
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '10px',
-                                  padding: '8px 12px',
+                                  padding: '6px 8px',
+                                  height: '27px',
                                   backgroundColor: 'transparent',
                                   border: 'none',
+                                  borderRadius: '4px',
                                   cursor: 'pointer',
                                   color: '#e2e8f0',
                                   fontSize: '0.875rem',
                                   textAlign: 'left',
+                                  boxSizing: 'border-box',
                                 }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1C2634'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
                                 <div style={{
                                   width: '16px',
@@ -2365,64 +2393,166 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                                 </div>
                                 Show completed
                               </button>
-                              <button
-                                onClick={() => {
-                                  setSortDirection('asc');
-                                  setActionItemsMenuOpen(false);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  padding: '8px 12px',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: '#e2e8f0',
-                                  fontSize: '0.875rem',
-                                  textAlign: 'left',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                  <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                              <div style={{ position: 'relative', margin: '0 4px' }}>
+                                <button
+                                  onClick={() => setSortSubmenuOpen(sortSubmenuOpen === 'asc' ? null : 'asc')}
+                                  style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '6px 8px',
+                                    height: '27px',
+                                    backgroundColor: sortSubmenuOpen === 'asc' ? '#1C2634' : 'transparent',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: '#e2e8f0',
+                                    fontSize: '0.875rem',
+                                    textAlign: 'left',
+                                    boxSizing: 'border-box',
+                                  }}
+                                  onMouseEnter={(e) => { if (sortSubmenuOpen !== 'asc') e.currentTarget.style.backgroundColor = '#1C2634'; }}
+                                  onMouseLeave={(e) => { if (sortSubmenuOpen !== 'asc') e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                                    </svg>
+                                    Sort ascending
+                                  </div>
+                                  <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
-                                  Sort ascending
-                                </div>
-                                <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSortDirection('desc');
-                                  setActionItemsMenuOpen(false);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  padding: '8px 12px',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: '#e2e8f0',
-                                  fontSize: '0.875rem',
-                                  textAlign: 'left',
-                                }}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                  <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                                </button>
+                                {sortSubmenuOpen === 'asc' && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    left: '100%',
+                                    top: 0,
+                                    marginLeft: '4px',
+                                    backgroundColor: '#0F172A',
+                                    borderRadius: '8px',
+                                    border: '1px solid #334155',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                                    minWidth: '140px',
+                                    zIndex: 100,
+                                    padding: '4px 0',
+                                  }}>
+                                    {(['date_created', 'due_date', 'assignee'] as const).map((option) => (
+                                      <button
+                                        key={option}
+                                        onClick={() => {
+                                          setSortBy(option);
+                                          setSortDirection('asc');
+                                          setSortSubmenuOpen(null);
+                                          setActionItemsMenuOpen(false);
+                                        }}
+                                        style={{
+                                          width: 'calc(100% - 8px)',
+                                          margin: '0 4px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          padding: '6px 8px',
+                                          height: '27px',
+                                          backgroundColor: sortBy === option && sortDirection === 'asc' ? '#1C2634' : 'transparent',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          color: '#e2e8f0',
+                                          fontSize: '0.875rem',
+                                          textAlign: 'left',
+                                          boxSizing: 'border-box',
+                                        }}
+                                        onMouseEnter={(e) => { if (!(sortBy === option && sortDirection === 'asc')) e.currentTarget.style.backgroundColor = '#1C2634'; }}
+                                        onMouseLeave={(e) => { if (!(sortBy === option && sortDirection === 'asc')) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                      >
+                                        {option === 'date_created' ? 'Date created' : option === 'due_date' ? 'Due date' : 'Assignee'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ position: 'relative', margin: '0 4px' }}>
+                                <button
+                                  onClick={() => setSortSubmenuOpen(sortSubmenuOpen === 'desc' ? null : 'desc')}
+                                  style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '6px 8px',
+                                    height: '27px',
+                                    backgroundColor: sortSubmenuOpen === 'desc' ? '#1C2634' : 'transparent',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: '#e2e8f0',
+                                    fontSize: '0.875rem',
+                                    textAlign: 'left',
+                                    boxSizing: 'border-box',
+                                  }}
+                                  onMouseEnter={(e) => { if (sortSubmenuOpen !== 'desc') e.currentTarget.style.backgroundColor = '#1C2634'; }}
+                                  onMouseLeave={(e) => { if (sortSubmenuOpen !== 'desc') e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <svg style={{ width: '16px', height: '16px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                                    </svg>
+                                    Sort descending
+                                  </div>
+                                  <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
-                                  Sort descending
-                                </div>
-                                <svg style={{ width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                              </button>
+                                </button>
+                                {sortSubmenuOpen === 'desc' && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    left: '100%',
+                                    top: 0,
+                                    marginLeft: '4px',
+                                    backgroundColor: '#0F172A',
+                                    borderRadius: '8px',
+                                    border: '1px solid #334155',
+                                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                                    minWidth: '140px',
+                                    zIndex: 100,
+                                    padding: '4px 0',
+                                  }}>
+                                    {(['date_created', 'due_date', 'assignee'] as const).map((option) => (
+                                      <button
+                                        key={option}
+                                        onClick={() => {
+                                          setSortBy(option);
+                                          setSortDirection('desc');
+                                          setSortSubmenuOpen(null);
+                                          setActionItemsMenuOpen(false);
+                                        }}
+                                        style={{
+                                          width: 'calc(100% - 8px)',
+                                          margin: '0 4px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          padding: '6px 8px',
+                                          height: '27px',
+                                          backgroundColor: sortBy === option && sortDirection === 'desc' ? '#1C2634' : 'transparent',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          color: '#e2e8f0',
+                                          fontSize: '0.875rem',
+                                          textAlign: 'left',
+                                          boxSizing: 'border-box',
+                                        }}
+                                        onMouseEnter={(e) => { if (!(sortBy === option && sortDirection === 'desc')) e.currentTarget.style.backgroundColor = '#1C2634'; }}
+                                        onMouseLeave={(e) => { if (!(sortBy === option && sortDirection === 'desc')) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                      >
+                                        {option === 'date_created' ? 'Date created' : option === 'due_date' ? 'Due date' : 'Assignee'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2458,7 +2588,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                       }}>
                         {/* Inventory Column */}
                         <div style={{
-                          backgroundColor: '#1a2332',
+                          backgroundColor: '#1A2235',
                           borderRadius: '8px',
                           padding: '10px',
                           display: 'flex',
@@ -2471,7 +2601,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             justifyContent: 'space-between',
                             marginBottom: '10px',
                           }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Inventory</span>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#10b981', backgroundColor: '#182A2C', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>Inventory</span>
                             <span style={{
                               backgroundColor: '#334155',
                               color: '#94a3b8',
@@ -2482,8 +2612,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             }}>{Object.values(actionItemsData).filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {Object.values(actionItemsData)
-                              .filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed'))
+                            {sortActionItems(Object.values(actionItemsData)
+                              .filter(item => item.category === 'Inventory' && (showCompletedItems || item.status !== 'Completed')))
                               .map(item => {
                                 const isCompleted = item.status === 'Completed';
                                 return (
@@ -2578,7 +2708,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
                         {/* Price Column */}
                         <div style={{
-                          backgroundColor: '#1a2332',
+                          backgroundColor: '#1A2235',
                           borderRadius: '8px',
                           padding: '10px',
                           display: 'flex',
@@ -2591,7 +2721,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             justifyContent: 'space-between',
                             marginBottom: '10px',
                           }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Price</span>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#f59e0b', backgroundColor: '#2C2825', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>Price</span>
                             <span style={{
                               backgroundColor: '#334155',
                               color: '#94a3b8',
@@ -2602,8 +2732,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             }}>{Object.values(actionItemsData).filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {Object.values(actionItemsData)
-                              .filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed'))
+                            {sortActionItems(Object.values(actionItemsData)
+                              .filter(item => item.category === 'Price' && (showCompletedItems || item.status !== 'Completed')))
                               .map(item => {
                                 const isCompleted = item.status === 'Completed';
                                 return (
@@ -2698,7 +2828,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
                         {/* Ads Column */}
                         <div style={{
-                          backgroundColor: '#1a2332',
+                          backgroundColor: '#1A2235',
                           borderRadius: '8px',
                           padding: '10px',
                           display: 'flex',
@@ -2711,7 +2841,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             justifyContent: 'space-between',
                             marginBottom: '10px',
                           }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>Ads</span>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#3b82f6', backgroundColor: '#1F335E', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>Ads</span>
                             <span style={{
                               backgroundColor: '#334155',
                               color: '#94a3b8',
@@ -2722,8 +2852,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             }}>{Object.values(actionItemsData).filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {Object.values(actionItemsData)
-                              .filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed'))
+                            {sortActionItems(Object.values(actionItemsData)
+                              .filter(item => item.category === 'Ads' && (showCompletedItems || item.status !== 'Completed')))
                               .map(item => {
                                 const isCompleted = item.status === 'Completed';
                                 return (
@@ -2818,7 +2948,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
 
                         {/* PDP Column */}
                         <div style={{
-                          backgroundColor: '#1a2332',
+                          backgroundColor: '#1A2235',
                           borderRadius: '8px',
                           padding: '10px',
                           display: 'flex',
@@ -2831,7 +2961,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             justifyContent: 'space-between',
                             marginBottom: '10px',
                           }}>
-                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#e2e8f0' }}>PDP</span>
+                            <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#8b5cf6', backgroundColor: '#212139', padding: '4px 12px', borderRadius: '6px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>PDP</span>
                             <span style={{
                               backgroundColor: '#334155',
                               color: '#94a3b8',
@@ -2842,8 +2972,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                             }}>{Object.values(actionItemsData).filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed')).length}</span>
                           </div>
                           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: '8px' }} className="scrollbar-hide">
-                            {Object.values(actionItemsData)
-                              .filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed'))
+                            {sortActionItems(Object.values(actionItemsData)
+                              .filter(item => item.category === 'PDP' && (showCompletedItems || item.status !== 'Completed')))
                               .map(item => {
                                 const isCompleted = item.status === 'Completed';
                                 return (
@@ -3170,45 +3300,51 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
             {/* Modal Body */}
             <div style={{ backgroundColor: '#1e2736', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Subject */}
-              <input
-                type="text"
-                placeholder="Enter Subject..."
-                value={newActionItemSubject}
-                onChange={(e) => setNewActionItemSubject(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '31px',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid #007AFF',
-                  backgroundColor: '#4B5563',
-                  color: '#E5E7EB',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#fff', marginBottom: '6px' }}>Subject<span style={{ color: '#ef4444' }}>*</span></label>
+                <input
+                  type="text"
+                  placeholder="Enter Subject..."
+                  value={newActionItemSubject}
+                  onChange={(e) => setNewActionItemSubject(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '31px',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid #007AFF',
+                    backgroundColor: '#4B5563',
+                    color: '#E5E7EB',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
 
               {/* Description */}
-              <textarea
-                placeholder="Enter Description..."
-                value={newActionItemDescription}
-                onChange={(e) => setNewActionItemDescription(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '52px',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#4B5563',
-                  color: '#E5E7EB',
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                  resize: 'none',
-                  fontFamily: 'inherit',
-                  boxSizing: 'border-box',
-                }}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#fff', marginBottom: '6px' }}>Description</label>
+                <textarea
+                  placeholder="Enter Description..."
+                  value={newActionItemDescription}
+                  onChange={(e) => setNewActionItemDescription(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '52px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    backgroundColor: '#4B5563',
+                    color: '#E5E7EB',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
 
               {/* Assignee + Due Date */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -3459,6 +3595,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 Cancel
               </button>
               <button
+                disabled={!newActionItemSubject.trim()}
                 onClick={() => {
                   if (!newActionItemSubject.trim()) return;
                   
@@ -3539,7 +3676,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
             justifyContent: 'center',
             zIndex: 2500,
           }}
-          onClick={() => setSelectedActionItem(null)}
+          onClick={() => { setSelectedActionItem(null); setStatusDropdownOpen(false); }}
         >
           <div
             style={{
@@ -3594,7 +3731,7 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                   </svg>
                 </button>
                 <button
-                  onClick={() => setSelectedActionItem(null)}
+                  onClick={() => { setSelectedActionItem(null); setStatusDropdownOpen(false); }}
                   style={{
                     backgroundColor: 'transparent',
                     border: 'none',
@@ -4059,31 +4196,94 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
                 <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0', margin: 0 }}>Additional Details</h4>
 
                 {/* Status */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
                   <label style={{ fontSize: '0.75rem', fontWeight: 500, color: '#64748b' }}>Status</label>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 12px',
-                    backgroundColor: selectedActionItem.status === 'Completed' ? 'rgba(16, 185, 129, 0.15)' : '#1a2332',
-                    borderRadius: '6px',
-                    border: selectedActionItem.status === 'Completed' ? '1px solid #10b981' : '1px solid #334155',
-                  }}>
+                  <button
+                    onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      backgroundColor: selectedActionItem.status === 'Completed' ? 'rgba(16, 185, 129, 0.15)' : '#1A2235',
+                      borderRadius: '6px',
+                      border: selectedActionItem.status === 'Completed' ? '1px solid #10b981' : '1px solid #334155',
+                      cursor: 'pointer',
+                      width: '100%',
+                    }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {selectedActionItem.status === 'Completed' ? (
                         <svg width="16" height="16" fill="none" stroke="#10b981" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
+                      ) : selectedActionItem.status === 'In Progress' ? (
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
                       ) : (
                         <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #475569' }} />
                       )}
-                      <span style={{ fontSize: '0.875rem', color: selectedActionItem.status === 'Completed' ? '#10b981' : '#e2e8f0' }}>{selectedActionItem.status}</span>
+                      <span style={{ fontSize: '0.875rem', color: selectedActionItem.status === 'Completed' ? '#10b981' : selectedActionItem.status === 'In Progress' ? '#3b82f6' : '#e2e8f0' }}>{selectedActionItem.status}</span>
                     </div>
-                    <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24">
+                    <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24" style={{ transform: statusDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
-                  </div>
+                  </button>
+                  {statusDropdownOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      marginTop: '4px',
+                      backgroundColor: '#0F172A',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      padding: '4px 0',
+                      zIndex: 100,
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.15)',
+                    }}>
+                      {['To Do', 'In Progress', 'Completed'].map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => {
+                            const updatedItem = { ...selectedActionItem, status };
+                            setSelectedActionItem(updatedItem);
+                            updateActionItem(updatedItem);
+                            setStatusDropdownOpen(false);
+                          }}
+                          style={{
+                            width: 'calc(100% - 8px)',
+                            margin: '0 4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '6px 8px',
+                            height: '27px',
+                            backgroundColor: selectedActionItem.status === status ? '#1C2634' : 'transparent',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            color: status === 'Completed' ? '#10b981' : status === 'In Progress' ? '#3b82f6' : '#e2e8f0',
+                            fontSize: '0.875rem',
+                            textAlign: 'left',
+                            boxSizing: 'border-box',
+                          }}
+                          onMouseEnter={(e) => { if (selectedActionItem.status !== status) e.currentTarget.style.backgroundColor = '#1C2634'; }}
+                          onMouseLeave={(e) => { if (selectedActionItem.status !== status) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          {status === 'Completed' ? (
+                            <svg width="16" height="16" fill="none" stroke="#10b981" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : status === 'In Progress' ? (
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
+                          ) : (
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', border: '2px solid #475569' }} />
+                          )}
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Category */}

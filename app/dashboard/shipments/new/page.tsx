@@ -290,7 +290,8 @@ export default function NewShipmentAddProductsPage() {
   }, []);
 
   const dateStr = formatShipmentDate(shipmentData);
-  const typeStr = shipmentData?.shipmentType || 'AWD';
+  const rawTypeStr = shipmentData?.shipmentType || 'AWD';
+  const typeStr = rawTypeStr === 'Manufacturing Order' ? 'MFG.' : rawTypeStr;
 
   // Filter API data based on search term
   const filteredApiRows = useMemo(() => {

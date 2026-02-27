@@ -1360,8 +1360,14 @@ function NgoosContent({
                 </button>
               </div>
               <div style={{ backgroundColor: '#1e2736', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input type="text" placeholder="Enter Subject..." value={newActionSubject} onChange={(e) => setNewActionSubject(e.target.value)} style={{ width: '100%', maxWidth: '408px', height: '23px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #007AFF', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }} />
-                <textarea placeholder="Enter Description..." value={newActionDescription} onChange={(e) => setNewActionDescription(e.target.value)} style={{ width: '100%', maxWidth: '408px', height: '52px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#fff', marginBottom: '6px' }}>Subject<span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" placeholder="Enter Subject..." value={newActionSubject} onChange={(e) => setNewActionSubject(e.target.value)} style={{ width: '100%', maxWidth: '408px', height: '23px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #007AFF', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#fff', marginBottom: '6px' }}>Description</label>
+                  <textarea placeholder="Enter Description..." value={newActionDescription} onChange={(e) => setNewActionDescription(e.target.value)} style={{ width: '100%', maxWidth: '408px', height: '52px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#4B5563', color: '#E5E7EB', fontSize: '0.875rem', outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: '16px', flexWrap: 'wrap' }}>
                   <div className="flex-1 min-w-0" style={{ minWidth: 0 }}>
                     <label className="block text-sm font-medium text-white mb-1.5">Assignee</label>
@@ -1443,8 +1449,10 @@ function NgoosContent({
               <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', gap: '10px', backgroundColor: '#141C2D', borderTop: '1px solid #334155', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', boxSizing: 'border-box' }}>
                 <button onClick={() => { setShowActionItemModal(false); setNewActionSubject(''); setNewActionDescription(''); setSelectedAssignees([]); setAssigneeSearch(''); setIsAssigneeDropdownOpen(false); setShowDueDateCalendar(false); setNewActionDueDate(''); }} style={{ width: '64px', height: '23px', borderRadius: '4px', border: '1px solid #334155', backgroundColor: '#252F42', color: '#E5E7EB', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>Cancel</button>
                 <button
+                  disabled={!newActionSubject.trim()}
                   onClick={() => {
-                    const title = newActionSubject.trim() || 'Untitled';
+                    if (!newActionSubject.trim()) return;
+                    const title = newActionSubject.trim();
                     const first = selectedAssignees[0];
                     const tagText = first?.initials ?? '—';
                     const tagBgColor = first?.color ?? '#10b981';
@@ -1509,7 +1517,7 @@ function NgoosContent({
                     setShowDueDateCalendar(false);
                     setNewActionDueDate('');
                   }}
-                  style={{ width: '63px', height: '23px', borderRadius: '4px', border: 'none', backgroundColor: 'rgba(0, 122, 255, 0.5)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}
+                  style={{ width: '63px', height: '23px', borderRadius: '4px', border: 'none', backgroundColor: newActionSubject.trim() ? '#007AFF' : 'rgba(0, 122, 255, 0.5)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', cursor: newActionSubject.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}
                 >
                   Create
                 </button>

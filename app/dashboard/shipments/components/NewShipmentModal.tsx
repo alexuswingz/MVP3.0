@@ -233,7 +233,7 @@ export function NewShipmentModal({ isOpen, onClose, newShipment, setNewShipment,
                     zIndex: 100,
                   }}
                 >
-                  {['FBA', 'AWD', 'Parcel', 'Production Order'].map((option) => (
+                  {['FBA', 'AWD', 'Hazmat', 'Manufacturing Order'].map((option) => (
                     <button
                       key={option}
                       type="button"
