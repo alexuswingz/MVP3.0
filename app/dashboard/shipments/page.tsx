@@ -182,11 +182,18 @@ export default function ShipmentsPage() {
   const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
 
   const handleRowClick = (row: PlanningTableRow) => {
-    const tab = row.addProducts !== 'completed' ? 'add-products' : 'book-shipment';
+    // Navigate to the next incomplete step
+    // If Add Products is completed, go to Book Shipment
+    // Otherwise, go to Add Products
+    const tab = row.addProducts === 'completed' ? 'book-shipment' : 'add-products';
     router.push(`/dashboard/shipments/new?shipmentId=${row.id}&tab=${tab}`);
   };
 
   const handleStepClick = (row: PlanningTableRow, step: 'addProducts' | 'bookShipment') => {
+    // Prevent navigating to Book Shipment if Add Products is not completed
+    if (step === 'bookShipment' && row.addProducts !== 'completed') {
+      return;
+    }
     const tab = step === 'addProducts' ? 'add-products' : 'book-shipment';
     router.push(`/dashboard/shipments/new?shipmentId=${row.id}&tab=${tab}`);
   };

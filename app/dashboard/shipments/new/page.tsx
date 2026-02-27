@@ -433,6 +433,12 @@ export default function NewShipmentAddProductsPage() {
       const ok = await createDraftShipment(true);
       if (ok) setActiveWorkflowTab('book-shipment');
     } else {
+      // Update existing shipment status to 'ready' (Add Products completed, Book Shipment in progress)
+      try {
+        await api.updateShipment(draftShipmentId, { status: 'ready' });
+      } catch (err) {
+        console.error('Failed to update shipment status:', err);
+      }
       setActiveWorkflowTab('book-shipment');
     }
   }, [addedProductIds.size, draftShipmentId, createDraftShipment]);
@@ -1539,19 +1545,31 @@ export default function NewShipmentAddProductsPage() {
             });
           }
         }}
-        onBeginNextStep={() => {
+        onBeginNextStep={async () => {
           setShowExportTemplateModal(false);
-          setActiveWorkflowTab('book-shipment');
+          // Create draft shipment and switch to book shipment tab
+          if (addedProductIds.size > 0) {
+            await handleBookShipmentTabClick();
+          } else {
+            setActiveWorkflowTab('book-shipment');
+          }
         }}
-        products={tableRows.map((row) => ({
-          id: row.id,
-          childSku: row.asin,
-          sku: row.asin,
-          qty: row.unitsToMake || 0,
-          size: row.variation1 || '',
-          brand: row.brand,
-          product: row.product,
-        }))}
+        preSelectedType={
+          shipmentData?.shipmentType?.toUpperCase() === 'FBA' ? 'fba' :
+          shipmentData?.shipmentType?.toUpperCase() === 'AWD' ? 'awd' :
+          null
+        }
+        products={tableRows
+          .filter((row) => addedProductIds.has(String(row.id)))
+          .map((row) => ({
+            id: row.id,
+            childSku: row.asin,
+            sku: row.asin,
+            qty: userQtyOverrides[String(row.id)] ?? row.unitsToMake ?? 0,
+            size: row.variation1 || '',
+            brand: row.brand,
+            product: row.product,
+          }))}
         shipmentData={{
           shipmentNumber: shipmentData?.shipmentName || '',
           shipmentDate: dateStr,

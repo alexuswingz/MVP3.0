@@ -436,11 +436,14 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onStepClick?.(row, 'bookShipment');
-                    if (!onStepClick) onRowClick?.(row);
+                    // Only allow clicking Book Shipment if Add Products is completed
+                    if (row.addProducts === 'completed') {
+                      onStepClick?.(row, 'bookShipment');
+                      if (!onStepClick) onRowClick?.(row);
+                    }
                   }}
-                  className={onStepClick ? 'cursor-pointer' : ''}
-                  title={onStepClick ? 'Open Book Shipment step' : undefined}
+                  className={onStepClick && row.addProducts === 'completed' ? 'cursor-pointer' : ''}
+                  title={row.addProducts !== 'completed' ? 'Complete Add Products first' : onStepClick ? 'Open Book Shipment step' : undefined}
                 >
                   <div className="flex justify-center">
                     <StatusCircle status={row.bookShipment} />

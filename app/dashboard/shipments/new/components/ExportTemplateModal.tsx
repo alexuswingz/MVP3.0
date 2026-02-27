@@ -8,6 +8,8 @@ interface ExportTemplateModalProps {
   onClose: () => void;
   onExport?: (selectedType: 'fba' | 'awd' | 'production-order') => void;
   onBeginNextStep?: () => void;
+  /** When set, skip the type selection and directly export with this type */
+  preSelectedType?: 'fba' | 'awd' | null;
   products: Array<{
     id: string;
     childSku?: string;
@@ -32,6 +34,7 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
   onClose,
   onExport,
   onBeginNextStep,
+  preSelectedType,
   products,
   shipmentData,
 }) => {
@@ -39,10 +42,11 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
   const [showExportComplete, setShowExportComplete] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoExportTriggered, setAutoExportTriggered] = useState(false);
 
   // When modal opens, pre-select the type chosen before booking (FBA or AWD)
   useEffect(() => {
-    if (isOpen && shipmentData?.shipmentType) {
+    if (isOpen && shipmentData?.shipmentType && !preSelectedType) {
       const t = String(shipmentData.shipmentType).trim().toUpperCase();
       if (t === 'FBA') setSelectedType('fba');
       else if (t === 'AWD') setSelectedType('awd');
@@ -52,10 +56,212 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
       setSelectedType(null);
       setShowExportComplete(false);
       setError(null);
+      setAutoExportTriggered(false);
     }
-  }, [isOpen, shipmentData?.shipmentType]);
+  }, [isOpen, shipmentData?.shipmentType, preSelectedType]);
+
+  // Auto-export when preSelectedType is provided (skip the selection modal)
+  useEffect(() => {
+    if (isOpen && preSelectedType && !autoExportTriggered && !showExportComplete) {
+      setAutoExportTriggered(true);
+      setIsExporting(true);
+      setSelectedType(preSelectedType);
+      
+      const doAutoExport = async () => {
+        try {
+          setError(null);
+          
+          if (onExport) {
+            onExport(preSelectedType);
+          }
+          
+          const res = await fetch('/api/shipment-export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              templateType: preSelectedType,
+              products: products || [],
+              shipmentData: shipmentData || {},
+            }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data?.error || res.statusText || 'Export failed');
+          }
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = res.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || `export_${preSelectedType}.xlsx`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          setShowExportComplete(true);
+        } catch (err) {
+          console.error('Export failed:', err);
+          setError(err instanceof Error ? err.message : 'Failed to export template. Please try again.');
+        } finally {
+          setIsExporting(false);
+        }
+      };
+      
+      doAutoExport();
+    }
+  }, [isOpen, preSelectedType, autoExportTriggered, showExportComplete, onExport, products, shipmentData]);
 
   if (!isOpen) return null;
+
+  // When preSelectedType is set, show loading or complete state only (skip selection modal entirely)
+  if (preSelectedType) {
+    // Show loading state
+    if (isExporting || (!showExportComplete && !error)) {
+      return (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9998,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#1F2937',
+              borderRadius: '12px',
+              width: '320px',
+              border: '1px solid #374151',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              zIndex: 9999,
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: '32px 24px',
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px',
+            }}>
+              <Loader2 className="w-12 h-12 animate-spin" style={{ color: '#3B82F6' }} />
+              <h2 style={{
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#F9FAFB',
+                margin: 0,
+                textAlign: 'center',
+              }}>
+                Exporting...
+              </h2>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error state
+    if (error) {
+      return (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9998,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onClick={onClose}
+        >
+          <div
+            style={{
+              backgroundColor: '#1F2937',
+              borderRadius: '12px',
+              width: '320px',
+              border: '1px solid #374151',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              zIndex: 9999,
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: '32px 24px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px',
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                backgroundColor: '#EF4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 18L18 6M6 6l12 12" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <h2 style={{
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#F9FAFB',
+                margin: 0,
+                textAlign: 'center',
+              }}>
+                Export Failed
+              </h2>
+              <p style={{
+                fontSize: '14px',
+                color: '#9CA3AF',
+                margin: 0,
+                textAlign: 'center',
+              }}>
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: '6px',
+                  border: '1px solid #4B5563',
+                  backgroundColor: '#374151',
+                  color: '#F9FAFB',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  marginTop: '8px',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  }
 
   const shipmentTypes = [
     {
@@ -276,7 +482,7 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
               margin: 0,
               textAlign: 'center',
             }}>
-              Export Complete!
+              Export Completed
             </h2>
           </div>
 
@@ -306,7 +512,7 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
               Close
             </button>
 
-            {/* Begin Next Step button */}
+            {/* Begin Book Shipment button */}
             <button
               type="button"
               onClick={handleBeginNextStep}
@@ -321,7 +527,7 @@ const ExportTemplateModal: React.FC<ExportTemplateModalProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Book Shipment
+              Begin Book Shipment
             </button>
           </div>
         </div>
