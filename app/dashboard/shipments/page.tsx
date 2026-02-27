@@ -361,7 +361,7 @@ export default function ShipmentsPage() {
             onClick={() => setShowNewShipmentModal(true)}
           >
             <Plus className="w-4 h-4" />
-            New Shipment
+            New .Shipment
           </Button>
         </div>
       </header>
