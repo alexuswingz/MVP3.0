@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import Image from 'next/image';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { RichTextEditor, type RichTextEditorHandle } from '@/components/ui/rich-text-editor';
 
 type TicketDetail = {
   ticketId: string;
@@ -26,6 +26,8 @@ type TicketDetail = {
   dateCreated: string;
   /** Saved rich-text description (HTML). When set, this is shown instead of building from description/instructions/bullets. */
   descriptionHtml?: string;
+  /** Attachments for this ticket. */
+  attachments?: { name: string; url: string; type?: string; uploadedAt: string }[];
 };
 
 const MOCK_DETAIL: Record<number, TicketDetail> = {
@@ -340,27 +342,42 @@ function DetailModal({
   onClose,
   descriptionHtml,
   setDescriptionHtml,
-  descriptionHovered,
-  setDescriptionHovered,
   descriptionFocused,
   setDescriptionFocused,
   onDescriptionCancel,
   onDescriptionSave,
+  onStatusChange,
+  onAttachmentsChange,
 }: {
   item: TicketDetail;
   onClose: () => void;
   descriptionHtml: string;
   setDescriptionHtml: (html: string) => void;
-  descriptionHovered: boolean;
-  setDescriptionHovered: (v: boolean) => void;
   descriptionFocused: boolean;
   setDescriptionFocused: (v: boolean) => void;
   onDescriptionCancel: () => void;
   onDescriptionSave: (html: string) => void;
+  onStatusChange: (status: string) => void;
+  onAttachmentsChange: (attachments: { name: string; url: string; type?: string; uploadedAt: string }[]) => void;
 }) {
-  const descriptionEditorRef = useRef<{ getContent: () => string } | null>(null);
+  const descriptionEditorRef = useRef<RichTextEditorHandle | null>(null);
   /** Capture editor content on Save mousedown (before blur) so we don't lose content to re-renders. */
   const pendingSaveContentRef = useRef<string | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const attachments = item.attachments ?? [];
+
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [statusDropdownOpen]);
 
   return (
     <div
@@ -372,107 +389,78 @@ function DetailModal({
         className="flex flex-col overflow-hidden shadow-2xl"
         style={{
           width: 800,
-          height: 535,
+          maxWidth: '95vw',
+          height: 620,
+          maxHeight: '90vh',
           borderRadius: 12,
           border: '1px solid #404040',
           background: '#1A2235',
-          opacity: 1,
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header */}
-        <div
-          className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-          style={{ background: '#1A2235', borderBottom: '1px solid #404040' }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-              aria-label="Close"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid #404040', background: '#1A2235', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <button type="button" onClick={onClose} style={{ padding: 8, borderRadius: 8, color: '#9ca3af', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }} aria-label="Back">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             </button>
-            <span className="text-sm font-medium text-gray-400">My Tickets</span>
-            <span className="text-sm text-gray-400">&gt;</span>
-            <span className="text-sm font-medium text-white">#{item.ticketId}</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#9ca3af' }}>My Tickets</span>
+            <span style={{ fontSize: 14, color: '#9ca3af' }}>&gt;</span>
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.category} – {item.subject}</span>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="More">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-              </svg>
-            </button>
-            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/5 text-gray-400" aria-label="Close">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          <button type="button" onClick={onClose} style={{ padding: 8, borderRadius: 8, color: '#9ca3af', background: 'transparent', border: 'none', cursor: 'pointer' }} aria-label="Close">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
-
-        {/* Modal body */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-row" style={{ background: '#1A2235' }}>
-          <div className="flex-1 min-w-0 flex flex-col gap-3 p-4 min-h-0 overflow-y-auto overflow-x-hidden" style={{ background: '#1A2235' }}>
-            <div
-              className="flex items-center gap-2 flex-shrink-0 items-start"
-              style={{
-                width: 488,
-                height: 64,
-                gap: 8,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #404040',
-                background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)',
-                opacity: 1,
-              }}
-            >
-              <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
-                <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                </svg>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'row', background: '#1A2235' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, overflow: 'visible', overflowX: 'hidden' }} className="scrollbar-hide">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', flexShrink: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
               </div>
-              <div className="min-w-0 flex-1 flex flex-col overflow-visible" style={{ minHeight: 39, gap: 6, opacity: 1 }}>
-                <p className="text-sm font-medium text-white break-words" style={{ textAlign: 'left' }}>{item.productName}</p>
-                <p className="text-xs text-gray-500 flex items-center gap-1.5 flex-wrap flex-shrink-0" style={{ textAlign: 'left' }}>
-                  <span>{item.productId}</span><span>•</span><span>{item.brand}</span><span>•</span><span>{item.unit}</span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.productName}</p>
+                <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {item.productId}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigator.clipboard?.writeText(item.productId).catch(() => {})}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigator.clipboard?.writeText(item.productId).catch(() => {}); } }}
+                    className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex"
+                    title="Copy ASIN"
+                  >
+                    <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  </span>
+                  {[item.brand, item.unit].filter(Boolean).length > 0 && ` • ${[item.brand, item.unit].filter(Boolean).join(' • ')}`}
                 </p>
               </div>
             </div>
-            <div className="flex-shrink-0 rounded-lg py-1.5 px-2 -mx-2 transition-colors duration-150 hover:bg-white/10" style={{ textAlign: 'left' }}>
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1.5">SUBJECT</p>
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
-                <p className="text-base font-semibold text-white">{item.subject}</p>
+            <div style={{ flexShrink: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {item.status === 'Completed' ? (
+                  <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                  </span>
+                ) : (
+                  <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent', flexShrink: 0 }} />
+                )}
+                <p style={{ fontSize: 16, fontWeight: 600, color: '#fff', margin: 0 }}>{item.subject}</p>
               </div>
             </div>
-            <div
-              className="flex-shrink-0 pl-4 -mt-1 flex flex-col py-0 px-2 -mx-2 min-h-0"
-              style={{ textAlign: 'left', height: 260 }}
-              onMouseEnter={() => setDescriptionHovered(true)}
-              onMouseLeave={() => setDescriptionHovered(false)}
-            >
-              <p className="text-xs font-medium uppercase tracking-wider mb-1 text-gray-400 flex-shrink-0">DESCRIPTION</p>
-              <div
-                className="flex-shrink-0 rounded-lg transition-colors duration-150 overflow-hidden"
-                style={{
-                  height: 200,
-                  ...(descriptionHovered && !descriptionFocused ? { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)' } : undefined),
-                }}
-              >
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <p style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>Description</p>
+              <div style={{ flexShrink: 0, minHeight: 120, borderRadius: 8, overflow: 'visible' }} className="scrollbar-hide">
                 <RichTextEditor
                   ref={descriptionEditorRef}
                   value={descriptionHtml}
                   onChange={setDescriptionHtml}
                   placeholder="Add description..."
-                  className="h-full min-h-0 flex flex-col"
-                  contentClassName={`!text-xs min-h-0 ${descriptionHovered && !descriptionFocused ? '!text-white' : ''}`}
+                  className="min-h-[120px] flex flex-col"
+                  contentClassName="!text-xs"
                   onFocusChange={setDescriptionFocused}
                   background="#1A2235"
-                  expandToFit={false}
+                  expandToFit={true}
                 />
               </div>
               {descriptionFocused ? (
@@ -481,14 +469,7 @@ function DetailModal({
                     type="button"
                     onClick={onDescriptionCancel}
                     className="flex items-center justify-center text-sm font-medium text-white transition-colors hover:bg-white/10"
-                    style={{
-                      width: 64,
-                      height: 28,
-                      borderRadius: 4,
-                      border: '1px solid #404040',
-                      background: '#2a2a2a',
-                      opacity: 1,
-                    }}
+                    style={{ width: 64, height: 28, borderRadius: 4, border: '1px solid #404040', background: '#2a2a2a', opacity: 1 }}
                   >
                     Cancel
                   </button>
@@ -506,88 +487,176 @@ function DetailModal({
                         console.log('[ActionItems] Save description: source=', fromEditor ? 'editor' : 'fallback(descriptionHtml)', 'length=', content.length, 'preview=', content.slice(0, 80));
                       }
                       onDescriptionSave(content);
+                      descriptionEditorRef.current?.blur();
                     }}
                     className="flex items-center justify-center text-sm font-medium text-white transition-colors hover:opacity-90"
-                    style={{
-                      width: 64,
-                      height: 28,
-                      borderRadius: 4,
-                      border: '1px solid transparent',
-                      background: '#3B82F6',
-                      opacity: 1,
-                    }}
+                    style={{ width: 64, height: 28, borderRadius: 4, border: '1px solid transparent', background: '#3B82F6', opacity: 1 }}
                   >
                     Save
                   </button>
                 </div>
-              ) : (
-                <div className="flex-shrink-0" style={{ height: 40 }} aria-hidden />
+              ) : null}
+            </div>
+            <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, marginTop: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <p style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachments</p>
+                <button type="button" onClick={() => attachmentInputRef.current?.click()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline', fontSize: 12 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                  Add Attachment
+                </button>
+              </div>
+              {attachments.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
+                  {attachments.map((att, idx) => {
+                    const isImage = att.type?.startsWith('image/');
+                    return (
+                      <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, width: 104, height: 92, opacity: 1, transform: 'rotate(0deg)', borderRadius: 8, overflow: 'hidden', background: '#252F42', border: '1px solid #334155', boxSizing: 'border-box' }}>
+                        <div style={{ position: 'relative', flexShrink: 0, width: '100%', height: 42 }}>
+                          <button type="button" onClick={() => { const list = attachments.filter((_, i) => i !== idx); if (att.url.startsWith('blob:')) URL.revokeObjectURL(att.url); onAttachmentsChange(list); }} style={{ position: 'absolute', top: 2, right: 2, background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 2, zIndex: 1 }} aria-label="Remove attachment">
+                            <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                          {isImage ? (
+                            <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', height: '100%', background: '#fff', borderRadius: 4, overflow: 'hidden' }}>
+                              <img src={att.url} alt={att.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </a>
+                          ) : (
+                            <a href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', borderRadius: 4, border: '1px solid #334155', background: '#334155', color: '#94a3b8', fontSize: 9, fontWeight: 600, textDecoration: 'none' }} title={att.name}>DOCX</a>
+                          )}
+                        </div>
+                        <div style={{ padding: '2px 6px 6px', background: '#1A2235', display: 'flex', flexDirection: 'column', gap: 2, minHeight: 36, flex: 1, justifyContent: 'flex-start', overflow: 'visible' }}>
+                          <a href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: '#60a5fa', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1.2 }} title={att.name}>{att.name}</a>
+                          <span style={{ fontSize: 8, color: '#9ca3af', flexShrink: 0, lineHeight: 1.2, whiteSpace: 'nowrap' }}>Uploaded {att.uploadedAt}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                accept="*/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (!files?.length) return;
+                  const now = new Date();
+                  const uploadedAt = `${MONTH_NAMES[now.getMonth()].slice(0, 3)}. ${now.getDate()}, ${now.getFullYear()}`;
+                  const newAtts: { name: string; url: string; type?: string; uploadedAt: string }[] = [];
+                  let done = 0;
+                  const total = files.length;
+                  const processNext = () => {
+                    if (done >= total) {
+                      onAttachmentsChange([...attachments, ...newAtts]);
+                      e.target.value = '';
+                      return;
+                    }
+                    const f = files[done];
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      newAtts.push({ name: f.name, url: reader.result as string, type: f.type, uploadedAt });
+                      done++;
+                      processNext();
+                    };
+                    reader.readAsDataURL(f);
+                  };
+                  processNext();
+                }}
+              />
             </div>
           </div>
-          <div className="w-px flex-shrink-0 self-stretch" style={{ background: '#404040' }} aria-hidden />
-          <div
-            className="flex flex-col flex-shrink-0 min-h-0 overflow-hidden"
-            style={{ width: 280, gap: 12, padding: '16px', background: '#1A2235', opacity: 1 }}
-          >
-            <h3 className="text-sm font-medium text-white flex-shrink-0" style={{ textAlign: 'left' }}>Additional Details</h3>
-            <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 8, marginBottom: 12 }} />
-            <div className="flex flex-col flex-shrink-0" style={{ gap: 12 }}>
-              <DetailModalRow label="Status" vertical>
-                <div
-                  className="inline-flex items-center gap-2 box-border"
-                  style={{ width: 232, height: 28, minWidth: 132, gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', opacity: 1 }}
+          <div style={{ width: 1, flexShrink: 0, alignSelf: 'stretch', background: '#404040' }} />
+          <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, background: '#141C2D' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: '0 0 8px' }}>Additional Details</h3>
+            <div style={{ height: 1, background: '#404040', marginBottom: 12 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div ref={statusDropdownRef} style={{ position: 'relative' }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Status</p>
+                <button
+                  type="button"
+                  onClick={() => setStatusDropdownOpen((v) => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232, cursor: 'pointer', color: '#fff', fontSize: 12 }}
                 >
-                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
-                  <span className="text-xs font-normal text-white">{item.status}</span>
-                  <svg className="w-3 h-3 ml-auto flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  {item.status === 'Completed' ? (
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                    </span>
+                  ) : (
+                    <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
+                  )}
+                  <span style={{ fontSize: 12 }}>{item.status}</span>
+                  <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {statusDropdownOpen && (
+                  <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: 4, minWidth: 232, borderRadius: 4, border: '1px solid #404040', background: '#1A2235', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', zIndex: 50, overflow: 'hidden' }}>
+                    <button
+                      type="button"
+                      onClick={() => { onStatusChange('To Do'); setStatusDropdownOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
+                      To Do
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onStatusChange('Completed'); setStatusDropdownOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                    >
+                      <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                      </span>
+                      Completed
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Category</p>
+                {(item.category === 'Inventory' || item.category === 'inventory') ? (
+                  <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 72, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#12B981', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#182A2C' }}>{item.category}</span>
+                ) : (item.category === 'Price' || item.category === 'price') ? (
+                  <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 46, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#F59E0C', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#2C2825' }}>{item.category}</span>
+                ) : (item.category === 'Ads' || item.category === 'ads') ? (
+                  <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 39, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#3B83F6', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#1F335E' }}>{item.category}</span>
+                ) : (item.category === 'PDP' || item.category === 'pdp') ? (
+                  <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 41, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#8B5CF6', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#212139' }}>{item.category}</span>
+                ) : (
+                  <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 72, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#12B981', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#182A2C' }}>{item.category}</span>
+                )}
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Assigned To</p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', width: '100%', maxWidth: 232 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1e40af', color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.assigneeInitials}</span>
+                  <span style={{ fontSize: 12, color: '#fff' }}>{item.assignee || 'Unassigned'}</span>
                 </div>
-              </DetailModalRow>
-              <DetailModalRow label="Category" vertical>
-                <div className="flex flex-col gap-1">
-                  <span className="inline-flex items-center justify-center text-xs font-normal" style={{ width: 72, height: 23, gap: 10, padding: '4px 8px', borderRadius: 4, opacity: 1, color: '#12B981' }}>{item.category}</span>
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Due Date</p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232 }}>
+                  <svg style={{ width: 14, height: 14, color: '#9ca3af', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  <span style={{ fontSize: 12, color: '#fff' }}>{item.dueDate || 'Select date'}</span>
                 </div>
-              </DetailModalRow>
-              <DetailModalRow label="Assigned To" vertical>
-                <div
-                  className="inline-flex items-center gap-2 box-border"
-                  style={{ width: 232, height: 28, gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', opacity: 1 }}
-                >
-                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: '#1e40af' }}>{item.assigneeInitials}</span>
-                  <span className="text-xs font-normal text-white">{item.assignee}</span>
-                </div>
-              </DetailModalRow>
-              <DetailModalRow label="Due Date" vertical>
-                <div
-                  className="inline-flex items-center gap-2 box-border"
-                  style={{ width: 232, height: 28, gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', opacity: 1 }}
-                >
-                  <svg className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-xs font-normal text-white">{item.dueDate}</span>
-                </div>
-              </DetailModalRow>
+              </div>
             </div>
-            <div className="flex-shrink-0 w-full" style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
-            <div className="flex flex-col flex-shrink-0" style={{ gap: 10 }}>
-              <DetailModalRow label="Created By" footer>
-                <div className="flex items-center gap-1 justify-end">
-                  <span
-                    className="flex items-center justify-center text-white font-medium flex-shrink-0"
-                    style={{ width: 16, height: 16, borderRadius: 16, background: '#3B82F6', opacity: 1, fontSize: 8 }}
-                  >{item.createdByInitials}</span>
-                  <span className="text-xs font-normal text-white">{item.createdBy}</span>
+            <div style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Created By</p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#2563EB', color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.createdByInitials}</span>
+                  <span style={{ fontSize: 12, color: '#fff' }}>{item.createdBy}</span>
                 </div>
-              </DetailModalRow>
-              <DetailModalRow label="Date Created" footer>
-                <span className="text-xs font-normal text-white">{item.dateCreated}</span>
-              </DetailModalRow>
-              <DetailModalRow label="Ticket ID" footer>
-                <span className="text-xs font-normal text-white">#{item.ticketId}</span>
-              </DetailModalRow>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Date Created</p>
+                <span style={{ fontSize: 12, color: '#fff' }}>{item.dateCreated}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Ticket ID</p>
+                <span style={{ fontSize: 12, color: '#fff' }}>#{item.ticketId}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -600,6 +669,7 @@ export function ActionItems() {
   const [filter, setFilter] = useState<'my' | 'all'>('my');
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
+  const [showActionCreatedToast, setShowActionCreatedToast] = useState(false);
   const [tableItems, setTableItems] = useState<TableRow[]>(() => {
     const loaded = loadActionItemsFromStorage();
     return loaded?.tableItems?.length ? loaded.tableItems : DEFAULT_TABLE_ITEMS;
@@ -609,6 +679,7 @@ export function ActionItems() {
     return loaded?.ticketDetails ?? {};
   });
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
+  const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
   const rowMenuRef = useRef<HTMLDivElement>(null);
   const [newItem, setNewItem] = useState({
@@ -634,7 +705,6 @@ export function ActionItems() {
   const dueDateInputRef = useRef<HTMLInputElement>(null);
   const [dueDateCalendarMonth, setDueDateCalendarMonth] = useState(() => new Date());
   const [descriptionHtml, setDescriptionHtml] = useState('');
-  const [descriptionHovered, setDescriptionHovered] = useState(false);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const descriptionOriginalRef = useRef<string>('');
   const prevFocusedRef = useRef(false);
@@ -723,9 +793,11 @@ export function ActionItems() {
     }
   };
 
-  const selectedDetailItem = selectedDetailId != null
-    ? (ticketDetails[selectedDetailId] ?? MOCK_DETAIL[selectedDetailId] ?? MOCK_DETAIL[1])
-    : null;
+  const selectedDetailItem = selectedDetailId != null ? (() => {
+    const base = ticketDetails[selectedDetailId] ?? MOCK_DETAIL[selectedDetailId] ?? MOCK_DETAIL[1];
+    const row = tableItems.find((r) => r.id === selectedDetailId);
+    return row ? { ...base, status: row.status } : base;
+  })() : null;
 
   useEffect(() => {
     if (selectedDetailId === null) return;
@@ -752,8 +824,56 @@ export function ActionItems() {
     }
   }, [selectedDetailId, ticketDetails]);
 
+  useEffect(() => {
+    if (!showActionCreatedToast) return;
+    const t = setTimeout(() => setShowActionCreatedToast(false), 4000);
+    return () => clearTimeout(t);
+  }, [showActionCreatedToast]);
+
+  const filteredTableItems = useMemo(() => {
+    if (!search.trim()) return tableItems;
+    const q = search.trim().toLowerCase();
+    return tableItems.filter(
+      (row) =>
+        row.productName.toLowerCase().includes(q) ||
+        row.productId.toLowerCase().includes(q) ||
+        row.subject.toLowerCase().includes(q) ||
+        row.category.toLowerCase().includes(q) ||
+        row.assignee.toLowerCase().includes(q)
+    );
+  }, [tableItems, search]);
+
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-6 -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary" style={{ backgroundColor: '#0B111E' }}>
+    <div className="flex flex-col flex-1 min-h-0 gap-6 -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary relative" style={{ backgroundColor: '#0B111E' }}>
+      {showActionCreatedToast && (
+        <div
+          className="fixed left-1/2 top-6 -translate-x-1/2 z-[2600] flex items-center"
+          style={{
+            width: 320,
+            height: 36,
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            background: '#1B3221',
+            opacity: 1,
+            boxSizing: 'border-box',
+          }}
+        >
+          <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: '#34C759' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+          </span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, color: '#34C759', fontWeight: 500, whiteSpace: 'nowrap' }}>New action item created.</span>
+          <button
+            type="button"
+            onClick={() => setShowActionCreatedToast(false)}
+            className="flex-shrink-0 p-1 rounded hover:opacity-80 transition-opacity"
+            style={{ color: '#fff' }}
+            aria-label="Dismiss"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
       <div className="flex flex-col flex-1 min-h-0 gap-6 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 min-w-0">
           <div className="flex items-center gap-4 min-w-0">
@@ -787,7 +907,7 @@ export function ActionItems() {
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
-                My Tickets (7)
+                My Tickets ({tableItems.length})
               </button>
               <button
                 onClick={() => setFilter('all')}
@@ -800,7 +920,7 @@ export function ActionItems() {
                     : { background: 'transparent', color: '#A0A0A0' }),
                 }}
               >
-                All (82)
+                All ({tableItems.length})
               </button>
             </div>
           </div>
@@ -878,22 +998,8 @@ export function ActionItems() {
             <table className="w-full min-w-[900px] border-separate" style={{ borderSpacing: '0 6px' }}>
               <thead>
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-400" style={{ background: '#0B111E' }}>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>
-                    <span className="inline-flex items-center gap-1 cursor-pointer hover:text-white">
-                      STATUS
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </span>
-                  </th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>
-                    <span className="inline-flex items-center gap-1 cursor-pointer hover:text-white">
-                      PRODUCTS
-                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    </span>
-                  </th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>STATUS</th>
+                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>PRODUCTS</th>
                   <th className="py-1.5 font-normal border-0 text-left" style={{ background: '#0B111E', paddingLeft: 16, paddingRight: 24, minWidth: 120 }}>CATEGORY</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>SUBJECT</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>ASSIGNEE</th>
@@ -909,7 +1015,7 @@ export function ActionItems() {
                 </tr>
               </thead>
               <tbody>
-                {tableItems.map((row) => (
+                {filteredTableItems.map((row) => (
                   <tr
                     key={row.id}
                     className="hover:opacity-95 transition-opacity overflow-hidden"
@@ -934,11 +1040,14 @@ export function ActionItems() {
                           gap: 8,
                         }}
                       >
-                        <span
-                          className="w-4 h-4 rounded-full flex-shrink-0"
-                          style={{ border: '2px solid #D0D0D0', background: 'transparent' }}
-                        />
-                        <span className="text-sm flex-1 min-w-0" style={{ color: '#E5E5E5' }}>{row.status}</span>
+                        {row.status === 'Completed' ? (
+                          <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: '#22c55e' }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                          </span>
+                        ) : (
+                          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
+                        )}
+                        <span className="flex-1 min-w-0" style={{ color: '#E5E5E5', fontSize: 12 }}>{row.status}</span>
                         <svg className="w-4 h-4 flex-shrink-0 ml-auto" fill="none" stroke="#D0D0D0" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
@@ -950,6 +1059,17 @@ export function ActionItems() {
                         onClick={() => setSelectedDetailId(row.id)}
                         className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer w-full text-left border-0 bg-transparent p-0"
                       >
+                        <span
+                          role="checkbox"
+                          aria-checked={checkedRowIds.has(row.id)}
+                          onClick={(e) => { e.stopPropagation(); setCheckedRowIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; }); }}
+                          className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border-2 cursor-pointer"
+                          style={{ borderColor: checkedRowIds.has(row.id) ? '#3B82F6' : '#6b7280', background: checkedRowIds.has(row.id) ? '#3B82F6' : 'transparent' }}
+                        >
+                          {checkedRowIds.has(row.id) && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                          )}
+                        </span>
                         <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
                           <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
@@ -962,8 +1082,17 @@ export function ActionItems() {
                             <span
                               role="button"
                               tabIndex={0}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard?.writeText(row.productId).catch(() => {});
+                              }}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  navigator.clipboard?.writeText(row.productId).catch(() => {});
+                                }
+                              }}
                               className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex"
                               title="Copy"
                             >
@@ -1195,15 +1324,43 @@ export function ActionItems() {
       {selectedDetailId != null && selectedDetailItem && (
         <DetailModal
           item={selectedDetailItem}
-          onClose={() => setSelectedDetailId(null)}
+          onClose={() => {
+            saveActionItemsToStorage(tableItems, ticketDetails);
+            setSelectedDetailId(null);
+          }}
           descriptionHtml={descriptionHtml}
           setDescriptionHtml={setDescriptionHtml}
-          descriptionHovered={descriptionHovered}
-          setDescriptionHovered={setDescriptionHovered}
           descriptionFocused={descriptionFocused}
           setDescriptionFocused={setDescriptionFocused}
           onDescriptionCancel={handleDescriptionCancel}
           onDescriptionSave={handleDescriptionSave}
+          onStatusChange={(status) => {
+            if (selectedDetailId == null) return;
+            setTableItems((prev) => prev.map((r) => (r.id === selectedDetailId ? { ...r, status } : r)));
+            setTicketDetails((prev) => {
+              const existing = prev[selectedDetailId];
+              const row = tableItems.find((r) => r.id === selectedDetailId);
+              const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+              if (!base) return prev;
+              return { ...prev, [selectedDetailId]: { ...base, status } };
+            });
+          }}
+          onAttachmentsChange={(attachments) => {
+            if (selectedDetailId == null) return;
+            let nextTicketDetails: Record<number, TicketDetail> | null = null;
+            flushSync(() => {
+              setTicketDetails((prev) => {
+                const existing = prev[selectedDetailId];
+                const row = tableItems.find((r) => r.id === selectedDetailId);
+                const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+                if (!base) return prev;
+                const next = { ...prev, [selectedDetailId]: { ...base, attachments } };
+                nextTicketDetails = next;
+                return next;
+              });
+            });
+            if (nextTicketDetails) saveActionItemsToStorage(tableItems, nextTicketDetails);
+          }}
         />
       )}
 
@@ -1708,6 +1865,7 @@ export function ActionItems() {
                   }));
 
                   setShowNewActionModal(false);
+                  setShowActionCreatedToast(true);
                   setNewItem({
                     product: '',
                     productId: '',
