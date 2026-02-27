@@ -71,8 +71,8 @@ export default function ProductDetailPage() {
   }
 
   const titleUppercase = product.name.toUpperCase();
-  const cardBg = isDarkMode ? '#1F2937' : '#F9FAFB';
-  const cardBorder = isDarkMode ? '#374151' : '#E5E7EB';
+  const cardBg = isDarkMode ? '#1A2235' : '#F9FAFB';
+  const cardBorder = isDarkMode ? '#334155' : '#E5E7EB';
   const textPrimary = isDarkMode ? '#F9FAFB' : '#111827';
   const textSecondary = isDarkMode ? '#9CA3AF' : '#6B7280';
   const dividerColor = isDarkMode ? '#374151' : '#E5E7EB';
@@ -123,11 +123,21 @@ export default function ProductDetailPage() {
 
       {/* Tab bar: Essential Info (active) */}
       <div
-        className="flex items-center gap-2 px-4 lg:px-6 py-3 border-b border-[#374151]"
+        className="flex items-center px-4 lg:px-6"
         style={{ backgroundColor: isDarkMode ? '#111827' : '#1F2937' }}
       >
-        <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-        <span className="text-sm font-medium text-foreground-primary">Essential Info</span>
+        <div
+          className="flex items-center"
+          style={{
+            padding: '12px 16px',
+            gap: 8,
+            backgroundColor: 'rgba(0, 122, 255, 0.05)',
+            borderBottom: '2px solid #007AFF',
+          }}
+        >
+          <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+          <span className="text-sm font-medium text-foreground-primary">Essential Info</span>
+        </div>
       </div>
 
       {/* Main content */}
@@ -138,14 +148,12 @@ export default function ProductDetailPage() {
           transition={{ duration: 0.2 }}
           className="w-full min-h-[440px]"
           style={{
-            opacity: 1,
             backgroundColor: cardBg,
-            borderWidth: 1,
-            borderStyle: 'solid',
-            borderColor: cardBorder,
+            border: `1px solid ${cardBorder}`,
             borderRadius: 8,
             padding: '24px',
             boxSizing: 'border-box',
+            boxShadow: '0px 4px 8px 0px rgba(0, 0, 0, 0.1)',
           }}
         >
           {/* Card header: Essential Info + Edit Info */}
