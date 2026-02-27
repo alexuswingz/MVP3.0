@@ -272,6 +272,17 @@ function DetailModalRow({ label, children, valueAlign = 'right', vertical = fals
   );
 }
 
+const CATEGORY_IMAGES: Record<string, string> = {
+  Inventory: '/assets/Status=Inventory.png',
+  Price: '/assets/Status=Price.png',
+  Ads: '/assets/Status=Ads.png',
+  PDP: '/assets/Status=PDP.png',
+  inventory: '/assets/Status=Inventory.png',
+  price: '/assets/Status=Price.png',
+  ads: '/assets/Status=Ads.png',
+  pdp: '/assets/Status=PDP.png',
+};
+
 const CATEGORIES = [
   { id: 'inventory', label: 'Inventory', icon: 'cube' },
   { id: 'price', label: 'Price', icon: 'tag' },
@@ -883,7 +894,7 @@ export function ActionItems() {
                       </svg>
                     </span>
                   </th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>CATEGORY</th>
+                  <th className="py-1.5 font-normal border-0 text-left" style={{ background: '#0B111E', paddingLeft: 16, paddingRight: 24, minWidth: 120 }}>CATEGORY</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>SUBJECT</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>ASSIGNEE</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>DUE DATE</th>
@@ -964,25 +975,124 @@ export function ActionItems() {
                         </div>
                       </button>
                     </td>
-                    <td className="px-4 align-middle" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
-                      <span
-                        className="inline-flex items-center justify-center box-border truncate"
-                        style={{
-                          fontWeight: 600,
-                          fontSize: 12,
-                          lineHeight: '100%',
-                          color: '#12B981',
-                          background: 'rgba(34, 197, 94, 0.15)',
-                          border: '1px solid rgba(34, 197, 94, 0.3)',
-                          width: 72,
-                          height: 23,
-                          borderRadius: 4,
-                          padding: '4px 8px',
-                          gap: 10,
-                        }}
-                      >
-                        {row.category}
-                      </span>
+                    <td className="align-middle text-left" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4, minWidth: 120 }}>
+                      {(row.category === 'Inventory' || row.category === 'inventory') ? (
+                        <span
+                          className="inline-flex items-center justify-start box-border truncate"
+                          style={{
+                            width: 72,
+                            height: 23,
+                            borderRadius: 4,
+                            opacity: 1,
+                            paddingTop: 4,
+                            paddingRight: 8,
+                            paddingBottom: 4,
+                            paddingLeft: 8,
+                            gap: 10,
+                            color: '#12B981',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: '100%',
+                            background: '#182A2C',
+                          }}
+                        >
+                          {row.category}
+                        </span>
+                      ) : (row.category === 'Price' || row.category === 'price') ? (
+                        <span
+                          className="inline-flex items-center justify-start box-border truncate"
+                          style={{
+                            width: 46,
+                            height: 23,
+                            borderRadius: 4,
+                            opacity: 1,
+                            paddingTop: 4,
+                            paddingRight: 8,
+                            paddingBottom: 4,
+                            paddingLeft: 8,
+                            gap: 10,
+                            color: '#F59E0C',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: '100%',
+                            background: '#2C2825',
+                          }}
+                        >
+                          {row.category}
+                        </span>
+                      ) : (row.category === 'Ads' || row.category === 'ads') ? (
+                        <span
+                          className="inline-flex items-center justify-start box-border truncate"
+                          style={{
+                            width: 39,
+                            height: 23,
+                            borderRadius: 4,
+                            opacity: 1,
+                            paddingTop: 4,
+                            paddingRight: 8,
+                            paddingBottom: 4,
+                            paddingLeft: 8,
+                            gap: 10,
+                            color: '#3B83F6',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: '100%',
+                            background: '#1F335E',
+                          }}
+                        >
+                          {row.category}
+                        </span>
+                      ) : (row.category === 'PDP' || row.category === 'pdp') ? (
+                        <span
+                          className="inline-flex items-center justify-start box-border truncate"
+                          style={{
+                            width: 41,
+                            height: 23,
+                            borderRadius: 4,
+                            opacity: 1,
+                            paddingTop: 4,
+                            paddingRight: 8,
+                            paddingBottom: 4,
+                            paddingLeft: 8,
+                            gap: 10,
+                            color: '#8B5CF6',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: '100%',
+                            background: '#212139',
+                          }}
+                        >
+                          {row.category}
+                        </span>
+                      ) : CATEGORY_IMAGES[row.category] ? (
+                        <Image
+                          src={CATEGORY_IMAGES[row.category]}
+                          alt={row.category}
+                          width={72}
+                          height={23}
+                          className="object-contain"
+                          style={{ borderRadius: 4 }}
+                        />
+                      ) : (
+                        <span
+                          className="inline-flex items-center justify-start box-border truncate"
+                          style={{
+                            fontWeight: 600,
+                            fontSize: 12,
+                            lineHeight: '100%',
+                            color: '#12B981',
+                            background: 'rgba(34, 197, 94, 0.15)',
+                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            width: 72,
+                            height: 23,
+                            borderRadius: 4,
+                            padding: '4px 8px',
+                            gap: 6,
+                          }}
+                        >
+                          {row.category}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 align-middle text-sm text-white" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
                       {row.subject}
@@ -1542,14 +1652,20 @@ export function ActionItems() {
               </button>
               <button
                 type="button"
+                disabled={!(newItem.product.trim() || productSearch.trim()) || !newItem.subject.trim() || !newItem.category}
                 onClick={() => {
+                  const hasProduct = !!(newItem.product.trim() || productSearch.trim());
+                  const hasSubject = !!newItem.subject.trim();
+                  const hasCategory = !!newItem.category;
+                  if (!hasProduct || !hasSubject || !hasCategory) return;
+
                   const nextId = Math.max(0, ...tableItems.map((r) => r.id)) + 1;
                   const catLabel = CATEGORIES.find((c) => c.id === newItem.category)?.label ?? newItem.category;
                   const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '—';
                   const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '—';
                   const dueDateParsed = parseDueDate(newItem.dueDate.trim());
                   const dueDateTableStr = dueDateParsed ? formatDueDateTable(dueDateParsed) : '—';
-                  const productName = newItem.product.trim() || productSearch.trim() || 'New product...';
+                  const productName = newItem.product.trim() || productSearch.trim();
                   const now = new Date();
                   const dateCreatedStr = formatDueDateTable(now);
 
@@ -1610,7 +1726,7 @@ export function ActionItems() {
                   setSelectedAssignees([]);
                   setShowDueDateCalendar(false);
                 }}
-                className="px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity"
+                className="px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 hover:opacity-90"
                 style={{ background: '#3b82f6' }}
               >
                 Create Action Item
