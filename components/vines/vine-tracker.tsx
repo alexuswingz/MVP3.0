@@ -236,6 +236,22 @@ const VineTracker = () => {
     [fetchVineClaims]
   );
 
+  const handleSetVineStatus = useCallback(
+    async (productId: number, statusLabel: 'Awaiting Reviews' | 'Concluded') => {
+      try {
+        setError(null);
+        await api.setVineStatus({ product_id: productId, status: statusLabel });
+        await fetchVineClaims();
+        toast.success('Status saved.');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to save status';
+        setError(msg);
+        toast.error(msg);
+      }
+    },
+    [fetchVineClaims]
+  );
+
   /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date then creates vine claim. */
   const handleCreateNewVine = useCallback(
     async (row: VineProductRow) => {
@@ -349,6 +365,7 @@ const VineTracker = () => {
               onUpdateClaim={handleUpdateClaim}
               onUpdateLaunchDate={handleUpdateLaunchDate}
               onUpdateEnrolled={handleUpdateEnrolled}
+              onSetVineStatus={handleSetVineStatus}
               onDeleteRow={handleDeleteRow}
             />
           </div>

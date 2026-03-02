@@ -474,6 +474,13 @@ class ExtendedApiClient extends ApiClient {
     });
   }
 
+  async setVineStatus(data: { product_id: number; status: 'Awaiting Reviews' | 'Concluded' }): Promise<{ updated: number; review_received: boolean }> {
+    return this.request<{ updated: number; review_received: boolean }>('/vine-claims/set-status/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Amazon Account API methods
   async getAmazonAuthUrl(
     marketplaceId: string = 'ATVPDKIKX0DER',

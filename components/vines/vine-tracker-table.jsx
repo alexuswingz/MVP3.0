@@ -340,7 +340,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, onUpdateClaim, onUpdateLaunchDate, onUpdateEnrolled, onAddNewRow, onDeleteRow }) => {
+const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, onUpdateClaim, onUpdateLaunchDate, onUpdateEnrolled, onSetVineStatus, onAddNewRow, onDeleteRow }) => {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const [openFilterColumn, setOpenFilterColumn] = useState(null);
@@ -1175,7 +1175,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                         >
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Awaiting Reviews' }); setOpenStatusDropdownId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateRow({ ...row, status: 'Awaiting Reviews' });
+                              const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                              if (onSetVineStatus && productId != null) onSetVineStatus(productId, 'Awaiting Reviews');
+                              setOpenStatusDropdownId(null);
+                            }}
                             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
                           >
                             <img src="/assets/awaiting.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
@@ -1183,7 +1189,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Concluded' }); setOpenStatusDropdownId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateRow({ ...row, status: 'Concluded' });
+                              const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                              if (onSetVineStatus && productId != null) onSetVineStatus(productId, 'Concluded');
+                              setOpenStatusDropdownId(null);
+                            }}
                             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #374151' }}
                           >
                             <img src="/assets/complete.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
