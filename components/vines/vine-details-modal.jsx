@@ -321,10 +321,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
       }
     };
 
-    // Add a small delay before attaching the listener to prevent immediate closure
+    // Delay attaching listener so the click that opened the menu doesn't close it
     const timeoutId = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
-    }, 100);
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
@@ -562,19 +562,22 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
       }
       setActionMenuId(null);
     } else {
-      // Show action menu
+      // Show action menu (position so it stays visible above the modal)
       const buttonRect = e.currentTarget.getBoundingClientRect();
-      const menuWidth = 150;
-      const menuHeight = 100;
+      const menuWidth = 160;
+      const menuHeight = 140;
       
+      // Prefer opening below the button; flip above if not enough space
       let top = buttonRect.bottom + 8;
-      let left = buttonRect.left;
-      
-      // Adjust if menu would go off screen
-      if (top + menuHeight > window.innerHeight) {
+      if (top + menuHeight > window.innerHeight - 16) {
         top = buttonRect.top - menuHeight - 8;
       }
-      if (left + menuWidth > window.innerWidth) {
+      if (top < 16) top = 16;
+      
+      // Open to the left of the button so the menu stays in view (ACTIONS column is on the right)
+      let left = buttonRect.right - menuWidth;
+      if (left < 16) left = 16;
+      if (left + menuWidth > window.innerWidth - 16) {
         left = window.innerWidth - menuWidth - 16;
       }
       
@@ -1759,37 +1762,59 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         </div>
       </div>
 
-      {/* Action Menu Popup */}
+      {/* Action Menu Popup - z-index above modal overlay (99999) so options are visible */}
       {actionMenuId && createPortal(
         <div
           data-action-menu
+          role="menu"
           style={{
             position: 'fixed',
             top: `${actionMenuPosition.top}px`,
             left: `${actionMenuPosition.left}px`,
-            zIndex: 1001,
-            minWidth: '150px',
-            padding: '8px',
+            zIndex: 100000,
+            minWidth: '160px',
+            padding: '8px 0',
             backgroundColor: '#1F2937',
             border: '1px solid #374151',
             borderRadius: '8px',
             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
           }}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          <div style={{ color: '#FFFFFF', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '8px 12px', borderBottom: '1px solid #374151', marginBottom: '4px' }}>
-            ACTIONS
+          <div style={{ color: '#9CA3AF', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 12px 8px', borderBottom: '1px solid #374151', marginBottom: '4px' }}>
+            Actions
           </div>
           <button
+            type="button"
+            role="menuitem"
             onClick={() => {
               const claim = claimHistory.find(c => c.id === actionMenuId);
               if (claim) {
-                handleDeleteClaim(actionMenuId);
+                let dateValue = '';
+                if (claim.date) {
+                  const date = new Date(claim.date);
+                  if (!isNaN(date.getTime())) {
+                    dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                  } else if (claim.date.includes('-') && claim.date.length === 10) {
+                    dateValue = claim.date;
+                  } else {
+                    const parts = claim.date.split('/');
+                    if (parts.length === 3) {
+                      dateValue = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+                    }
+                  }
+                }
+                setEditClaimDate(dateValue);
+                setEditClaimUnits(claim.units != null ? String(claim.units) : '0');
+                setEditModalPosition({ top: Math.min(120, window.innerHeight - 280), left: Math.max(16, (window.innerWidth - 400) / 2) });
+                setEditModalClaimId(actionMenuId);
               }
+              setActionMenuId(null);
             }}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '10px 12px',
               background: 'none',
               border: 'none',
               color: '#FFFFFF',
@@ -1800,12 +1825,38 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
               alignItems: 'center',
               gap: '8px',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#374151';
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#374151'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>Edit</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const claim = claimHistory.find(c => c.id === actionMenuId);
+              if (claim) handleDeleteClaim(actionMenuId);
+              setActionMenuId(null);
             }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              background: 'none',
+              border: 'none',
+              color: '#FFFFFF',
+              fontSize: '0.875rem',
+              textAlign: 'left',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#374151'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="3 6 5 6 21 6"></polyline>
