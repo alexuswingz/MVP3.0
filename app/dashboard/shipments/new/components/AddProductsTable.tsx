@@ -722,6 +722,10 @@ export function AddProductsTable({
           </div>
         );
       }
+      case 'totalDoi':
+        return formatCell(row.totalDoi);
+      case 'inventory':
+        return formatCell(row.inventory);
       default:
         return formatCell((row as Record<string, unknown>)[col.key] as string | number | undefined | null);
     }

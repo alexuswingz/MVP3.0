@@ -14,7 +14,9 @@ import {
   ReferenceLine,
 } from 'recharts';
 import ForecastSettingsModal, { type ForecastSettingsPayload } from '@/components/forecast/forecast-settings-modal';
+import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { ForecastSettingsDropdown } from './ForecastSettingsDropdown';
 
 const isDarkMode = true;
 
@@ -90,9 +92,10 @@ interface NgoosModalProps {
   selectedProduct: any;
   currentQty?: number;
   onAddUnits?: (product: any, units: number) => void;
+  onSeasonalityUploaded?: (productId: string) => void;
 }
 
-export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits }: NgoosModalProps) {
+export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits, onSeasonalityUploaded }: NgoosModalProps) {
   const [activeTab, setActiveTab] = useState<'inventory' | 'sales' | 'ads'>('inventory');
   const [displayUnits, setDisplayUnits] = useState(selectedProduct?.unitsToMake || 0);
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -109,6 +112,8 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [applyConfirmPayload, setApplyConfirmPayload] = useState<ForecastSettingsPayload | null>(null);
   const [showSettingsAppliedBadge, setShowSettingsAppliedBadge] = useState(false);
   const [showCustomSettingsTooltip, setShowCustomSettingsTooltip] = useState(false);
+  const [showGearDropdown, setShowGearDropdown] = useState(false);
+  const [showSeasonalityModal, setShowSeasonalityModal] = useState(false);
   const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
@@ -1650,7 +1655,11 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setShowForecastSettingsModal(true);
+                          if (selectedProduct?.needsSeasonality) {
+                            setShowGearDropdown((prev) => !prev);
+                          } else {
+                            setShowForecastSettingsModal(true);
+                          }
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         style={{
@@ -1668,6 +1677,21 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                       >
                         <img src="/assets/Icon%20Button.png" alt="Forecast Settings" width={20} height={20} style={{ display: 'block' }} />
                       </button>
+                      {/* Gear dropdown menu - only shown when product needs seasonality */}
+                      {selectedProduct?.needsSeasonality && (
+                        <ForecastSettingsDropdown
+                          isOpen={showGearDropdown}
+                          onClose={() => setShowGearDropdown(false)}
+                          onForecastSettingsClick={() => {
+                            setShowGearDropdown(false);
+                            setShowForecastSettingsModal(true);
+                          }}
+                          onSeasonalityCurveClick={() => {
+                            setShowGearDropdown(false);
+                            setShowSeasonalityModal(true);
+                          }}
+                        />
+                      )}
                       {showSettingsAppliedBadge && (
                         <button
                           type="button"
@@ -3105,6 +3129,18 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
         onApply={(payload) => {
           setApplyConfirmPayload(payload);
           setShowApplyConfirmModal(true);
+        }}
+      />
+      <UploadSeasonalityModal
+        isOpen={showSeasonalityModal}
+        onClose={() => setShowSeasonalityModal(false)}
+        productId={selectedProduct?.id ? String(selectedProduct.id) : null}
+        isDarkMode
+        onUploadSuccess={() => {
+          if (selectedProduct?.id && onSeasonalityUploaded) {
+            onSeasonalityUploaded(String(selectedProduct.id));
+          }
+          setShowSeasonalityModal(false);
         }}
       />
       {showApplyConfirmModal && applyConfirmPayload && (

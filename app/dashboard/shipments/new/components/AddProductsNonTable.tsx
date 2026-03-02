@@ -32,6 +32,10 @@ export interface NonTableProductRow {
   labelsAvailable?: number;
   label_inventory?: number;
   labels_available?: number;
+  /** True if the product needs seasonality data for accurate forecasting */
+  needsSeasonality?: boolean;
+  /** True if seasonality was just uploaded for this product (show warning icon) */
+  seasonalityUploaded?: boolean;
 }
 
 interface AddProductsNonTableProps {
@@ -47,6 +51,8 @@ interface AddProductsNonTableProps {
   onAddedIdsChange?: (ids: string[]) => void;
   /** Called when user edits "units to make" so the page can save it when creating the draft */
   onUnitsOverride?: (productId: string, units: number | null) => void;
+  /** Called when user clicks Upload Seasonality for a product that needs seasonality data */
+  onUploadSeasonality?: (productId: string) => void;
   totalProducts?: number;
   totalPalettes?: number;
   totalBoxes?: number;
@@ -96,6 +102,7 @@ export function AddProductsNonTable({
   initialAddedIds,
   onAddedIdsChange,
   onUnitsOverride,
+  onUploadSeasonality,
   totalProducts = 0,
   totalPalettes = 0,
   totalBoxes = 0,
@@ -834,10 +841,29 @@ export function AddProductsNonTable({
                     zIndex: 1,
                   }}
                 >
+                  {row.seasonalityUploaded && (
+                    <svg 
+                      width="16" 
+                      height="16" 
+                      viewBox="0 0 16 16" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ position: 'absolute', left: -6 }}
+                    >
+                      <circle cx="8" cy="8" r="7" fill="#F59E0B" />
+                      <path
+                        d="M8 4.5V8.5"
+                        stroke="white"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="8" cy="11" r="0.75" fill="white" />
+                    </svg>
+                  )}
                   {row.inventory.toLocaleString()}
                 </div>
 
-                {/* UNITS TO MAKE column - label warning icon (when qty > labels) + input + arrows + Add */}
+                {/* UNITS TO MAKE column - label warning icon (when qty > labels) + input + arrows + Add OR Upload Seasonality button */}
                 <div
                   style={{
                     display: 'flex',
@@ -852,6 +878,41 @@ export function AddProductsNonTable({
                     zIndex: clickedLabelWarningIndex === index ? 10001 : 1,
                   }}
                 >
+                  {row.needsSeasonality ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUploadSeasonality?.(String(row.id));
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)',
+                        color: '#FFFFFF',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.2s',
+                        marginLeft: 50,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'linear-gradient(135deg, #D97706 0%, #C2410C 100%)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)';
+                      }}
+                    >
+                      Upload Seasonality
+                    </button>
+                  ) : (
+                    <>
                   {/* Fixed-width slot so input doesn't move when icon appears */}
                   <div style={{ position: 'relative', width: 26, minWidth: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {(() => {
@@ -1160,6 +1221,8 @@ export function AddProductsNonTable({
                     {!isAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
                     <span>{isAdded ? 'Added' : 'Add'}</span>
                   </button>
+                    </>
+                  )}
                   {/* Label warning popover - when icon clicked */}
                   {clickedLabelWarningIndex === index && (() => {
                     const labelsAvail = getLabelsAvailable(row);
@@ -1225,7 +1288,7 @@ export function AddProductsNonTable({
                   })()}
                 </div>
 
-                {/* DAYS OF INVENTORY column - FBA bar (when toggled) + DOI bar + number + icon group */}
+                {/* DAYS OF INVENTORY column - FBA bar (when toggled) + DOI bar + number + icon group OR Missing Seasonality bar */}
                 <div
                   style={{
                     display: 'flex',
@@ -1239,6 +1302,60 @@ export function AddProductsNonTable({
                     overflow: 'visible',
                   }}
                 >
+                  {row.needsSeasonality ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 16px',
+                        background: 'linear-gradient(180deg, #1E293B 0%, #263041 50%, #1E293B 100%)',
+                        border: '1px dashed #334155',
+                        borderRadius: 6,
+                        minWidth: 320,
+                        marginLeft: -350,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 6,
+                          backgroundColor: '#1E293B',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path
+                            d="M2 14L6.5 9.5L10.5 13.5L18 6"
+                            stroke="#64748B"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M14 6H18V10"
+                            stroke="#64748B"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 500, color: '#E2E8F0', whiteSpace: 'nowrap' }}>
+                          Missing Seasonality Data
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#64748B', whiteSpace: 'nowrap' }}>
+                          Upload seasonality data to calculate units needed.
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
                   <div
                     style={{
                       flex: 1,
@@ -1254,7 +1371,7 @@ export function AddProductsNonTable({
                   >
                     {/* FBA Available bar - when FBA button is on (match 1000bananas2.0) */}
                     {showFbaBar && (() => {
-                      const fbaDays = Number(row.fbaAvailableDoi ?? row.daysOfInventory * 0.8 ?? 0);
+                      const fbaDays = Number(row.fbaAvailableDoi ?? (row.daysOfInventory ?? 0) * 0.8);
                       const baseWidth = 100;
                       const maxDaysForBar = 100;
                       const daysForWidth = Math.min(maxDaysForBar, fbaDays);
@@ -1346,6 +1463,7 @@ export function AddProductsNonTable({
                       </div>
                     ); })()}
                   </div>
+                  )}
                   {/* Icon group: pencil + banana, aligned at right and vertically centered */}
                   <div
                     style={{

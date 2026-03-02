@@ -13,6 +13,7 @@ import { BookShipmentForm } from './components/BookShipmentForm';
 import { NgoosModal } from './components/NgoosModal';
 import { ShipmentDetailsModal, type ShipmentDetailsData } from './components/ShipmentDetailsModal';
 import ExportTemplateModal from './components/ExportTemplateModal';
+import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { api, type ForecastTableResponse, type ShipmentDetail } from '@/lib/api';
 import { calculateUnitsToMake } from '@/lib/calculations';
 
@@ -133,6 +134,7 @@ function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]
     fbaAvailable: inv.fbaAvailable,
     awdTotal: inv.awdTotal,
     unitsToMake: apiRow.unitsToMake,
+    needsSeasonality: apiRow.needsSeasonality,
   };
 }
 
@@ -149,6 +151,7 @@ function transformApiRowToNonTableRow(apiRow: ForecastTableResponse['rows'][0]):
     unitsToMake: apiRow.unitsToMake,
     daysOfInventory: apiRow.daysOfInventory,
     fbaAvailableDoi: apiRow.doiFba,
+    needsSeasonality: apiRow.needsSeasonality,
   };
 }
 
@@ -201,6 +204,10 @@ export default function NewShipmentAddProductsPage() {
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
+  const [showSeasonalityModal, setShowSeasonalityModal] = useState(false);
+  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
+  /** Track products that have had seasonality uploaded (no longer need seasonality) */
+  const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
   const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
@@ -336,8 +343,17 @@ export default function NewShipmentAddProductsPage() {
         return r;
       });
     }
+    // Override needsSeasonality to false, set seasonalityUploaded to true, and set unitsToMake to 0 for products that have uploaded seasonality
+    if (uploadedSeasonalityProductIds.size > 0) {
+      rows = rows.map((r) => {
+        if (uploadedSeasonalityProductIds.has(String(r.id))) {
+          return { ...r, needsSeasonality: false, seasonalityUploaded: true, unitsToMake: 0 };
+        }
+        return r;
+      });
+    }
     return rows;
-  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities]);
+  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
 
   // Transform API rows to non-table format; overlay recalculated units when user applied DOI; overlay loaded shipment quantities when opening from table
   const nonTableRows: NonTableProductRow[] = useMemo(() => {
@@ -356,8 +372,17 @@ export default function NewShipmentAddProductsPage() {
         return r;
       });
     }
+    // Override needsSeasonality to false, set seasonalityUploaded to true, and set unitsToMake to 0 for products that have uploaded seasonality
+    if (uploadedSeasonalityProductIds.size > 0) {
+      rows = rows.map((r) => {
+        if (uploadedSeasonalityProductIds.has(String(r.id))) {
+          return { ...r, needsSeasonality: false, seasonalityUploaded: true, unitsToMake: 0 };
+        }
+        return r;
+      });
+    }
     return rows;
-  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities]);
+  }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
   
   // Use summary data from API or calculate from rows
   const totalProducts = apiData?.summary?.totalProducts ?? filteredApiRows.length;
@@ -1336,6 +1361,10 @@ export default function NewShipmentAddProductsPage() {
                 initialAddedIds={Array.from(addedProductIds)}
                 onAddedIdsChange={handleAddedIdsChange}
                 onUnitsOverride={handleUnitsOverride}
+                onUploadSeasonality={(productId) => {
+                  setSeasonalityProductId(productId);
+                  setShowSeasonalityModal(true);
+                }}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -1407,6 +1436,26 @@ export default function NewShipmentAddProductsPage() {
         currentQty={0}
         onAddUnits={(product, units) => {
           console.log(`Adding ${units} units of ${product.name || product.product}`);
+        }}
+        onSeasonalityUploaded={(productId) => {
+          setUploadedSeasonalityProductIds((prev) => new Set([...prev, productId]));
+        }}
+      />
+
+      <UploadSeasonalityModal
+        isOpen={showSeasonalityModal}
+        onClose={() => {
+          setShowSeasonalityModal(false);
+          setSeasonalityProductId(null);
+        }}
+        productId={seasonalityProductId}
+        onUploadSuccess={() => {
+          // Mark this product as having seasonality uploaded
+          if (seasonalityProductId) {
+            setUploadedSeasonalityProductIds((prev) => new Set([...prev, seasonalityProductId]));
+          }
+          setShowSeasonalityModal(false);
+          setSeasonalityProductId(null);
         }}
       />
 
