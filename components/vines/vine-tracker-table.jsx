@@ -371,6 +371,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
   const [isOpenedFromPlusButton, setIsOpenedFromPlusButton] = useState(false);
   const claimDateInputRef = useRef(null);
   const [openThreeDotsMenuId, setOpenThreeDotsMenuId] = useState(null);
+  const [threeDotsMenuPosition, setThreeDotsMenuPosition] = useState({ top: 0, left: 0 });
   const threeDotsMenuRefs = useRef({});
 
   // Handler function to open the vine details modal - used by both plus button and row click
@@ -461,6 +462,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
             const tpsProduct = tpsMap[asin] || {};
             
             return {
+              id: item.id,
               // Primary fields from production inventory (has brand_name, size, child_asin)
               product_name: item.product_name || tpsProduct.product_name || '',
               brand_name: item.brand_name || tpsProduct.brand || tpsProduct.brand_name || '',
@@ -1595,6 +1597,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                                             brand: brand,
                                             size: size,
                                             asin: asin || '',
+                                            ...(product.id != null && { productId: product.id }),
                                           };
                                           if (onUpdateRow) {
                                             onUpdateRow({ ...row, ...selectedProduct });
@@ -2331,7 +2334,21 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setOpenThreeDotsMenuId(openThreeDotsMenuId === row.id ? null : row.id);
+                              if (openThreeDotsMenuId === row.id) {
+                                setOpenThreeDotsMenuId(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const menuWidth = 180;
+                                const menuHeight = 100;
+                                let top = rect.bottom + 8;
+                                let left = rect.right - menuWidth;
+                                if (top + menuHeight > window.innerHeight - 16) top = rect.top - menuHeight - 8;
+                                if (top < 16) top = 16;
+                                if (left < 16) left = 16;
+                                if (left + menuWidth > window.innerWidth - 16) left = window.innerWidth - menuWidth - 16;
+                                setThreeDotsMenuPosition({ top, left });
+                                setOpenThreeDotsMenuId(row.id);
+                              }
                             }}
                             style={{
                               display: 'inline-flex',
@@ -2361,120 +2378,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                             </svg>
                           </button>
                           
-                          {/* Three dots dropdown menu */}
-                          {openThreeDotsMenuId === row.id && (
-                            <div
-                              id={`three-dots-menu-${row.id}`}
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                right: 0,
-                                marginTop: '8px',
-                                backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
-                                border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
-                                borderRadius: '8px',
-                                padding: '4px',
-                                minWidth: '180px',
-                                zIndex: 1000,
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              }}
-                            >
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setOpenThreeDotsMenuId(null);
-                                  handleOpenVineDetailsModal(row, false);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  textAlign: 'left',
-                                  fontSize: '14px',
-                                  color: isDarkMode ? '#FFFFFF' : '#111827',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }}
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                                Edit Vine Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setOpenThreeDotsMenuId(null);
-                                  // Delete the row
-                                  if (window.confirm(`Are you sure you want to delete "${row.productName || 'this product'}"?`)) {
-                                    if (onDeleteRow) {
-                                      onDeleteRow(row.id);
-                                    } else if (onUpdateRow) {
-                                      // Fallback: mark as deleted if no delete handler provided
-                                      onUpdateRow({ ...row, status: 'archived', isDeleted: true });
-                                    }
-                                  }
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  textAlign: 'left',
-                                  fontSize: '14px',
-                                  color: '#EF4444',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }}
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
-                                Delete
-                              </button>
-                            </div>
-                          )}
+                          {/* Three dots menu is rendered in a portal below to avoid overflow clipping */}
                         </div>
                       </div>
                     )}
@@ -2514,6 +2418,100 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
         }
       `}</style>
 
+      {/* Three dots dropdown menu - portal so it's not clipped by table overflow */}
+      {openThreeDotsMenuId && (() => {
+        const row = rows.find((r) => r.id === openThreeDotsMenuId);
+        if (!row) return null;
+        return createPortal(
+          <div
+            id={`three-dots-menu-${openThreeDotsMenuId}`}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: `${threeDotsMenuPosition.top}px`,
+              left: `${threeDotsMenuPosition.left}px`,
+              zIndex: 10000,
+              backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+              border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
+              borderRadius: '8px',
+              padding: '6px 0',
+              minWidth: '180px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenThreeDotsMenuId(null);
+                handleOpenVineDetailsModal(row, false);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                textAlign: 'left',
+                fontSize: '14px',
+                color: isDarkMode ? '#FFFFFF' : '#111827',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit Vine Details
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenThreeDotsMenuId(null);
+                if (window.confirm(`Are you sure you want to delete "${row.productName || 'this product'}"?`)) {
+                  if (onDeleteRow) onDeleteRow(row.id);
+                  else if (onUpdateRow) onUpdateRow({ ...row, status: 'archived', isDeleted: true });
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                textAlign: 'left',
+                fontSize: '14px',
+                color: '#EF4444',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Delete
+            </button>
+          </div>,
+          document.body
+        );
+      })()}
+
       {/* Vine Details Modal */}
       <VineDetailsModal
         isOpen={showVineDetailsModal}
@@ -2536,8 +2534,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
         onAddClaim={(newClaim) => {
           // Update the row's claimed count
           if (onUpdateRow && selectedVineRow) {
+            const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
             const updatedRow = {
               ...selectedVineRow,
+              productId,
               claimed: (selectedVineRow.claimed || 0) + (newClaim.units || 0),
               claimHistory: [...(selectedVineRow.claimHistory || []), newClaim],
             };
@@ -2753,21 +2753,20 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
               </button>
               <button
                 onClick={() => {
-                  if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
-                    // Update the row's claimed count
+                    if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
+                    const units = parseInt(claimUnits);
+                    const newClaim = { id: Date.now(), date: claimDate, units };
+                    const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+                    const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
                     if (onUpdateRow) {
                       const updatedRow = {
                         ...selectedVineRow,
-                        claimed: (selectedVineRow.claimed || 0) + parseInt(claimUnits),
+                        productId,
+                        claimed: (selectedVineRow.claimed || 0) + units,
+                        claimHistory: updatedHistory,
                       };
                       onUpdateRow(updatedRow);
                     }
-                    
-                    // Show toast notification
-                    toast.success('Claim entry submitted', {
-                      description: `${parseInt(claimUnits)} unit(s) claimed${selectedVineRow.productName ? ' for ' + selectedVineRow.productName : ''}`,
-                      duration: 3000,
-                    });
                     
                     // Close modal and reset everything
                     setClaimDate('');
