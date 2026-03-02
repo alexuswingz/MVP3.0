@@ -230,6 +230,7 @@ interface ProductResponse {
   category: string;
   status: string;
   launch_date: string | null;
+  vine_units_enrolled?: number | null;
   image_url: string;
   is_hazmat: boolean;
   is_active: boolean;
@@ -725,6 +726,7 @@ interface VineClaimResponse {
   product_sku: string;
   brand_name: string | null;
   product_launch_date?: string | null;
+  product_vine_units_enrolled?: number | null;
   claim_date: string;
   units_claimed: number;
   review_received: boolean;

@@ -340,7 +340,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, onUpdateClaim, onUpdateLaunchDate, onAddNewRow, onDeleteRow }) => {
+const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, onUpdateClaim, onUpdateLaunchDate, onUpdateEnrolled, onAddNewRow, onDeleteRow }) => {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const [openFilterColumn, setOpenFilterColumn] = useState(null);
@@ -1993,41 +1993,41 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       display: 'table-cell',
                     }}
                   >
-                    {isNewRow ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          value={row.enrolled || 0}
-                          className="no-spinner"
-                          disabled
-                          readOnly
-                          style={{
-                            width: '72px',
-                            height: '27px',
-                            padding: '6px',
-                            borderRadius: '4px',
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: '#374151',
-                            backgroundColor: '#374151',
-                            color: '#FFFFFF',
-                            fontSize: '0.875rem',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            textAlign: 'center',
-                            cursor: 'not-allowed',
-                            opacity: 0.7,
-                          }}
-                          onWheel={(e) => e.target.blur()}
-                        />
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>
-                        {row.enrolled || 0}
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.enrolled ?? 0}
+                        onChange={(e) => {
+                          if (!onUpdateRow) return;
+                          const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
+                          onUpdateRow({ ...row, enrolled: Math.max(0, inputValue) });
+                        }}
+                        onBlur={() => {
+                          const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                          if (onUpdateEnrolled && productId != null) {
+                            onUpdateEnrolled(productId, row.enrolled ?? 0);
+                          }
+                        }}
+                        className="no-spinner"
+                        style={{
+                          width: '72px',
+                          height: '27px',
+                          padding: '6px',
+                          borderRadius: '4px',
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: '#374151',
+                          backgroundColor: '#374151',
+                          color: '#FFFFFF',
+                          fontSize: '0.875rem',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          textAlign: 'center',
+                        }}
+                        onWheel={(e) => e.target.blur()}
+                      />
+                    </div>
                   </td>
 
                   {/* ACTIONS */}

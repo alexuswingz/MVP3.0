@@ -55,11 +55,12 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
     const claimed = productClaims.reduce((s, c) => s + c.units_claimed, 0);
     const allConcluded = productClaims.every((c) => c.review_received);
     const status = allConcluded ? 'Concluded' : 'Awaiting Reviews';
-    const launchDate = first.product_launch_date
-      ? (typeof first.product_launch_date === 'string'
-          ? first.product_launch_date
-          : '')
+    const launchDate = first.product_launch_date && typeof first.product_launch_date === 'string'
+      ? first.product_launch_date
       : '';
+    const enrolled = typeof first.product_vine_units_enrolled === 'number'
+      ? first.product_vine_units_enrolled
+      : 0;
     rows.push({
       id: productId,
       productId,
@@ -71,7 +72,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
       asin: first.product_asin || '',
       launchDate,
       claimed,
-      enrolled: 0,
+      enrolled,
       imageUrl: null,
       claimHistory: productClaims.map((c) => ({
         id: c.id,
@@ -218,6 +219,23 @@ const VineTracker = () => {
     [fetchVineClaims]
   );
 
+  const handleUpdateEnrolled = useCallback(
+    async (productId: number, enrolledUnits: number) => {
+      const normalized = Math.max(0, enrolledUnits || 0);
+      try {
+        setError(null);
+        await api.updateProduct(productId, { vine_units_enrolled: normalized });
+        await fetchVineClaims();
+        toast.success('Enrolled units saved.');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to save enrolled units';
+        setError(msg);
+        toast.error(msg);
+      }
+    },
+    [fetchVineClaims]
+  );
+
   /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date then creates vine claim. */
   const handleCreateNewVine = useCallback(
     async (row: VineProductRow) => {
@@ -229,15 +247,15 @@ const VineTracker = () => {
       }
       setError(null);
       try {
-        // Sync product launch_date with form: set to date if provided, otherwise null so vine shows N/A
+        // Sync product fields with form before creating vine
         const launchDateTrimmed = (row.launchDate || '').trim();
         if (launchDateTrimmed) {
           const normalized = claimDateToApiFormat(launchDateTrimmed);
           if (normalized) {
-            await api.updateProduct(productId, { launch_date: normalized });
+            await api.updateProduct(productId, { launch_date: normalized, vine_units_enrolled: row.enrolled ?? 0 });
           }
         } else {
-          await api.updateProduct(productId, { launch_date: null });
+          await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
         }
         const today = new Date().toISOString().slice(0, 10);
         await api.createVineClaim({
@@ -330,6 +348,7 @@ const VineTracker = () => {
               onConfirmNewVine={handleCreateNewVine}
               onUpdateClaim={handleUpdateClaim}
               onUpdateLaunchDate={handleUpdateLaunchDate}
+              onUpdateEnrolled={handleUpdateEnrolled}
               onDeleteRow={handleDeleteRow}
             />
           </div>
