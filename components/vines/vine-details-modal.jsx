@@ -686,10 +686,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
 
       setClaimHistory(updatedHistory);
 
-      if (onAddClaim) {
-        onAddClaim(newClaim);
-      }
-
+      // Notify parent once via onUpdateProduct only; do not also call onAddClaim to avoid duplicate API creates
       if (onUpdateProduct) {
         const updatedProduct = {
           ...productData,
@@ -865,10 +862,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
 
       setClaimHistory(updatedHistory);
 
-      if (onAddClaim) {
-        onAddClaim(newClaim);
-      }
-
+      // Notify parent once via onUpdateProduct only; do not also call onAddClaim to avoid duplicate API creates
       if (onUpdateProduct) {
         const updatedProduct = {
           ...productData,

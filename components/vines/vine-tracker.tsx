@@ -229,11 +229,15 @@ const VineTracker = () => {
       }
       setError(null);
       try {
-        if ((row.launchDate || '').trim()) {
-          const normalized = claimDateToApiFormat((row.launchDate || '').trim());
+        // Sync product launch_date with form: set to date if provided, otherwise null so vine shows N/A
+        const launchDateTrimmed = (row.launchDate || '').trim();
+        if (launchDateTrimmed) {
+          const normalized = claimDateToApiFormat(launchDateTrimmed);
           if (normalized) {
             await api.updateProduct(productId, { launch_date: normalized });
           }
+        } else {
+          await api.updateProduct(productId, { launch_date: null });
         }
         const today = new Date().toISOString().slice(0, 10);
         await api.createVineClaim({
