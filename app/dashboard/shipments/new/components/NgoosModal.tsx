@@ -477,7 +477,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
       if (ticks.length >= tickCount) break;
     }
     if (ticks.length === 0) ticks.push(min, max);
-    return [...new Set(ticks.sort((a, b) => a - b))];
+    return Array.from(new Set(ticks.sort((a, b) => a - b)));
   }, [chartDisplayMinMax.minValue, chartDisplayMinMax.maxValue]);
 
   const chartSegments = useMemo(() => {
@@ -820,8 +820,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
         style={{
           width: '90vw',
           maxWidth: '1009px',
-          height: '90vh',
-          maxHeight: '90vh',
+          height: '829px',
+          maxHeight: '829px',
           borderRadius: '12px',
           boxShadow: '0 24px 80px rgba(15,23,42,0.75)',
           border: '1px solid #1F2937',
@@ -899,15 +899,15 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
             overflow: 'auto',
           }}
         >
-          <div style={{ padding: '0.5rem clamp(0.75rem, 2vw, 1.5rem)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '0 clamp(0.75rem, 2vw, 1.5rem)', flex: 1, display: 'flex', flexDirection: 'column' }}>
             {/* Tabs and Add Units Button */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: '1rem',
-                marginTop: '0.9375rem',
+                marginBottom: '24px',
+                marginTop: '24px',
               }}
             >
               <div
@@ -1135,7 +1135,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
               style={{
                 display: 'flex',
                 gap: '1rem',
-                marginBottom: '0.75rem',
+                marginBottom: '24px',
                 alignItems: 'stretch',
                 overflowX: 'auto',
                 minWidth: 0,
@@ -1392,7 +1392,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: '0.75rem',
-                marginBottom: '0.75rem',
+                marginBottom: '24px',
               }}
             >
               {/* FBA Available Card */}
@@ -1405,6 +1405,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                   backgroundColor: '#0f172a',
                   borderTop: '3px solid #A855F7',
                   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  height: '87px',
+                  boxSizing: 'border-box',
                 }}
               >
                 <div
@@ -1441,6 +1443,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                   backgroundColor: '#0f172a',
                   borderTop: '3px solid #45CE18',
                   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  height: '87px',
+                  boxSizing: 'border-box',
                 }}
               >
                 <div
@@ -1477,6 +1481,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                   backgroundColor: '#0f172a',
                   borderTop: '3px solid #007AFF',
                   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  height: '87px',
+                  boxSizing: 'border-box',
                 }}
               >
                 <div
@@ -1506,7 +1512,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
             {activeTab === 'inventory' && chartBuild && chartBuild.data.length > 0 && (
               <div
                 style={{
-                  marginTop: '0.25rem',
+                  marginTop: '0px',
+                  marginBottom: '24px',
                   borderRadius: '0.75rem',
                   padding: '1rem',
                   border: '1px solid #334155',
@@ -1514,8 +1521,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                   width: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  flex: 1,
-                  minHeight: 0,
+                  height: '338px',
+                  flexShrink: 0,
                 }}
               >
                 <div
@@ -1949,12 +1956,12 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v)))}
                         domain={
                           unitForecastYTicks.length >= 2
-                            ? [unitForecastYTicks[0], unitForecastYTicks[unitForecastYTicks.length - 1]]
+                            ? [unitForecastYTicks[0], unitForecastYTicks[unitForecastYTicks.length - 1]] as [number, number]
                             : unitForecastYTicks.length === 1
-                              ? [unitForecastYTicks[0], unitForecastYTicks[0] * 1.1]
+                              ? [unitForecastYTicks[0], unitForecastYTicks[0] * 1.1] as [number, number]
                               : chartDisplayMinMax.maxValue
-                                ? [0, Math.ceil(chartDisplayMinMax.maxValue * 1.1)]
-                                : 'auto'
+                                ? [0, Math.ceil(chartDisplayMinMax.maxValue * 1.1)] as [number, number]
+                                : [0, 'auto'] as [number, 'auto']
                         }
                       />
                       {unitForecastYTicks.map((v) => (
@@ -2236,15 +2243,15 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       padding: '12px 16px',
-                      marginTop: '0.75rem',
+                      marginTop: '0px',
                       borderRadius: '8px',
                       border: '1px solid #334155',
-                      backgroundColor: 'transparent',
+                      backgroundColor: '#0F172A',
                       cursor: 'pointer',
                       transition: 'background-color 0.2s',
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#212937'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#0F172A'; }}
                   >
                     <span style={{
                       fontSize: '1rem',
@@ -2274,7 +2281,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                 {/* Expanded Action Items */}
                 {actionItemsExpanded && (
                   <div style={{
-                    marginTop: '0.75rem',
+                    marginTop: '0px',
                     borderRadius: '8px',
                     border: '1px solid #334155',
                     backgroundColor: '#0F172A',
@@ -2569,8 +2576,8 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                             justifyContent: 'center',
                           }}
                         >
-                          <svg style={{ width: '18px', height: '18px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          <svg style={{ width: '20px', height: '20px', color: '#94a3b8' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                           </svg>
                         </button>
                     </div>
