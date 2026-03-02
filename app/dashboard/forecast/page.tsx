@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
 import DoiSettingsPopover, { getDefaultDoiSettings } from '@/components/forecast/doi-settings-popover';
 import NGOOSmodal from '@/components/forecast/NGOOSmodal';
+import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { useUIStore } from '@/stores/ui-store';
 import { api, type ForecastTableResponse } from '@/lib/api';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
@@ -63,6 +64,8 @@ export default function ForecastPage() {
   const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
+  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
   const [summary, setSummary] = useState({
     totalProducts: 0,
     totalUnitsToMake: 0,
@@ -451,8 +454,8 @@ export default function ForecastPage() {
           onClear={() => console.log('Clear')}
           onExport={() => console.log('Export')}
           onUploadSeasonality={(productId) => {
-            // TODO: Implement seasonality upload modal
-            console.log('Upload seasonality for product:', productId);
+            setSeasonalityProductId(productId);
+            setSeasonalityModalOpen(true);
           }}
           totalProducts={tableRows.length}
           totalPalettes={totalPallets}
@@ -475,6 +478,15 @@ export default function ForecastPage() {
           onNavigate={handleNgoosNavigate}
           showAddButton={false}
           showActionItems
+        />
+        <UploadSeasonalityModal
+          isOpen={seasonalityModalOpen}
+          onClose={() => {
+            setSeasonalityModalOpen(false);
+            setSeasonalityProductId(null);
+          }}
+          productId={seasonalityProductId}
+          isDarkMode={isDarkMode}
         />
       </motion.div>
     </div>

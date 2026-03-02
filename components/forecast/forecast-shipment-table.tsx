@@ -569,107 +569,165 @@ export function NewShipmentTable({
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', minHeight: 40 }}>
-                    {/* In-flow content: single number when both bars off. Bars use absolute positioning so they don't affect layout. */}
-                    {!showFbaBar && !showDoiBar && (
-                      <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
-                        {displayDoi !== null ? displayDoi : '--'}
-                      </span>
-                    )}
-                    {/* Bars overlay - centered under header; bars left-aligned within their group */}
-                    {(showFbaBar || showDoiBar) && (
+                    {/* Missing Seasonality Data bar - shown when needsSeasonality is true */}
+                    {row.needsSeasonality ? (
                       <div
                         style={{
-                          position: 'absolute',
-                          inset: 0,
                           display: 'flex',
-                          flexDirection: 'column',
+                          flexDirection: 'row',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          pointerEvents: 'none',
+                          gap: 8,
+                          padding: '8px 16px',
+                          background: 'linear-gradient(180deg, #1E293B 0%, #263041 50%, #1E293B 100%)',
+                          border: '1px dashed #334155',
+                          borderRadius: 6,
+                          width: 359,
+                          marginLeft: -52,
                         }}
                       >
                         <div
                           style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: '#1E293B',
                             display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            gap: showFbaBar && showDoiBar ? 6 : 0,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
                           }}
                         >
-                        {showFbaBar && (() => {
-                          const baseWidth = 100;
-                          const maxDaysForBar = 100;
-                          const daysForWidth = Math.min(maxDaysForBar, fbaDays);
-                          const fbaBarWidth = daysForWidth <= 30 ? baseWidth : Math.round(baseWidth * (daysForWidth / 30));
-                          const fbaPct = fbaDays <= 30 ? (fbaDays / 30) * 100 : 100;
-                          const fbaNumColor = getFbaBarColor(fbaDays);
-                          return (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 20 }}>
-                              <div
-                                style={{
-                                  width: fbaBarWidth,
-                                  minWidth: fbaBarWidth,
-                                  height: 20,
-                                  borderRadius: 6,
-                                  overflow: 'hidden',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                                  display: 'flex',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    width: `${fbaPct}%`,
-                                    height: '100%',
-                                    backgroundColor: '#22C55E',
-                                    transition: 'width 0.6s ease-in-out',
-                                  }}
-                                />
-                                <div style={{ flex: 1, height: '100%', backgroundColor: '#DCE8DA', minWidth: 0 }} />
-                              </div>
-                              <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content' }}>
-                                {Math.round(fbaDays)}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        {showDoiBar && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 20 }}>
-                            <div
-                              style={{
-                                width: 333,
-                                minWidth: 333,
-                                height: 20,
-                                borderRadius: 6,
-                                overflow: 'hidden',
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
-                                display: 'flex',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {displayDoi !== null ? (
-                                <>
-                                  <div
-                                    style={{
-                                      width: `${Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}%`,
-                                      height: '100%',
-                                      backgroundColor: '#3399FF',
-                                      transition: 'width 0.3s ease-out',
-                                    }}
-                                  />
-                                  <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
-                                </>
-                              ) : (
-                                <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
-                              )}
-                            </div>
-                            <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
-                              {displayDoi !== null ? displayDoi : '--'}
-                            </span>
-                          </div>
-                        )}
+                          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M2 14L6.5 9.5L10.5 13.5L18 6"
+                              stroke="#64748B"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M14 6H18V10"
+                              stroke="#64748B"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 }}>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: '#E2E8F0', whiteSpace: 'nowrap' }}>
+                            Missing Seasonality Data
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#64748B', whiteSpace: 'nowrap' }}>
+                            Upload seasonality data to calculate units needed.
+                          </span>
                         </div>
                       </div>
+                    ) : (
+                      <>
+                        {/* In-flow content: single number when both bars off. Bars use absolute positioning so they don't affect layout. */}
+                        {!showFbaBar && !showDoiBar && (
+                          <span style={{ fontSize: 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
+                            {displayDoi !== null ? displayDoi : '--'}
+                          </span>
+                        )}
+                        {/* Bars overlay - centered under header; bars left-aligned within their group */}
+                        {(showFbaBar || showDoiBar) && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              pointerEvents: 'none',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: showFbaBar && showDoiBar ? 6 : 0,
+                              }}
+                            >
+                            {showFbaBar && (() => {
+                              const baseWidth = 100;
+                              const maxDaysForBar = 100;
+                              const daysForWidth = Math.min(maxDaysForBar, fbaDays);
+                              const fbaBarWidth = daysForWidth <= 30 ? baseWidth : Math.round(baseWidth * (daysForWidth / 30));
+                              const fbaPct = fbaDays <= 30 ? (fbaDays / 30) * 100 : 100;
+                              const fbaNumColor = getFbaBarColor(fbaDays);
+                              return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 20 }}>
+                                  <div
+                                    style={{
+                                      width: fbaBarWidth,
+                                      minWidth: fbaBarWidth,
+                                      height: 20,
+                                      borderRadius: 6,
+                                      overflow: 'hidden',
+                                      boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                      display: 'flex',
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        width: `${fbaPct}%`,
+                                        height: '100%',
+                                        backgroundColor: '#22C55E',
+                                        transition: 'width 0.6s ease-in-out',
+                                      }}
+                                    />
+                                    <div style={{ flex: 1, height: '100%', backgroundColor: '#DCE8DA', minWidth: 0 }} />
+                                  </div>
+                                  <span style={{ fontSize: 18, fontWeight: 600, color: fbaNumColor, minWidth: 'fit-content' }}>
+                                    {Math.round(fbaDays)}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                            {showDoiBar && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minHeight: 20 }}>
+                                <div
+                                  style={{
+                                    width: 333,
+                                    minWidth: 333,
+                                    height: 20,
+                                    borderRadius: 6,
+                                    overflow: 'hidden',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                                    display: 'flex',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {displayDoi !== null ? (
+                                    <>
+                                      <div
+                                        style={{
+                                          width: `${Math.min(100, (Number(displayDoi) / Math.max(requiredDoi, 1)) * 100)}%`,
+                                          height: '100%',
+                                          backgroundColor: '#3399FF',
+                                          transition: 'width 0.3s ease-out',
+                                        }}
+                                      />
+                                      <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
+                                    </>
+                                  ) : (
+                                    <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
+                                  )}
+                                </div>
+                                <span style={{ fontSize: showFbaBar ? 18 : 20, fontWeight: 500, color: doiColor, minWidth: 'fit-content' }}>
+                                  {displayDoi !== null ? displayDoi : '--'}
+                                </span>
+                              </div>
+                            )}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                     <div
                       style={{
