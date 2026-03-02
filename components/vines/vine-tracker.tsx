@@ -153,6 +153,24 @@ const VineTracker = () => {
           setVineProducts((p) => p.map((row) => (row.id === updatedRow.id ? updatedRow : row)));
           return;
         }
+        const enrolled = updatedRow.enrolled ?? 0;
+        const alreadyClaimed = prev?.claimed ?? 0;
+        const totalNew = newClaims.reduce((s, c) => s + (c.units || 0), 0);
+        const attemptedTotal = alreadyClaimed + totalNew;
+        if (enrolled <= 0 && totalNew > 0) {
+          const msg = 'Set enrolled units first (cannot claim units when enrolled is 0).';
+          setError(msg);
+          toast.error(msg);
+          await fetchVineClaims();
+          return;
+        }
+        if (enrolled > 0 && attemptedTotal > enrolled) {
+          const msg = `Claimed units cannot exceed enrolled units (Enrolled: ${enrolled}, Attempted claimed: ${attemptedTotal}).`;
+          setError(msg);
+          toast.error(msg);
+          await fetchVineClaims();
+          return;
+        }
         setError(null);
         try {
           for (const nc of newClaims) {

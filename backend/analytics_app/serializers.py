@@ -1,3 +1,4 @@
+from django.db.models import Sum
 from rest_framework import serializers
 from .models import VineClaim
 from forecast_app.models import Product
@@ -52,3 +53,51 @@ class VineClaimSerializer(serializers.ModelSerializer):
             return obj.product.extended.vine_units_enrolled
         except Exception:
             return None
+
+    def validate(self, attrs):
+        """
+        Enforce: total claimed units must not exceed units enrolled (ProductExtended.vine_units_enrolled).
+        - If enrolled is null/0, disallow any units_claimed > 0.
+        """
+        instance = getattr(self, 'instance', None)
+
+        # Resolve product for create/update
+        if instance is not None:
+            product = instance.product
+        else:
+            product = attrs.get('product_id')
+
+        if product is None:
+            return attrs
+
+        # Enrolled units
+        try:
+            enrolled = product.extended.vine_units_enrolled
+        except Exception:
+            enrolled = None
+        enrolled_val = int(enrolled or 0)
+
+        # Units for this claim
+        units = attrs.get('units_claimed')
+        if units is None and instance is not None:
+            units = instance.units_claimed
+        units_val = int(units or 0)
+
+        # Sum other claims
+        qs = VineClaim.objects.filter(product=product)
+        if instance is not None and instance.pk:
+            qs = qs.exclude(pk=instance.pk)
+        other_total = int(qs.aggregate(total=Sum('units_claimed'))['total'] or 0)
+        attempted_total = other_total + units_val
+
+        if enrolled_val <= 0 and units_val > 0:
+            raise serializers.ValidationError(
+                {'units_claimed': 'Set enrolled units first (cannot claim units when enrolled is 0).'}
+            )
+
+        if enrolled_val > 0 and attempted_total > enrolled_val:
+            raise serializers.ValidationError(
+                {'units_claimed': f'Claimed units cannot exceed enrolled units ({attempted_total} > {enrolled_val}).'}
+            )
+
+        return attrs

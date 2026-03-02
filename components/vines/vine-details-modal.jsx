@@ -297,6 +297,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
   const claimDateInputRef = useRef(null);
   const [showLaunchDatePicker, setShowLaunchDatePicker] = useState(false);
   const launchDateInputRef = useRef(null);
+  const [claimValidationError, setClaimValidationError] = useState(null);
 
   useEffect(() => {
     if (isOpen && productData) {
@@ -313,12 +314,14 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       // Reset input row state when modal opens, but show ACTIONS column if there are claims
       setShowInputRow(false);
       setShowActionsColumn(history.length > 0);
+      setClaimValidationError(null);
     } else {
       // Reset when modal closes
       setShowAddClaimModal(false);
       setShowInputRow(false);
       setShowActionsColumn(false);
       setEditModalClaimId(null);
+      setClaimValidationError(null);
     }
   }, [isOpen, productData]);
 
@@ -636,6 +639,30 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     const oldUnits = claim.units;
     const units = parseInt(editClaimUnits, 10);
 
+    // Validation: claimed must not exceed enrolled
+    const enrolled = productData.enrolled ?? 0;
+    const baseClaimed = (productData.claimed || 0) - oldUnits;
+    const newTotalClaimed = baseClaimed + units;
+    if (enrolled > 0 && newTotalClaimed > enrolled) {
+      const remaining = Math.max(0, enrolled - baseClaimed);
+      const msg = `Cannot save claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+      setClaimValidationError(msg);
+      toast.error('Claim exceeds enrolled units', {
+        description: `You can only claim ${remaining} more unit(s).`,
+        duration: 3500,
+      });
+      return;
+    }
+    if (enrolled <= 0 && units > 0) {
+      const msg = 'Cannot save claim. Set enrolled units first.';
+      setClaimValidationError(msg);
+      toast.error('Set enrolled units first', {
+        description: 'You cannot add claimed units when enrolled is 0.',
+        duration: 3000,
+      });
+      return;
+    }
+
     // Persist edit to API when this is an existing claim (numeric id)
     if (typeof claimId === 'number' && onUpdateClaim) {
       const claimDate = claimDateToApiFormat(editClaimDate);
@@ -670,10 +697,34 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     setEditClaimDate('');
     setEditClaimUnits('');
     setShowEditClaimDatePicker(false);
+    setClaimValidationError(null);
   };
 
   const handleSaveAddClaim = () => {
     if (editClaimDate && editClaimUnits && parseInt(editClaimUnits) > 0) {
+      const enrolled = productData.enrolled ?? 0;
+      const unitsToAdd = parseInt(editClaimUnits);
+      const newTotalClaimed = (productData.claimed || 0) + unitsToAdd;
+      if (enrolled > 0 && newTotalClaimed > enrolled) {
+        const existingClaimed = productData.claimed || 0;
+        const remaining = Math.max(0, enrolled - existingClaimed);
+        const msg = `Cannot add claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+        setClaimValidationError(msg);
+        toast.error('Claim exceeds enrolled units', {
+          description: `You can only claim ${remaining} more unit(s).`,
+          duration: 3500,
+        });
+        return;
+      }
+      if (enrolled <= 0 && unitsToAdd > 0) {
+        const msg = 'Cannot add claim. Set enrolled units first.';
+        setClaimValidationError(msg);
+        toast.error('Set enrolled units first', {
+          description: 'You cannot add claimed units when enrolled is 0.',
+          duration: 3000,
+        });
+        return;
+      }
       const newClaim = {
         id: Date.now(),
         date: editClaimDate,
@@ -695,6 +746,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         };
         onUpdateProduct(updatedProduct);
       }
+      setClaimValidationError(null);
 
       const toastId = toast.success('', {
         description: (
@@ -845,11 +897,35 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     setEditClaimDate('');
     setEditClaimUnits('');
     setShowEditClaimDatePicker(false);
+    setClaimValidationError(null);
   };
 
   // Handle adding new claim entry
   const handleAddClaim = () => {
     if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
+      const enrolled = productData.enrolled ?? 0;
+      const unitsToAdd = parseInt(claimUnits);
+      const newTotalClaimed = (productData.claimed || 0) + unitsToAdd;
+      if (enrolled > 0 && newTotalClaimed > enrolled) {
+        const existingClaimed = productData.claimed || 0;
+        const remaining = Math.max(0, enrolled - existingClaimed);
+        const msg = `Cannot add claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+        setClaimValidationError(msg);
+        toast.error('Claim exceeds enrolled units', {
+          description: `You can only claim ${remaining} more unit(s).`,
+          duration: 3500,
+        });
+        return;
+      }
+      if (enrolled <= 0 && unitsToAdd > 0) {
+        const msg = 'Cannot add claim. Set enrolled units first.';
+        setClaimValidationError(msg);
+        toast.error('Set enrolled units first', {
+          description: 'You cannot add claimed units when enrolled is 0.',
+          duration: 3000,
+        });
+        return;
+      }
       const newClaim = {
         id: Date.now(),
         date: claimDate,
@@ -871,6 +947,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         };
         onUpdateProduct(updatedProduct);
       }
+      setClaimValidationError(null);
 
       const toastId2 = toast.success('', {
         description: (
@@ -1673,7 +1750,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                         <input
                           type="number"
                           value={claimUnits}
-                          onChange={(e) => setClaimUnits(e.target.value)}
+                          onChange={(e) => {
+                            setClaimUnits(e.target.value);
+                            if (claimValidationError) setClaimValidationError(null);
+                          }}
                           className="no-spinner"
                           style={{
                             width: '70px',
@@ -1694,6 +1774,11 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                           min="0"
                         />
                       </div>
+                      {claimValidationError && (
+                        <div style={{ marginTop: '6px', fontSize: '12px', color: '#F59E0B', textAlign: 'center' }}>
+                          {claimValidationError}
+                        </div>
+                      )}
                     </td>
                     <td
                       style={{ 
@@ -2174,7 +2259,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
               <input
                 type="number"
                 value={editClaimUnits}
-                onChange={(e) => setEditClaimUnits(e.target.value)}
+                onChange={(e) => {
+                  setEditClaimUnits(e.target.value);
+                  if (claimValidationError) setClaimValidationError(null);
+                }}
                 placeholder="0"
                 min="0"
                       className="no-spinner"
@@ -2194,6 +2282,11 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                       }}
                       onWheel={(e) => e.target.blur()}
               />
+              {claimValidationError && (
+                <div style={{ marginTop: '6px', fontSize: '12px', color: '#F59E0B' }}>
+                  {claimValidationError}
+                </div>
+              )}
             </div>
                 </div>
               </div>
