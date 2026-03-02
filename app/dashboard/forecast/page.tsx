@@ -2,9 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Plus, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
 import DoiSettingsPopover, { getDefaultDoiSettings } from '@/components/forecast/doi-settings-popover';
@@ -21,8 +20,8 @@ function toNgoosSelectedRow(row: ShipmentTableRow) {
     asin: row.product.asin,
     childAsin: row.product.asin,
     child_asin: row.product.asin,
-    unitsToMake: row.unitsToMake,
-    suggestedQty: row.unitsToMake,
+    unitsToMake: row.unitsToMake ?? undefined,
+    suggestedQty: row.unitsToMake ?? undefined,
     product: row.product.name,
     product_name: row.product.name,
     name: row.product.name,
@@ -58,7 +57,6 @@ function transformApiRowToTableRow(apiRow: ForecastTableResponse['rows'][0]): Sh
 }
 
 export default function ForecastPage() {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
@@ -99,7 +97,7 @@ export default function ForecastPage() {
       if (prev.length === 0) return prev;
       const products = prev.map((r) => ({
         id: r.product.id,
-        daysOfInventory: r.daysOfInventory,
+        daysOfInventory: r.daysOfInventory ?? undefined,
         avgWeeklySales: r.avgWeeklySales,
       }));
       const editedIds = manuallyEditedProductIds.current;
@@ -229,14 +227,14 @@ export default function ForecastPage() {
   }, [selectedNgoosRow, tableRows]);
 
   // Use real data from API summary, with fallback calculations
-  const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + r.unitsToMake, 0);
+  const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);
   const totalDaysOfInventory = summary.totalDaysOfInventory || summary.avgDaysOfInventory || (
     tableRows.length > 0
-      ? Math.round(tableRows.reduce((s, r) => s + r.daysOfInventory, 0) / tableRows.length)
+      ? Math.round(tableRows.reduce((s, r) => s + (r.daysOfInventory ?? 0), 0) / tableRows.length)
       : 0
   );
   const requiredDoiThreshold = summary.doiThreshold || 130;
-  const productsAtRisk = summary.productsAtRisk || tableRows.filter((r) => r.daysOfInventory < requiredDoiThreshold).length;
+  const productsAtRisk = summary.productsAtRisk || tableRows.filter((r) => (r.daysOfInventory ?? 0) < requiredDoiThreshold).length;
   const totalPallets = summary.totalPallets || Math.round((totalUnitsToMake / 5000) * 10) / 10;
 
   const cardBg = isDarkMode ? '#1F2937' : '#FFFFFF';
@@ -322,13 +320,6 @@ export default function ForecastPage() {
               <RefreshCw className="w-4 h-4" />
             )}
             Refresh
-          </Button>
-          <Button
-            onClick={() => router.push('/dashboard/shipments/new')}
-            className="gap-2 text-white border-0 hover:opacity-90 bg-primary"
-          >
-            <Plus className="w-4 h-4" />
-            New Shipment
           </Button>
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Settings">
             <Settings className="w-4 h-4" />
@@ -482,6 +473,7 @@ export default function ForecastPage() {
           isDarkMode={isDarkMode}
           allProducts={tableRows.map((r) => ({ id: r.product.id }))}
           onNavigate={handleNgoosNavigate}
+          showAddButton={false}
           showActionItems
         />
       </motion.div>

@@ -56,6 +56,29 @@ const DAY_NAMES = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 /** Same key as Action Items page so items created in the modal appear there */
 const ACTION_ITEMS_STORAGE_KEY = 'action-items-persisted';
 
+/** Status icons: In progress = progress.png, In review = time.png */
+const STATUS_ICONS: Record<string, string> = {
+  'In progress': '/assets/progress.png',
+  'In review': '/assets/time.png',
+};
+
+function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
+  const iconPath = STATUS_ICONS[status];
+  if (status === 'Completed') {
+    return (
+      <span className="rounded-full flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, background: '#22c55e' }}>
+        <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+      </span>
+    );
+  }
+  if (iconPath) {
+    return (
+      <img src={iconPath} alt={status} width={size} height={size} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />
+    );
+  }
+  return <span className="rounded-full flex-shrink-0" style={{ width: size, height: size, border: '2px solid #D0D0D0', background: 'transparent' }} />;
+}
+
 type PersistedTableRow = { id: number; status: string; productName: string; productId: string; category: string; subject: string; assignee: string; assigneeInitials: string; dueDate: string };
 type PersistedAttachment = { name: string; dataUrl: string; type?: string; uploadedAt: string };
 type PersistedTicketDetail = { ticketId: string; productName: string; productId: string; brand: string; unit: string; subject: string; description: string; instructions: string; bullets: unknown[]; status: string; category: string; assignee: string; assigneeInitials: string; dueDate: string; createdBy: string; createdByInitials: string; dateCreated: string; attachments?: PersistedAttachment[] };
@@ -314,7 +337,7 @@ function ProductInfoCard({ data = {}, onAsinCopy }: ProductInfoCardProps) {
 
   return (
     <div style={CARD_STYLE.productCard}>
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
         <div
           style={{
             width: '104px',
@@ -338,11 +361,11 @@ function ProductInfoCard({ data = {}, onAsinCopy }: ProductInfoCardProps) {
             </svg>
           )}
         </div>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#fff', margin: 0, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {productName}
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
             <div style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', lineHeight: 1.2, minHeight: '16px' }}>
               <span style={{ fontWeight: 500, color: '#94a3b8' }}>SIZE:</span>
               <span style={{ color: '#fff', marginLeft: '6px' }}>{productSize}</span>
@@ -489,7 +512,7 @@ function NgoosCard({ data = {}, inventoryData = {}, onAsinCopy }: { data?: Recor
       className="scrollbar-hide"
       style={{
         display: 'flex',
-        gap: '1rem',
+        gap: '8px',
         alignItems: 'stretch',
         overflowX: 'auto',
         minWidth: 0,
@@ -510,6 +533,7 @@ interface NgoosContentProps {
   isAlreadyAdded?: boolean;
   overrideUnitsToMake?: number | null;
   onAddUnits?: (units: number) => void;
+  showAddButton?: boolean;
   showActionItems?: boolean;
   onActionItemsExpandedChange?: (expanded: boolean) => void;
   inventoryData?: InventoryCardProps['inventoryData'];
@@ -580,6 +604,7 @@ function NgoosContent({
   isAlreadyAdded = false,
   overrideUnitsToMake = null,
   onAddUnits = () => {},
+  showAddButton = true,
   showActionItems = false,
   onActionItemsExpandedChange,
   inventoryData = EMPTY_INVENTORY_DATA,
@@ -930,30 +955,32 @@ function NgoosContent({
                     </svg>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={isAlreadyAdded}
-                  onClick={() => onAddUnits(displayedUnits)}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: 'none',
-                    backgroundColor: isAlreadyAdded ? '#059669' : '#2563EB',
-                    color: '#FFFFFF',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    height: '23px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    whiteSpace: 'nowrap',
-                    cursor: isAlreadyAdded ? 'default' : 'pointer',
-                    opacity: isAlreadyAdded ? 0.9 : 1,
-                  }}
-                >
-                  {isAlreadyAdded ? <span>Added</span> : <><span style={{ fontSize: '1rem' }}>+</span><span>Add</span></>}
-                </button>
+                {showAddButton && (
+                  <button
+                    type="button"
+                    disabled={isAlreadyAdded}
+                    onClick={() => onAddUnits(displayedUnits)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      backgroundColor: isAlreadyAdded ? '#059669' : '#2563EB',
+                      color: '#FFFFFF',
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      height: '23px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      whiteSpace: 'nowrap',
+                      cursor: isAlreadyAdded ? 'default' : 'pointer',
+                      opacity: isAlreadyAdded ? 0.9 : 1,
+                    }}
+                  >
+                    {isAlreadyAdded ? <span>Added</span> : <><span style={{ fontSize: '1rem' }}>+</span><span>Add</span></>}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -994,7 +1021,7 @@ function NgoosContent({
                 salesHistory={salesHistory}
                 inventoryOnly
                 isDarkMode={isDarkMode}
-                showMetricCards={!(showActionItems && actionItemsExpanded)}
+                showMetricCards
               />
             </div>
           )}
@@ -1017,8 +1044,23 @@ function NgoosContent({
         <>
         <div style={{ marginTop: '1rem', flexShrink: 0, position: 'relative' }}>
           <div style={{ backgroundColor: '#0F172A', border: '1px solid #334155', borderRadius: '12px', overflow: 'hidden' }}>
-            {/* Header row: Action Items | Search | Three dots | Chevron (like image) */}
+            {/* Header row: entire bar clickable to expand/collapse */}
             <div
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                const next = !actionItemsExpanded;
+                setActionItemsExpanded(next);
+                onActionItemsExpandedChange?.(next);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  const next = !actionItemsExpanded;
+                  setActionItemsExpanded(next);
+                  onActionItemsExpandedChange?.(next);
+                }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1026,26 +1068,11 @@ function NgoosContent({
                 padding: '1rem 1.25rem',
                 backgroundColor: 'transparent',
                 borderBottom: actionItemsExpanded ? '1px solid #334155' : 'none',
+                cursor: 'pointer',
+                width: '100%',
               }}
             >
-              <button
-                onClick={() => {
-                  const next = !actionItemsExpanded;
-                  setActionItemsExpanded(next);
-                  onActionItemsExpandedChange?.(next);
-                }}
-                style={{
-                  flexShrink: 0,
-                  padding: 0,
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', letterSpacing: '0.025em' }}>Action Items</span>
-              </button>
+              <span style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', letterSpacing: '0.025em', flexShrink: 0 }}>Action Items</span>
               {actionItemsExpanded && (
                 <>
               <div
@@ -1281,29 +1308,11 @@ function NgoosContent({
               </div>
                 </>
               )}
-              <button
-                onClick={() => {
-                  const next = !actionItemsExpanded;
-                  setActionItemsExpanded(next);
-                  onActionItemsExpandedChange?.(next);
-                }}
-                style={{
-                  padding: '4px',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: '#94a3b8',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginLeft: 'auto',
-                }}
-                aria-label={actionItemsExpanded ? 'Collapse' : 'Expand'}
-              >
+              <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#94a3b8' }} aria-hidden>
                 <svg style={{ width: '20px', height: '20px', transform: actionItemsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-              </button>
+              </span>
             </div>
             {actionItemsExpanded && (
               <div style={{ padding: '16px', backgroundColor: '#0F172A', overflowY: 'auto', maxHeight: 'min(40vh, 320px)' }}>
@@ -1573,13 +1582,7 @@ function NgoosContent({
                     <div style={{ flexShrink: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</p>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {(actionItemsByCategory[openTicketModal.category] ?? []).find((i) => i.id === openTicketModal.id)?.status === 'Completed' ? (
-                          <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                          </span>
-                        ) : (
-                          <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent', flexShrink: 0 }} />
-                        )}
+                        <StatusIcon status={(actionItemsByCategory[openTicketModal.category] ?? []).find((i) => i.id === openTicketModal.id)?.status ?? 'To Do'} size={16} />
                         <p style={{ fontSize: 16, fontWeight: 600, color: '#fff', margin: 0 }}>{openTicketModal.subject}</p>
                       </div>
                     </div>
@@ -1721,11 +1724,7 @@ function NgoosContent({
                           onClick={() => setStatusDropdownOpen((v) => !v)}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232, cursor: 'pointer', color: '#fff', fontSize: 12 }}
                         >
-                          {(actionItemsByCategory[openTicketModal.category] ?? []).find((i) => i.id === openTicketModal.id)?.status === 'Completed' ? (
-                            <img src="/assets/complete.png" alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
-                          ) : (
-                            <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
-                          )}
+                          <StatusIcon status={(actionItemsByCategory[openTicketModal.category] ?? []).find((i) => i.id === openTicketModal.id)?.status ?? 'To Do'} size={12} />
                           <span>{(actionItemsByCategory[openTicketModal.category] ?? []).find((i) => i.id === openTicketModal.id)?.status ?? 'To Do'}</span>
                           <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                         </button>
@@ -1741,8 +1740,34 @@ function NgoosContent({
                               }}
                               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
                             >
-                              <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
+                              <StatusIcon status="To Do" size={12} />
                               To Do
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { category, id } = openTicketModal;
+                                setActionItemsByCategory((prev) => ({ ...prev, [category]: (prev[category] ?? []).map((item) => item.id === id ? { ...item, status: 'In progress' } : item) }));
+                                persistTicketDetail(id, { status: 'In progress' });
+                                setStatusDropdownOpen(false);
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                            >
+                              <StatusIcon status="In progress" size={12} />
+                              In progress
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const { category, id } = openTicketModal;
+                                setActionItemsByCategory((prev) => ({ ...prev, [category]: (prev[category] ?? []).map((item) => item.id === id ? { ...item, status: 'In review' } : item) }));
+                                persistTicketDetail(id, { status: 'In review' });
+                                setStatusDropdownOpen(false);
+                              }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                            >
+                              <StatusIcon status="In review" size={12} />
+                              In review
                             </button>
                             <button
                               type="button"
@@ -1754,7 +1779,7 @@ function NgoosContent({
                               }}
                               style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                             >
-                              <img src="/assets/complete.png" alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                              <StatusIcon status="Completed" size={12} />
                               Completed
                             </button>
                           </div>
@@ -1812,6 +1837,7 @@ function NgoosContent({
 interface NGOOSmodalProps {
   isOpen: boolean;
   onClose: () => void;
+  showAddButton?: boolean;
   selectedRow?: {
     id?: string;
     child_asin?: string;
@@ -1833,6 +1859,7 @@ interface NGOOSmodalProps {
 export default function NGOOSmodal({
   isOpen,
   onClose,
+  showAddButton = true,
   selectedRow = null,
   isDarkMode = true,
   allProducts = [],
@@ -2176,6 +2203,7 @@ export default function NGOOSmodal({
               isAlreadyAdded={false}
               overrideUnitsToMake={forecastUnits || null}
               onAddUnits={handleAddUnitsClick}
+              showAddButton={showAddButton}
               showActionItems={showActionItems}
               onActionItemsExpandedChange={setActionItemsExpanded}
               inventoryData={forecastData?.inventoryData ?? EMPTY_INVENTORY_DATA}

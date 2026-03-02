@@ -373,6 +373,8 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
   const [openThreeDotsMenuId, setOpenThreeDotsMenuId] = useState(null);
   const [threeDotsMenuPosition, setThreeDotsMenuPosition] = useState({ top: 0, left: 0 });
   const threeDotsMenuRefs = useRef({});
+  const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
+  const statusDropdownRefs = useRef({});
 
   // Handler function to open the vine details modal - used by both plus button and row click
   const handleOpenVineDetailsModal = (row, focusOnClaimEntry = false) => {
@@ -566,9 +568,20 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
           }
         }
       }
+
+      // Close status dropdown when clicking outside
+      if (openStatusDropdownId !== null) {
+        const statusTrigger = statusDropdownRefs.current[openStatusDropdownId];
+        const statusDropdownEl = document.getElementById(`status-dropdown-${openStatusDropdownId}`);
+        const isClickInsideTrigger = statusTrigger && statusTrigger.contains(event.target);
+        const isClickInsideDropdown = statusDropdownEl && statusDropdownEl.contains(event.target);
+        if (!isClickInsideTrigger && !isClickInsideDropdown) {
+          setOpenStatusDropdownId(null);
+        }
+      }
     };
 
-    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null) {
+    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null || openStatusDropdownId !== null) {
       const timeoutId = setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
       }, 0);
@@ -578,7 +591,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
         document.removeEventListener('click', handleClickOutside);
       };
     }
-  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId]);
+  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId, openStatusDropdownId]);
 
   // Handle filter icon click
   const handleFilterClick = (columnKey, e) => {
@@ -951,30 +964,6 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                   >
                     {col.label}
                   </span>
-                  {col.key !== 'action' && (
-                    <img
-                      ref={(el) => { if (el) filterIconRefs.current[col.key] = el; }}
-                      src="/assets/Vector (1).png"
-                      alt="Filter"
-                      className={`w-3 h-3 transition-opacity cursor-pointer ${
-                        (isFilterActive(col.key) || openFilterColumn === col.key)
-                          ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                      onClick={(e) => handleFilterClick(col.key, e)}
-                      style={{
-                        width: '12px',
-                        height: '12px',
-                        flexShrink: 0,
-                        ...((isFilterActive(col.key) || openFilterColumn === col.key)
-                          ? {
-                              filter:
-                                'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)',
-                            }
-                          : undefined)
-                      }}
-                    />
-                  )}
                 </div>
               </th>
             ))}
@@ -1035,6 +1024,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       target.closest('button') ||
                       target.closest('[data-date-picker]') || 
                       target.closest('[data-dropdown]') ||
+                      target.closest('[data-status-dropdown]') ||
                       target.closest('[data-no-expand]');
                     
                     // For non-interactive elements on product rows, completely block single clicks
@@ -1072,6 +1062,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       target.closest('button') ||
                       target.closest('[data-date-picker]') || 
                       target.closest('[data-dropdown]') ||
+                      target.closest('[data-status-dropdown]') ||
                       target.closest('[data-no-expand]');
                     
                     // Open the vine details modal when double-clicking on product row
@@ -1093,9 +1084,15 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       minHeight: '40px',
                       display: 'table-cell',
                     }}
+                    data-status-dropdown
                   >
-                    {isNewRow ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
                       <div
+                        ref={(el) => { if (el) statusDropdownRefs.current[row.id] = el; }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenStatusDropdownId((prev) => (prev === row.id ? null : row.id));
+                        }}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1119,6 +1116,8 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       >
                         {(row.status || 'Awaiting Reviews') === 'Awaiting Reviews' ? (
                           <img src="/assets/awaiting.png" alt="Awaiting Reviews" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
+                        ) : (row.status || '') === 'Concluded' ? (
+                          <img src="/assets/complete.png" alt="Concluded" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
                         ) : (
                           <svg
                             style={{ width: '1rem', height: '1rem' }}
@@ -1146,7 +1145,6 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                         >
                           {row.status || 'Awaiting Reviews'}
                         </span>
-                        {/* Down chevron - inside container */}
                         <svg
                           style={{ width: '0.85rem', height: '0.85rem', flexShrink: 0 }}
                           fill="none"
@@ -1154,84 +1152,46 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           viewBox="0 0 24 24"
                           aria-hidden
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 9l-7 7-7-7"
-                          />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </div>
-                    ) : (
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          width: '167px',
-                          height: '24px',
-                          minWidth: '132px',
-                          paddingTop: '4px',
-                          paddingRight: '8px',
-                          paddingBottom: '4px',
-                          paddingLeft: '8px',
-                          borderRadius: '4px',
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: '#374151',
-                          backgroundColor: '#374151',
-                          boxSizing: 'border-box',
-                          cursor: 'pointer',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {/* Status icon - awaiting.png for Awaiting Reviews */}
-                        {(row.status || 'Awaiting Reviews') === 'Awaiting Reviews' ? (
-                          <img src="/assets/awaiting.png" alt="Awaiting Reviews" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
-                        ) : (
-                          <svg
-                            style={{ width: '1rem', height: '1rem' }}
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke={statusColor}
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M12 2v20M12 2L8 6l4-4 4 4M12 22l-4-4 4 4 4-4M2 12h20M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3" />
-                          </svg>
-                        )}
-                        <span
+                      {openStatusDropdownId === row.id && (
+                        <div
+                          id={`status-dropdown-${row.id}`}
+                          data-status-dropdown
                           style={{
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            color: '#FFFFFF',
-                            whiteSpace: 'nowrap',
+                            position: 'absolute',
+                            left: 0,
+                            top: '100%',
+                            marginTop: 4,
+                            minWidth: 167,
+                            borderRadius: 4,
+                            border: '1px solid #374151',
+                            backgroundColor: '#1F2937',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                            zIndex: 50,
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            minWidth: 0,
-                            flex: 1,
                           }}
                         >
-                          {row.status || 'Awaiting Reviews'}
-                        </span>
-                        {/* Down chevron - inside container */}
-                        <svg
-                          style={{ width: '0.85rem', height: '0.85rem', flexShrink: 0 }}
-                          fill="none"
-                          stroke="#9CA3AF"
-                          viewBox="0 0 24 24"
-                          aria-hidden
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 9l-7 7-7-7"
-                          />
-                        </svg>
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Awaiting Reviews' }); setOpenStatusDropdownId(null); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <img src="/assets/awaiting.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
+                            Awaiting Reviews
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Concluded' }); setOpenStatusDropdownId(null); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #374151' }}
+                          >
+                            <img src="/assets/complete.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
+                            Concluded
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   {/* PRODUCT NAME */}

@@ -289,7 +289,7 @@ export function AddProductsNonTable({
   // Animate DOI bar fill when Add is clicked: startPct (current blue) -> target%. Bar extends from current fill to full target.
   useEffect(() => {
     if (!barFillAnimation || barFillPhase !== 'start') return;
-    const id = setTimeout(() => setBarFillPhase('go'), 25);
+    const id = setTimeout(() => setBarFillPhase('go'), 16);
     return () => clearTimeout(id);
   }, [barFillAnimation, barFillPhase]);
   useEffect(() => {
@@ -297,7 +297,7 @@ export function AddProductsNonTable({
     const id = setTimeout(() => {
       setBarFillAnimation(null);
       setBarFillPhase('start');
-    }, 325);
+    }, 1300);
     return () => clearTimeout(id);
   }, [barFillPhase, barFillAnimation]);
 
@@ -729,8 +729,8 @@ export function AddProductsNonTable({
                       flexShrink: 0,
                     }}
                   />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, maxWidth: 450 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', minWidth: 0 }}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onProductClick?.(row); }}
@@ -739,17 +739,18 @@ export function AddProductsNonTable({
                           fontWeight: 500,
                           color: '#3B82F6',
                           textDecoration: 'underline',
-                          whiteSpace: 'normal',
-                          wordBreak: 'break-word',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                           background: 'none',
                           border: 'none',
                           padding: 0,
                           cursor: 'pointer',
                           textAlign: 'left',
                           fontFamily: 'inherit',
-                          width: 'fit-content',
-                          maxWidth: '100%',
+                          maxWidth: 450,
                         }}
+                        title={row.product}
                       >
                         {row.product}
                       </button>
@@ -1281,7 +1282,7 @@ export function AddProductsNonTable({
                                   width: `${fbaPct}%`,
                                   height: '100%',
                                   backgroundColor: '#22C55E',
-                                  transition: 'width 0.6s ease-in-out',
+                                  transition: 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                 }}
                               />
                               <div style={{ flex: 1, height: '100%', backgroundColor: '#DCE8DA', minWidth: 0 }} />
@@ -1331,7 +1332,7 @@ export function AddProductsNonTable({
                                 width: `${displayPct}%`,
                                 height: '100%',
                                 backgroundColor: '#3399FF',
-                                transition: isAnimating && barFillPhase === 'start' ? 'none' : 'width 0.3s ease-out',
+                                transition: isAnimating && barFillPhase === 'start' ? 'none' : 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
                               }}
                             />
                             <div style={{ flex: 1, height: '100%', backgroundColor: '#ADD8E6', minWidth: 0 }} />
