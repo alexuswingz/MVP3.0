@@ -12,6 +12,7 @@ class VineClaimSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_sku = serializers.CharField(source='product.sku', read_only=True)
     brand_name = serializers.CharField(source='product.brand.name', read_only=True, allow_null=True)
+    product_launch_date = serializers.DateField(source='product.launch_date', read_only=True, format='%Y-%m-%d')
 
     class Meta:
         model = VineClaim
@@ -23,6 +24,7 @@ class VineClaimSerializer(serializers.ModelSerializer):
             'product_name',
             'product_sku',
             'brand_name',
+            'product_launch_date',
             'claim_date',
             'units_claimed',
             'review_received',

@@ -12,19 +12,34 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
 
   const parseDate = (dateString) => {
     if (!dateString) return null;
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      const month = parseInt(parts[0]) - 1;
-      const day = parseInt(parts[1]);
-      const year = parseInt(parts[2]);
+    // MM/DD/YYYY
+    const slashParts = dateString.split('/');
+    if (slashParts.length === 3) {
+      const month = parseInt(slashParts[0], 10) - 1;
+      const day = parseInt(slashParts[1], 10);
+      const year = parseInt(slashParts[2], 10);
       if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
         return new Date(year, month, day);
+      }
+    }
+    // YYYY-MM-DD
+    if (dateString.includes('-') && dateString.length >= 10) {
+      const [y, m, d] = dateString.slice(0, 10).split('-').map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m - 1, d);
       }
     }
     return null;
   };
 
   const selectedDate = parseDate(value);
+
+  // Sync calendar month when value changes so picker opens on the right month
+  useEffect(() => {
+    if (selectedDate && !isNaN(selectedDate.getTime())) {
+      setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+    }
+  }, [value]);
 
   const formatDate = (date) => {
     if (!date) return '';
@@ -260,7 +275,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpdateClaim, onAddClaim, onOpenAddClaimed }) => {
+const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpdateClaim, onUpdateLaunchDate, onAddClaim, onOpenAddClaimed }) => {
   const { isDarkMode } = useTheme();
   const [claimHistory, setClaimHistory] = useState([]);
   const [actionMenuId, setActionMenuId] = useState(null);
@@ -280,6 +295,8 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
   const [showActionsColumn, setShowActionsColumn] = useState(false);
   const [showInputRow, setShowInputRow] = useState(false);
   const claimDateInputRef = useRef(null);
+  const [showLaunchDatePicker, setShowLaunchDatePicker] = useState(false);
+  const launchDateInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen && productData) {
@@ -305,9 +322,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     }
   }, [isOpen, productData]);
 
-  // Handle click outside to close action menu and edit modal
+  // Handle click outside to close action menu, edit modal, and launch date picker
   useEffect(() => {
-    if (!actionMenuId && !editModalClaimId && !showAddClaimModal) return;
+    if (!actionMenuId && !editModalClaimId && !showAddClaimModal && !showLaunchDatePicker) return;
 
     const handleClickOutside = (event) => {
       if (actionMenuId && !event.target.closest('[data-action-menu]') && !event.target.closest('[data-action-button]')) {
@@ -318,6 +335,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         setShowAddClaimModal(false);
         setEditClaimDate('');
         setEditClaimUnits('');
+      }
+      if (showLaunchDatePicker && launchDateInputRef.current && !launchDateInputRef.current.contains(event.target) && !event.target.closest('[data-date-picker-calendar]')) {
+        setShowLaunchDatePicker(false);
       }
     };
 
@@ -330,7 +350,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [actionMenuId, editModalClaimId, showAddClaimModal]);
+  }, [actionMenuId, editModalClaimId, showAddClaimModal, showLaunchDatePicker]);
 
   if (!isOpen || !productData) return null;
 
@@ -1266,11 +1286,55 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                 >
                   Active
                 </div>
-                {productData.launchDate && (
-                  <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>
-                    DATE LAUNCHED: {formatLaunchDate(productData.launchDate).toUpperCase()}
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>Launch date:</span>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      ref={launchDateInputRef}
+                      type="text"
+                      placeholder="MM/DD/YYYY"
+                      value={productData.launchDate || ''}
+                      onChange={(e) => {
+                        if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: e.target.value });
+                      }}
+                      onBlur={() => {
+                        const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
+                        const raw = (productData.launchDate || '').trim();
+                        if (onUpdateLaunchDate && productId != null && raw) {
+                          const apiDate = claimDateToApiFormat(raw);
+                          if (apiDate) onUpdateLaunchDate(productId, raw);
+                        }
+                      }}
+                      onFocus={() => setShowLaunchDatePicker(true)}
+                      onClick={() => setShowLaunchDatePicker(true)}
+                      style={{
+                        width: '110px',
+                        height: '28px',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #374151',
+                        backgroundColor: '#374151',
+                        color: '#FFFFFF',
+                        fontSize: '0.75rem',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    {showLaunchDatePicker && launchDateInputRef.current && (
+                      <CalendarDropdown
+                        value={productData.launchDate || ''}
+                        onChange={(date) => {
+                          if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: date });
+                          setShowLaunchDatePicker(false);
+                          const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
+                          if (onUpdateLaunchDate && productId != null && date) onUpdateLaunchDate(productId, date);
+                        }}
+                        onClose={() => setShowLaunchDatePicker(false)}
+                        inputRef={launchDateInputRef.current}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

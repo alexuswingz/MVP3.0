@@ -724,6 +724,7 @@ interface VineClaimResponse {
   product_name: string;
   product_sku: string;
   brand_name: string | null;
+  product_launch_date?: string | null;
   claim_date: string;
   units_claimed: number;
   review_received: boolean;

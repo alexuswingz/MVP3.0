@@ -55,6 +55,11 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
     const claimed = productClaims.reduce((s, c) => s + c.units_claimed, 0);
     const allConcluded = productClaims.every((c) => c.review_received);
     const status = allConcluded ? 'Concluded' : 'Awaiting Reviews';
+    const launchDate = first.product_launch_date
+      ? (typeof first.product_launch_date === 'string'
+          ? first.product_launch_date
+          : '')
+      : '';
     rows.push({
       id: productId,
       productId,
@@ -64,7 +69,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
       brand: first.brand_name || '',
       size: '',
       asin: first.product_asin || '',
-      launchDate: '',
+      launchDate,
       claimed,
       enrolled: 0,
       imageUrl: null,
@@ -172,31 +177,7 @@ const VineTracker = () => {
         }
       }
 
-      // New row with product selected but no claims yet: create an initial vine claim so it persists after refresh
-      const isNewRow = typeof updatedRow.id === 'string' && String(updatedRow.id).startsWith('new-');
-      const hasProduct = productId != null && (updatedRow.productName || updatedRow.asin);
-      const noClaimsYet = !updatedRow.claimHistory?.length;
-
-      if (isNewRow && hasProduct && noClaimsYet && productId != null) {
-        setError(null);
-        try {
-          const today = new Date().toISOString().slice(0, 10);
-          await api.createVineClaim({
-            product_id: productId,
-            claim_date: today,
-            units_claimed: 0,
-            notes: '',
-          });
-          await fetchVineClaims();
-          toast.success('Vine product saved. Add claim entries as needed.');
-          return;
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : 'Failed to save vine product';
-          setError(msg);
-          toast.error(msg);
-        }
-      }
-
+      // Do not auto-create vine on product select; creation happens only when user clicks Create
       setVineProducts((p) => p.map((row) => (row.id === updatedRow.id ? updatedRow : row)));
     },
     [vineProducts, fetchVineClaims]
@@ -214,6 +195,59 @@ const VineTracker = () => {
         setError(msg);
         toast.error(msg);
         throw e;
+      }
+    },
+    [fetchVineClaims]
+  );
+
+  const handleUpdateLaunchDate = useCallback(
+    async (productId: number, launchDate: string) => {
+      const normalized = claimDateToApiFormat(launchDate);
+      if (!normalized) return;
+      try {
+        setError(null);
+        await api.updateProduct(productId, { launch_date: normalized });
+        await fetchVineClaims();
+        toast.success('Launch date saved.');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to save launch date';
+        setError(msg);
+        toast.error(msg);
+      }
+    },
+    [fetchVineClaims]
+  );
+
+  /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date then creates vine claim. */
+  const handleCreateNewVine = useCallback(
+    async (row: VineProductRow) => {
+      const productId = row.productId ?? (typeof row.id === 'number' ? row.id : undefined);
+      if (productId == null || !(row.productName || row.asin)) {
+        setError('Select a product first.');
+        toast.error('Select a product first.');
+        return;
+      }
+      setError(null);
+      try {
+        if ((row.launchDate || '').trim()) {
+          const normalized = claimDateToApiFormat((row.launchDate || '').trim());
+          if (normalized) {
+            await api.updateProduct(productId, { launch_date: normalized });
+          }
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        await api.createVineClaim({
+          product_id: productId,
+          claim_date: today,
+          units_claimed: 0,
+          notes: '',
+        });
+        await fetchVineClaims();
+        toast.success('Vine created. Add claim entries as needed.');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to create vine';
+        setError(msg);
+        toast.error(msg);
       }
     },
     [fetchVineClaims]
@@ -289,7 +323,9 @@ const VineTracker = () => {
               rows={vineProducts}
               searchValue={searchValue}
               onUpdateRow={handleUpdateRow}
+              onConfirmNewVine={handleCreateNewVine}
               onUpdateClaim={handleUpdateClaim}
+              onUpdateLaunchDate={handleUpdateLaunchDate}
               onDeleteRow={handleDeleteRow}
             />
           </div>
