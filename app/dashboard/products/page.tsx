@@ -44,10 +44,12 @@ const cardStyles = (isDarkMode: boolean) => ({
   }),
 });
 
-const MARKETPLACE = 'Amazon';
+const MARKETPLACES = ['Amazon', 'Walmart'] as const;
+type Marketplace = (typeof MARKETPLACES)[number];
 const SELLER_ACCOUNT = 'TPS Nutrients';
 
 export default function ProductsPage() {
+  const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace>('Amazon');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeIds, setActiveIds] = useState<Set<string>>(() => new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -119,22 +121,42 @@ export default function ProductsPage() {
           </div>
           <h1 className="text-2xl font-bold text-foreground-primary">My Products</h1>
           <div
+            role="tablist"
+            aria-label="Marketplace"
             className="flex items-center overflow-hidden"
             style={{
               height: 32,
-              borderRadius: 4,
+              borderRadius: 6,
               border: '1px solid #334155',
               backgroundColor: '#1E293B',
-              gap: 10,
+              padding: 2,
             }}
           >
-            <select
-              className="h-full pl-3 pr-8 bg-transparent text-foreground-primary text-sm focus:outline-none border-0 cursor-pointer appearance-none"
-              defaultValue="Amazon"
-            >
-              <option value="Amazon">Amazon</option>
-            </select>
-            <ChevronDown className="w-4 h-4 text-foreground-muted pointer-events-none -ml-6" />
+            {MARKETPLACES.map((mp) => (
+              <button
+                key={mp}
+                type="button"
+                role="tab"
+                aria-selected={selectedMarketplace === mp}
+                aria-label={`Switch to ${mp}`}
+                onClick={() => setSelectedMarketplace(mp)}
+                style={{
+                  height: '100%',
+                  paddingLeft: 12,
+                  paddingRight: 12,
+                  borderRadius: 4,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: selectedMarketplace === mp ? '#F9FAFB' : '#9CA3AF',
+                  backgroundColor: selectedMarketplace === mp ? '#334155' : 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {mp}
+              </button>
+            ))}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -175,22 +197,22 @@ export default function ProductsPage() {
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0"
       >
         <div style={styles.card('#3B82F6')}>
-          <div style={styles.label}>Total Products</div>
+          <div style={styles.label}>Total Active Child Products</div>
           <div style={styles.value}>{stats?.total_products?.toLocaleString() || totalCount}</div>
           <div style={styles.subtitle('#9CA3AF')}>Across all seller accounts</div>
         </div>
         <div style={styles.card('#10B981')}>
-          <div style={styles.label}>Launched Products</div>
+          <div style={styles.label}>In Stock Rate %</div>
           <div style={styles.value}>{stats?.launched_products?.toLocaleString() || 0}</div>
           <div style={styles.subtitle('#9CA3AF')}>Active on marketplace</div>
         </div>
         <div style={styles.card('#F59E0B')}>
-          <div style={styles.label}>Pending Products</div>
+          <div style={styles.label}>Products at Risk of Stock-out</div>
           <div style={styles.value}>{stats?.by_status?.pending?.toLocaleString() || 0}</div>
           <div style={styles.subtitle('#9CA3AF')}>Awaiting launch</div>
         </div>
         <div style={styles.card('#EF4444')}>
-          <div style={styles.label}>Draft Products</div>
+          <div style={styles.label}>Total Revenue (30 days)</div>
           <div style={styles.value}>{stats?.by_status?.draft?.toLocaleString() || 0}</div>
           <div style={styles.subtitle('#9CA3AF')}>In preparation</div>
         </div>
@@ -308,9 +330,10 @@ export default function ProductsPage() {
               const isActive = activeIds.has(product.id);
               const ROW_BG = isDarkMode ? '#1A2235' : '#FFFFFF';
               const BORDER_COLOR = isDarkMode ? '#374151' : '#E5E7EB';
+              const rowOpacity = isActive ? 1 : 0.45;
               return (
                 <React.Fragment key={product.id}>
-                  <tr style={{ height: 1, backgroundColor: ROW_BG }}>
+                  <tr className="transition-opacity duration-200" style={{ height: 1, backgroundColor: ROW_BG, opacity: rowOpacity }}>
                     <td
                       colSpan={5}
                       style={{ padding: 0, backgroundColor: ROW_BG, border: 'none' }}
@@ -326,12 +349,13 @@ export default function ProductsPage() {
                     </td>
                   </tr>
                   <tr
-                    className="cursor-pointer transition-colors"
+                    className="cursor-pointer transition-all duration-200"
                     style={{
                       backgroundColor: ROW_BG,
                       height: 'auto',
                       minHeight: 40,
                       display: 'table-row',
+                      opacity: rowOpacity,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = ROW_BG;
@@ -504,7 +528,7 @@ export default function ProductsPage() {
                         color: isDarkMode ? '#FFFFFF' : '#111827',
                       }}
                     >
-                      {MARKETPLACE}
+                      {selectedMarketplace}
                     </td>
                     {/* SELLER ACCOUNT */}
                     <td

@@ -274,6 +274,29 @@ function DetailModalRow({ label, children, valueAlign = 'right', vertical = fals
   );
 }
 
+/** Status icons: In progress = progress.png, In review = time.png */
+const STATUS_ICONS: Record<string, string> = {
+  'In progress': '/assets/progress.png',
+  'In review': '/assets/time.png',
+};
+
+function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
+  const iconPath = STATUS_ICONS[status];
+  if (status === 'Completed') {
+    return (
+      <span className="rounded-full flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, background: '#22c55e' }}>
+        <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+      </span>
+    );
+  }
+  if (iconPath) {
+    return (
+      <Image src={iconPath} alt={status} width={size} height={size} className="flex-shrink-0" style={{ width: size, height: size, objectFit: 'contain' }} />
+    );
+  }
+  return <span className="rounded-full flex-shrink-0" style={{ width: size, height: size, border: '2px solid #D0D0D0', background: 'transparent' }} />;
+}
+
 const CATEGORY_IMAGES: Record<string, string> = {
   Inventory: '/assets/Status=Inventory.png',
   Price: '/assets/Status=Price.png',
@@ -438,13 +461,7 @@ function DetailModal({
             <div style={{ flexShrink: 0 }}>
               <p style={{ fontSize: 12, fontWeight: 500, color: '#9ca3af', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject</p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {item.status === 'Completed' ? (
-                  <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                  </span>
-                ) : (
-                  <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent', flexShrink: 0 }} />
-                )}
+                <StatusIcon status={item.status} size={16} />
                 <p style={{ fontSize: 16, fontWeight: 600, color: '#fff', margin: 0 }}>{item.subject}</p>
               </div>
             </div>
@@ -578,13 +595,7 @@ function DetailModal({
                   onClick={() => setStatusDropdownOpen((v) => !v)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232, cursor: 'pointer', color: '#fff', fontSize: 12 }}
                 >
-                  {item.status === 'Completed' ? (
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                    </span>
-                  ) : (
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
-                  )}
+                  <StatusIcon status={item.status} size={12} />
                   <span style={{ fontSize: 12 }}>{item.status}</span>
                   <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
@@ -595,17 +606,31 @@ function DetailModal({
                       onClick={() => { onStatusChange('To Do'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
                     >
-                      <span style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid #d0d0d0', background: 'transparent' }} />
+                      <StatusIcon status="To Do" size={12} />
                       To Do
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onStatusChange('In progress'); setStatusDropdownOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                    >
+                      <StatusIcon status="In progress" size={12} />
+                      In progress
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onStatusChange('In review'); setStatusDropdownOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                    >
+                      <StatusIcon status="In review" size={12} />
+                      In review
                     </button>
                     <button
                       type="button"
                       onClick={() => { onStatusChange('Completed'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                     >
-                      <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                      </span>
+                      <StatusIcon status="Completed" size={12} />
                       Completed
                     </button>
                   </div>
@@ -1032,7 +1057,8 @@ export function ActionItems() {
                         style={{
                           background: '#4B5563',
                           boxShadow: '0 1px 3px 0 rgba(0,0,0,0.2), 0 1px 2px -1px rgba(0,0,0,0.2)',
-                          width: 132,
+                          width: 150,
+                          minWidth: 150,
                           height: 24,
                           borderRadius: 4,
                           border: '1px solid #4A4D51',
@@ -1040,14 +1066,8 @@ export function ActionItems() {
                           gap: 8,
                         }}
                       >
-                        {row.status === 'Completed' ? (
-                          <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ background: '#22c55e' }}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                          </span>
-                        ) : (
-                          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ border: '2px solid #D0D0D0', background: 'transparent' }} />
-                        )}
-                        <span className="flex-1 min-w-0" style={{ color: '#E5E5E5', fontSize: 12 }}>{row.status}</span>
+                        <StatusIcon status={row.status} size={16} />
+                        <span className="flex-1 min-w-0 truncate" style={{ color: '#E5E5E5', fontSize: 12, whiteSpace: 'nowrap' }}>{row.status}</span>
                         <svg className="w-4 h-4 flex-shrink-0 ml-auto" fill="none" stroke="#D0D0D0" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
