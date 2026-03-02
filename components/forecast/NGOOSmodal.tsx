@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Copy, Settings, Loader2, Upload } from 'lucide-react';
+import { X, Copy, Settings, Loader2 } from 'lucide-react';
 import ForecastUnit from './forecast-unit';
 import DoiSettingsPopover from '@/components/forecast/doi-settings-popover';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -830,37 +830,6 @@ function NgoosContent({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <DoiSettingsPopover isDarkMode={isDarkMode} />
-            {needsSeasonality ? (
-              <button
-                type="button"
-                onClick={onUploadSeasonality}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '6px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid #F59E0B',
-                  backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)',
-                  color: '#F59E0B',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s',
-                  height: '28px',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.25)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)';
-                }}
-              >
-                <Upload className="w-4 h-4" />
-                Upload Seasonality
-              </button>
-            ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
                 <div
                   style={{
@@ -982,7 +951,6 @@ function NgoosContent({
                   </button>
                 )}
               </div>
-            )}
           </div>
         </div>
       )}

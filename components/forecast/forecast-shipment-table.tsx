@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy, Upload } from 'lucide-react';
+import { Copy } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import type { Product } from '@/types';
 import { IconGroupOpenNgoos } from './banana-icon-open-ngoos';
@@ -141,26 +141,26 @@ function UploadSeasonalityButton({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '6px',
-        padding: '6px 12px',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '8px 16px',
         borderRadius: '6px',
-        border: '1px solid #F59E0B',
-        backgroundColor: isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)',
-        color: '#F59E0B',
-        fontSize: '12px',
+        border: 'none',
+        background: 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)',
+        color: '#FFFFFF',
+        fontSize: '14px',
         fontWeight: 500,
         cursor: 'pointer',
         whiteSpace: 'nowrap',
         transition: 'all 0.2s',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.25)';
+        e.currentTarget.style.background = 'linear-gradient(135deg, #D97706 0%, #C2410C 100%)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = isDarkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.15)';
+        e.currentTarget.style.background = 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)';
       }}
     >
-      <Upload className="w-3.5 h-3.5" />
       Upload Seasonality
     </button>
   );
