@@ -260,7 +260,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAddClaim, onOpenAddClaimed }) => {
+const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpdateClaim, onAddClaim, onOpenAddClaimed }) => {
   const { isDarkMode } = useTheme();
   const [claimHistory, setClaimHistory] = useState([]);
   const [actionMenuId, setActionMenuId] = useState(null);
@@ -586,29 +586,63 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
     }
   };
 
-  const handleSaveEdit = (claimId) => {
-    if (editClaimDate && editClaimUnits && parseInt(editClaimUnits) > 0) {
-      const claim = claimHistory.find(c => c.id === claimId);
-      if (claim) {
-        const oldUnits = claim.units;
-        // Update the claim without sorting - keep original order
-        const updatedHistory = claimHistory.map(c => 
-          c.id === claimId 
-            ? { ...c, date: editClaimDate, units: parseInt(editClaimUnits) }
-            : c
-        );
+  const claimDateToApiFormat = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) return dateStr;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const [mm, dd, yyyy] = parts;
+      return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    }
+    return dateStr;
+  };
 
-        setClaimHistory(updatedHistory);
+  const handleSaveEdit = async (claimId) => {
+    if (!editClaimDate || !editClaimUnits || parseInt(editClaimUnits, 10) <= 0) {
+      setEditingClaimId(null);
+      setEditModalClaimId(null);
+      setShowAddClaimModal(false);
+      setEditClaimDate('');
+      setEditClaimUnits('');
+      setShowEditClaimDatePicker(false);
+      return;
+    }
+    const claim = claimHistory.find(c => c.id === claimId);
+    if (!claim) {
+      setEditModalClaimId(null);
+      setShowEditClaimDatePicker(false);
+      return;
+    }
+    const oldUnits = claim.units;
+    const units = parseInt(editClaimUnits, 10);
 
-        if (onUpdateProduct) {
-          const updatedProduct = {
-            ...productData,
-            claimHistory: updatedHistory,
-            claimed: (productData.claimed || 0) - oldUnits + parseInt(editClaimUnits),
-          };
-          onUpdateProduct(updatedProduct);
-        }
+    // Persist edit to API when this is an existing claim (numeric id)
+    if (typeof claimId === 'number' && onUpdateClaim) {
+      const claimDate = claimDateToApiFormat(editClaimDate);
+      if (!claimDate) {
+        toast.error('Invalid claim date. Use MM/DD/YYYY or YYYY-MM-DD.');
+        return;
       }
+      try {
+        await onUpdateClaim(claimId, { claim_date: claimDate, units_claimed: units });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update claim');
+        return;
+      }
+    }
+
+    // Update local state
+    const updatedHistory = claimHistory.map(c =>
+      c.id === claimId ? { ...c, date: editClaimDate, units } : c
+    );
+    setClaimHistory(updatedHistory);
+    if (onUpdateProduct) {
+      const updatedProduct = {
+        ...productData,
+        claimHistory: updatedHistory,
+        claimed: (productData.claimed || 0) - oldUnits + units,
+      };
+      onUpdateProduct(updatedProduct);
     }
     setEditingClaimId(null);
     setEditModalClaimId(null);

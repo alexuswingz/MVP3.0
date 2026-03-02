@@ -340,7 +340,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDeleteRow }) => {
+const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onUpdateClaim, onAddNewRow, onDeleteRow }) => {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const [openFilterColumn, setOpenFilterColumn] = useState(null);
@@ -2491,6 +2491,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
             onUpdateRow(updatedProduct);
           }
         }}
+        onUpdateClaim={onUpdateClaim}
         onAddClaim={(newClaim) => {
           // Update the row's claimed count
           if (onUpdateRow && selectedVineRow) {

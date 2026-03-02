@@ -202,6 +202,23 @@ const VineTracker = () => {
     [vineProducts, fetchVineClaims]
   );
 
+  const handleUpdateClaim = useCallback(
+    async (claimId: number, data: { claim_date: string; units_claimed: number }) => {
+      try {
+        setError(null);
+        await api.updateVineClaim(claimId, data);
+        await fetchVineClaims();
+        toast.success('Vine claim updated.');
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Failed to update claim';
+        setError(msg);
+        toast.error(msg);
+        throw e;
+      }
+    },
+    [fetchVineClaims]
+  );
+
   const handleDeleteRow = useCallback(
     async (rowId: string | number) => {
       if (typeof rowId === 'string' && rowId.startsWith('new-')) {
@@ -272,6 +289,7 @@ const VineTracker = () => {
               rows={vineProducts}
               searchValue={searchValue}
               onUpdateRow={handleUpdateRow}
+              onUpdateClaim={handleUpdateClaim}
               onDeleteRow={handleDeleteRow}
             />
           </div>
