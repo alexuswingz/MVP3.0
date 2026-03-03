@@ -22,6 +22,12 @@ const DEFAULT_INVENTORY = {
   awd: { total: 0, available: 0, inbound: 0, reserved: 0 },
 };
 
+// Allow optional/partial inventory so callers can pass partial data (e.g. from API)
+type InventoryDataProp = {
+  fba?: { total?: number; available?: number; inbound?: number; reserved?: number };
+  awd?: { total?: number; available?: number; inbound?: number; reserved?: number };
+};
+
 // Default timeline for metric cards
 const DEFAULT_TIMELINE = {
   fbaAvailable: 0,
@@ -127,7 +133,7 @@ function generateChartDataFromForecasts(
 }
 
 interface ForecastUnitProps {
-  inventoryData?: typeof DEFAULT_INVENTORY;
+  inventoryData?: InventoryDataProp;
   timeline?: typeof DEFAULT_TIMELINE;
   forecasts?: Array<{ week_end: string; forecast: number; units_needed: number }>;
   salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;

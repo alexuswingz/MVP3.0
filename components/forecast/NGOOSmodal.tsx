@@ -1854,7 +1854,7 @@ export default function NGOOSmodal({
     setIsLoading(true);
     setFetchError(null);
     try {
-      const data = await api.getProductForecast(productId);
+      const data = await api.getProductForecast(Number(productId));
       const transformed = transformForecastData(data);
       setForecastData(transformed);
     } catch (err) {
