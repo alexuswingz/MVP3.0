@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -95,10 +95,30 @@ const VineTracker = () => {
     try {
       setError(null);
       const claims = await api.getVineClaims({ ordering: '-claim_date' });
-      setVineProducts(vineClaimsToRows(claims));
+      const fromApi = vineClaimsToRows(claims);
+      const apiProductIds = new Set(
+        fromApi.map((r) => (r.productId ?? (typeof r.id === 'number' ? r.id : null))).filter(
+          (x): x is number => x != null
+        )
+      );
+      setVineProducts((prev) => {
+        const localOnly = prev.filter(
+          (p) =>
+            p.isNew === true ||
+            (typeof p.id === 'string' &&
+              String(p.id).startsWith('new-') &&
+              p.productId != null &&
+              !apiProductIds.has(p.productId))
+        );
+        return [...localOnly, ...fromApi];
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load vine claims');
-      setVineProducts([]);
+      setVineProducts((prev) =>
+        prev.filter(
+          (p) => p.isNew === true || (typeof p.id === 'string' && String(p.id).startsWith('new-'))
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -112,7 +132,45 @@ const VineTracker = () => {
     setSearchValue(value);
   };
 
+  /** True if there is an unsaved new-vine row with any data entered */
+  const hasUnsavedNewVine = useMemo(
+    () =>
+      vineProducts.some(
+        (p) =>
+          p.isNew &&
+          (!!(p.productName?.trim()) ||
+            !!(p.asin?.trim()) ||
+            !!(p.launchDate?.trim()) ||
+            ((p.enrolled ?? 0) > 0))
+      ),
+    [vineProducts]
+  );
+
+  useEffect(() => {
+    if (!hasUnsavedNewVine) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedNewVine]);
+
   const handleNewVine = () => {
+    const existingNew = vineProducts.filter((p) => p.isNew);
+    const dirtyNew = existingNew.find(
+      (p) =>
+        !!(p.productName?.trim()) ||
+        !!(p.asin?.trim()) ||
+        !!(p.launchDate?.trim()) ||
+        ((p.enrolled ?? 0) > 0)
+    );
+    if (dirtyNew) {
+      const ok = window.confirm(
+        'You have unsaved changes in the new Vine form. Discard and start over?'
+      );
+      if (!ok) return;
+    }
     const newRow: VineProductRow = {
       id: `new-${Date.now()}`,
       status: 'Awaiting Reviews',
@@ -128,7 +186,7 @@ const VineTracker = () => {
       claimHistory: [],
       isNew: true,
     };
-    setVineProducts((prev) => [newRow, ...prev]);
+    setVineProducts((prev) => [newRow, ...prev.filter((p) => !p.isNew)]);
   };
 
   const handleUpdateRow = useCallback(
@@ -270,7 +328,7 @@ const VineTracker = () => {
     [fetchVineClaims]
   );
 
-  /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date then creates vine claim. */
+  /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date and enrolled only; no claim is created until user adds one. */
   const handleCreateNewVine = useCallback(
     async (row: VineProductRow) => {
       const productId = row.productId ?? (typeof row.id === 'number' ? row.id : undefined);
@@ -281,7 +339,7 @@ const VineTracker = () => {
       }
       setError(null);
       try {
-        // Sync product fields with form before creating vine
+        // Sync product fields only; do not create a 0-unit claim
         const launchDateTrimmed = (row.launchDate || '').trim();
         if (launchDateTrimmed) {
           const normalized = claimDateToApiFormat(launchDateTrimmed);
@@ -291,22 +349,24 @@ const VineTracker = () => {
         } else {
           await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
         }
-        const today = new Date().toISOString().slice(0, 10);
-        await api.createVineClaim({
-          product_id: productId,
-          claim_date: today,
-          units_claimed: 0,
-          notes: '',
-        });
-        await fetchVineClaims();
-        toast.success('Vine created. Add claim entries as needed.');
+        // Keep row in list with empty claim history; no refetch so it doesn't disappear (product has no claims yet)
+        setVineProducts((prev) =>
+          prev.map((p) =>
+            p.id === row.id
+              ? { ...p, ...row, isNew: false, claimHistory: [], claimed: 0, productId: productId ?? p.productId }
+              : p
+          )
+        );
+        toast.success(
+          'Vine saved and added to the list. Add claim entries below; it will persist after refresh once you add your first claim.'
+        );
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to create vine';
         setError(msg);
         toast.error(msg);
       }
     },
-    [fetchVineClaims]
+    []
   );
 
   const handleDeleteRow = useCallback(
