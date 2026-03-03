@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 
 const ROW_BG = '#1A2235';
@@ -137,6 +138,10 @@ export function AddProductsNonTable({
   const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
   const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
   const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
+  const [hoveredSoldOutIconIndex, setHoveredSoldOutIconIndex] = useState<number | null>(null);
+  const [hoveredSeasonalityIconIndex, setHoveredSeasonalityIconIndex] = useState<number | null>(null);
+  const [soldOutTooltipRect, setSoldOutTooltipRect] = useState<DOMRect | null>(null);
+  const [seasonalityTooltipRect, setSeasonalityTooltipRect] = useState<DOMRect | null>(null);
   const [shipmentStatsMenuOpen, setShipmentStatsMenuOpen] = useState(false);
   const shipmentStatsPopupRef = useRef<HTMLDivElement>(null);
   const [footerStatsVisibility, setFooterStatsVisibility] = useState({
@@ -823,7 +828,7 @@ export function AddProductsNonTable({
                   </div>
                 </div>
 
-                {/* INVENTORY column */}
+                {/* INVENTORY column - icons absolutely positioned 10px left so number never moves */}
                 <div
                   style={{
                     display: 'flex',
@@ -841,26 +846,82 @@ export function AddProductsNonTable({
                     zIndex: 1,
                   }}
                 >
-                  {row.seasonalityUploaded && (
-                    <svg 
-                      width="16" 
-                      height="16" 
-                      viewBox="0 0 16 16" 
-                      fill="none" 
-                      xmlns="http://www.w3.org/2000/svg"
-                      style={{ position: 'absolute', left: -6 }}
-                    >
-                      <circle cx="8" cy="8" r="7" fill="#F59E0B" />
-                      <path
-                        d="M8 4.5V8.5"
-                        stroke="white"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                      <circle cx="8" cy="11" r="0.75" fill="white" />
-                    </svg>
-                  )}
-                  {row.inventory.toLocaleString()}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: -10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {row.inventory === 0 && (
+                      <span
+                        style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}
+                        onMouseEnter={(e) => {
+                          setHoveredSoldOutIconIndex(index);
+                          setSoldOutTooltipRect(e.currentTarget.getBoundingClientRect());
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredSoldOutIconIndex(null);
+                          setSoldOutTooltipRect(null);
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 18,
+                            height: 18,
+                            minWidth: 18,
+                            borderRadius: '50%',
+                            backgroundColor: '#EF4444',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#FFFFFF',
+                            fontWeight: 700,
+                            fontSize: 12,
+                          }}
+                        >
+                          !
+                        </span>
+                      </span>
+                    )}
+                    {row.seasonalityUploaded && (
+                      <span
+                        style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}
+                        onMouseEnter={(e) => {
+                          setHoveredSeasonalityIconIndex(index);
+                          setSeasonalityTooltipRect(e.currentTarget.getBoundingClientRect());
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredSeasonalityIconIndex(null);
+                          setSeasonalityTooltipRect(null);
+                        }}
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <circle cx="8" cy="8" r="7" fill="#F59E0B" />
+                          <path
+                            d="M8 4.5V8.5"
+                            stroke="white"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                          <circle cx="8" cy="11" r="0.75" fill="white" />
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                  <span>
+                    {row.inventory.toLocaleString()}
+                  </span>
                 </div>
 
                 {/* UNITS TO MAKE column - label warning icon (when qty > labels) + input + arrows + Add OR Upload Seasonality button */}
@@ -1787,6 +1848,78 @@ export function AddProductsNonTable({
           </div>
         </div>
       )}
+      {soldOutTooltipRect &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              left: soldOutTooltipRect.left + soldOutTooltipRect.width / 2,
+              top: soldOutTooltipRect.top - 6,
+              transform: 'translate(-50%, -100%)',
+              padding: '4px 10px',
+              backgroundColor: '#2B2D3B',
+              borderRadius: 6,
+              border: '1px solid #3C414D',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+              whiteSpace: 'nowrap',
+              zIndex: 9999,
+              pointerEvents: 'none',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 500, color: '#EF4444' }}>Sold out</span>
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '100%',
+                transform: 'translateX(-50%)',
+                width: 0,
+                height: 0,
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderTop: '6px solid #2B2D3B',
+              }}
+            />
+          </div>,
+          document.body
+        )}
+      {seasonalityTooltipRect &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{
+              position: 'fixed',
+              left: seasonalityTooltipRect.left + seasonalityTooltipRect.width / 2,
+              top: seasonalityTooltipRect.top - 6,
+              transform: 'translate(-50%, -100%)',
+              padding: '4px 10px',
+              backgroundColor: '#1E293B',
+              borderRadius: 6,
+              border: '1px solid #334155',
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+              whiteSpace: 'nowrap',
+              zIndex: 9999,
+              pointerEvents: 'none',
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 500, color: '#F59E0B' }}>No sales history</span>
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '100%',
+                transform: 'translateX(-50%)',
+                width: 0,
+                height: 0,
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderTop: '6px solid #1E293B',
+              }}
+            />
+          </div>,
+          document.body
+        )}
     </>
   );
 }

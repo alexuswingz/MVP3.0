@@ -63,6 +63,10 @@ export interface AddProductRow {
   fbaAvailable?: string | number;
   awdTotal?: string | number;
   unitsToMake?: number;
+  /** True if the product needs seasonality data for accurate forecasting (show Upload Seasonality in table) */
+  needsSeasonality?: boolean;
+  /** True if seasonality was uploaded for this product (show orange notification on units container) */
+  seasonalityUploaded?: boolean;
   /** Labels available; when set and qty > this, show label warning icon */
   labelsAvailable?: number;
   label_inventory?: number;
@@ -88,6 +92,8 @@ interface AddProductsTableProps {
   onAddedIdsChange?: (ids: string[]) => void;
   /** Called when user edits "units to make" so the page can save it when creating the draft */
   onUnitsOverride?: (productId: string, units: number | null) => void;
+  /** Called when user clicks Upload Seasonality for a product that needs seasonality data */
+  onUploadSeasonality?: (productId: string) => void;
   totalProducts?: number;
   totalPalettes?: number;
   totalBoxes?: number;
@@ -150,6 +156,7 @@ export function AddProductsTable({
   initialAddedIds,
   onAddedIdsChange,
   onUnitsOverride,
+  onUploadSeasonality,
   totalProducts = 0,
   totalPalettes = 0,
   totalBoxes = 0,
@@ -158,6 +165,8 @@ export function AddProductsTable({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(() => new Set(initialAddedIds ?? []));
   const [qtyValues, setQtyValues] = useState<Record<number, string>>({});
   const [hoveredQtyIndex, setHoveredQtyIndex] = useState<number | null>(null);
+  const [hoveredSeasonalityIndex, setHoveredSeasonalityIndex] = useState<number | null>(null);
+  const [hoveredSeasonalityUploadedIconIndex, setHoveredSeasonalityUploadedIconIndex] = useState<number | null>(null);
   const [clickedLabelWarningIndex, setClickedLabelWarningIndex] = useState<number | null>(null);
   const [hoveredLabelWarningIndex, setHoveredLabelWarningIndex] = useState<number | null>(null);
   
@@ -405,12 +414,188 @@ export function AddProductsTable({
           </div>
         );
       case 'unitsToMake': {
+        if (row.needsSeasonality) {
+          const showSeasonalityTooltip = hoveredSeasonalityIndex === index;
+          return (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                minHeight: 31,
+                position: 'relative',
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUploadSeasonality?.(String(row.id));
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #D97706 0%, #C2410C 100%)';
+                  setHoveredSeasonalityIndex(index);
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)';
+                  setHoveredSeasonalityIndex(null);
+                }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  width: '100%',
+                  minHeight: 31,
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Upload Seasonality
+              </button>
+              {showSeasonalityTooltip && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '50%',
+                    bottom: '100%',
+                    transform: 'translateX(-50%)',
+                    marginBottom: 8,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    width: 170,
+                    minHeight: 31,
+                    padding: '8px 12px',
+                    borderRadius: 4,
+                    border: '1px solid #334155',
+                    backgroundColor: '#1E293B',
+                    color: '#FFFFFF',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    zIndex: 10002,
+                    pointerEvents: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'block',
+                      width: 146,
+                      height: 15,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      lineHeight: '15px',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    Missing Seasonality Data
+                  </span>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '100%',
+                      transform: 'translateX(-50%)',
+                      width: 0,
+                      height: 0,
+                      borderLeft: '6px solid transparent',
+                      borderRight: '6px solid transparent',
+                      borderTop: '6px solid #1E293B',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        }
         const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
         const labelsAvail = getLabelsAvailableFromRow(row);
         const labelsNeeded = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
         const showLabelWarning = labelsAvail > 0 && labelsNeeded > labelsAvail;
         return (
           <div style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', justifyContent: 'center', position: 'relative', zIndex: clickedLabelWarningIndex === index ? 10001 : undefined }}>
+            {/* Warning icon at top-left of quantity container when seasonality was uploaded (with tooltip on hover) */}
+            {row.seasonalityUploaded && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  display: 'inline-flex',
+                  flexShrink: 0,
+                  zIndex: 3,
+                  cursor: 'default',
+                }}
+                onMouseEnter={() => setHoveredSeasonalityUploadedIconIndex(index)}
+                onMouseLeave={() => setHoveredSeasonalityUploadedIconIndex(null)}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Seasonality data uploaded"
+                >
+                  <circle cx="8" cy="8" r="7" fill="#F59E0B" />
+                  <path
+                    d="M8 4.5V8.5"
+                    stroke="white"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="8" cy="11" r="0.75" fill="white" />
+                </svg>
+                {hoveredSeasonalityUploadedIconIndex === index && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      bottom: '100%',
+                      transform: 'translateX(-50%)',
+                      marginBottom: 6,
+                      padding: '4px 10px',
+                      backgroundColor: '#1E293B',
+                      borderRadius: 6,
+                      border: '1px solid #334155',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.2)',
+                      whiteSpace: 'nowrap',
+                      zIndex: 10002,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#F59E0B' }}>No sales history</span>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '50%',
+                        top: '100%',
+                        transform: 'translateX(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '6px solid transparent',
+                        borderRight: '6px solid transparent',
+                        borderTop: '6px solid #1E293B',
+                      }}
+                    />
+                  </div>
+                )}
+              </span>
+            )}
             {/* Fixed-width slot so input doesn't move when icon appears */}
             <div style={{ position: 'relative', width: 26, minWidth: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {showLabelWarning && (

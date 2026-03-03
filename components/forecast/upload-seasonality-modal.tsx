@@ -19,6 +19,8 @@ interface UploadSeasonalityModalProps {
   productId: string | null;
   isDarkMode?: boolean;
   onUploadSuccess?: (fileName: string) => void;
+  /** Called when seasonality data is successfully uploaded; use to refresh units/bar (e.g. refetch table). */
+  onSeasonalityUploaded?: (productId: string | null) => void;
 }
 
 function SuccessToast({
@@ -126,6 +128,7 @@ export function UploadSeasonalityModal({
   onClose,
   productId,
   onUploadSuccess,
+  onSeasonalityUploaded,
 }: UploadSeasonalityModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -176,6 +179,7 @@ export function UploadSeasonalityModal({
       setToastFileName(file.name);
       setShowToast(true);
       onUploadSuccess?.(file.name);
+      onSeasonalityUploaded?.(productId);
       setFile(null);
       setShowPreview(false);
       onClose();

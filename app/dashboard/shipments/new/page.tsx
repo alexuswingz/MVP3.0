@@ -1343,6 +1343,10 @@ export default function NewShipmentAddProductsPage() {
                 initialAddedIds={Array.from(addedProductIds)}
                 onAddedIdsChange={handleAddedIdsChange}
                 onUnitsOverride={handleUnitsOverride}
+                onUploadSeasonality={(productId) => {
+                  setSeasonalityProductId(productId);
+                  setShowSeasonalityModal(true);
+                }}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
