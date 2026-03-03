@@ -12,6 +12,7 @@ class VineClaimSerializer(serializers.ModelSerializer):
     product_asin = serializers.CharField(source='product.asin', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_sku = serializers.CharField(source='product.sku', read_only=True)
+    product_size = serializers.CharField(source='product.size', read_only=True, allow_blank=True)
     brand_name = serializers.CharField(source='product.brand.name', read_only=True, allow_null=True)
     product_launch_date = serializers.DateField(source='product.launch_date', read_only=True, format='%Y-%m-%d')
     product_vine_units_enrolled = serializers.SerializerMethodField()
@@ -25,6 +26,7 @@ class VineClaimSerializer(serializers.ModelSerializer):
             'product_asin',
             'product_name',
             'product_sku',
+            'product_size',
             'brand_name',
             'product_launch_date',
             'product_vine_units_enrolled',
