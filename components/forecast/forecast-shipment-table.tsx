@@ -48,7 +48,7 @@ interface NewShipmentTableProps {
 }
 
 function getDoiColor(doi: number): string {
-  if (doi >= 130) return '#22C55E';
+  if (doi >= 130) return '#10B981';
   if (doi >= 60) return '#3B82F6';
   if (doi >= 30) return '#F59E0B';
   if (doi >= 7) return '#F97316';

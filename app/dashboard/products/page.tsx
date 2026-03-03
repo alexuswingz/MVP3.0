@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useProductStore } from '@/stores/product-store';
 import { useUIStore } from '@/stores/ui-store';
+import { toast } from '@/lib/toast';
 
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
@@ -51,10 +52,8 @@ const SELLER_ACCOUNT = 'TPS Nutrients';
 export default function ProductsPage() {
   const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace>('Amazon');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeIds, setActiveIds] = useState<Set<string>>(() => new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const hasInitializedActive = useRef(false);
-  const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats } = useProductStore();
+  const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats, updateProduct, setProductActive } = useProductStore();
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const styles = cardStyles(isDarkMode);
@@ -65,13 +64,11 @@ export default function ProductsPage() {
     fetchProductStats();
   }, [fetchProducts, fetchProductStats]);
 
-  // Default all product toggles to "on" when products first load (matches design)
-  useEffect(() => {
-    if (products.length > 0 && !hasInitializedActive.current) {
-      hasInitializedActive.current = true;
-      setActiveIds(new Set(products.map((p) => p.id)));
-    }
-  }, [products]);
+  // Toggle state is derived from products (single source of truth)
+  const activeIds = useMemo(
+    () => new Set(products.filter((p) => p.isActive !== false).map((p) => p.id)),
+    [products]
+  );
 
   // Client-side filtering - no API call needed for search
   const filteredProducts = useMemo(() => {
@@ -85,7 +82,7 @@ export default function ProductsPage() {
     );
   }, [products, searchQuery]);
 
-  // Manual refresh - force fetch
+  // Manual refresh - products come from API, toggles derive from products
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await Promise.all([
@@ -95,14 +92,23 @@ export default function ProductsPage() {
     setIsRefreshing(false);
   }, [fetchProducts, fetchProductStats]);
 
-  const toggleActive = (id: string) => {
-    setActiveIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const toggleActive = useCallback(
+    async (id: string) => {
+      const product = products.find((p) => p.id === id);
+      if (!product) return;
+      const nextActive = !(product.isActive !== false);
+      setProductActive(id, nextActive);
+      try {
+        await updateProduct(id, { isActive: nextActive });
+      } catch (err) {
+        setProductActive(id, !nextActive);
+        toast.error('Failed to update product status', {
+          description: err instanceof Error ? err.message : 'Try refreshing the page.',
+        });
+      }
+    },
+    [products, updateProduct, setProductActive]
+  );
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0">
