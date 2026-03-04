@@ -336,7 +336,7 @@ const VineTracker = () => {
     [fetchVineClaims]
   );
 
-  /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date and enrolled only; no claim is created until user adds one. */
+  /** Called only when user explicitly clicks Create on a new Vine row. Persists product fields and a placeholder VineClaim so the product appears in the list after refresh. */
   const handleCreateNewVine = useCallback(
     async (row: VineProductRow) => {
       const productId = row.productId ?? (typeof row.id === 'number' ? row.id : undefined);
@@ -347,24 +347,27 @@ const VineTracker = () => {
       }
       setError(null);
       try {
-        // Sync product fields only; do not create a 0-unit claim
         const launchDateTrimmed = (row.launchDate || '').trim();
         if (launchDateTrimmed) {
           const normalized = claimDateToApiFormat(launchDateTrimmed);
           if (normalized) {
             await api.updateProduct(productId, { launch_date: normalized, vine_units_enrolled: row.enrolled ?? 0 });
+          } else {
+            await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
           }
         } else {
           await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
         }
-        // Keep row in list with empty claim history; no refetch so it doesn't disappear (product has no claims yet)
-        setVineProducts((prev) =>
-          prev.map((p) =>
-            p.id === row.id
-              ? { ...p, ...row, isNew: false, claimHistory: [], claimed: 0, productId: productId ?? p.productId }
-              : p
-          )
-        );
+        // Create a placeholder VineClaim (0 units) so this product is returned by GET /vine-claims/ and persists after refresh
+        const today = new Date();
+        const claimDate = today.toISOString().slice(0, 10);
+        await api.createVineClaim({
+          product_id: productId,
+          claim_date: claimDate,
+          units_claimed: 0,
+          notes: '',
+        });
+        await fetchVineClaims(productId);
         const label = [row.productName, row.size, row.asin].filter(Boolean).join(' • ') || 'Vine created';
         toast.vineCreated(`Vine created for ${label}`);
       } catch (e) {
@@ -373,7 +376,7 @@ const VineTracker = () => {
         toast.error(msg);
       }
     },
-    []
+    [fetchVineClaims]
   );
 
   const handleDeleteRow = useCallback(
