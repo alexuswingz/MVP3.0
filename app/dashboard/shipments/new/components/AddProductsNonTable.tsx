@@ -75,32 +75,24 @@ function getFbaBarColor(fbaDays: number): string {
   return '#EF4444';
 }
 
-/** Filter icon (funnel) for column headers - matches 1000bananas style */
+/** Filter icon for column headers - uses asset from public/assets */
 function FilterIcon({ active }: { active: boolean }) {
   return (
-    <svg
+    <img
+      src="/assets/Vector (1).png"
+      alt="Filter"
       width={12}
       height={12}
-      viewBox="0 0 12 12"
-      fill="none"
       style={{
         flexShrink: 0,
+        objectFit: 'contain',
         ...(active
           ? {
               filter: 'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)',
             }
           : {}),
       }}
-    >
-      <path
-        d="M1 2h10l-3 4v3l-2 1V6L1 2z"
-        stroke="currentColor"
-        strokeWidth={1.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
+    />
   );
 }
 

@@ -1,9 +1,11 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { Sidebar } from './sidebar';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
+
+const SIDEBAR_WIDTH_EXPANDED = 280;
+const SIDEBAR_WIDTH_COLLAPSED = 80;
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   const { sidebarCollapsed, sidebarOpen } = useUIStore();
+  const marginLeft = sidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
 
   return (
     <div className="h-screen overflow-hidden" style={{ height: '100dvh' }}>
@@ -25,23 +28,22 @@ export function DashboardShell({ children }: DashboardShellProps) {
         />
       )}
 
-      {/* Main Content - full height, sidebar only */}
-      <motion.main
-        initial={false}
-        animate={{
-          marginLeft: sidebarCollapsed ? 80 : 280,
-        }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      {/* Main Content - margin transitions in sync with sidebar width (0.3s ease-in-out) */}
+      <main
         className={cn(
           'overflow-hidden flex flex-col min-h-0 bg-[#0B111E]',
-          'transition-all duration-300'
+          'transition-[margin-left] duration-300 ease-in-out'
         )}
-        style={{ height: '100dvh', maxHeight: '100dvh' }}
+        style={{
+          height: '100dvh',
+          maxHeight: '100dvh',
+          marginLeft,
+        }}
       >
         <div className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden bg-[#0B111E]">
           {children}
         </div>
-      </motion.main>
+      </main>
     </div>
   );
 }

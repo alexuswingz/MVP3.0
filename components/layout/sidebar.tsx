@@ -6,31 +6,31 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard,
-  Package,
-  TrendingUp,
-  Truck,
-  ClipboardList,
-  Sprout,
+  Home,
+  ShoppingBag,
+  Box,
+  Rocket,
   Settings,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
+  ChevronUp,
+  PanelLeft,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
+import { NAV_ITEMS } from '@/lib/constants';
 import type { NavItem } from '@/types';
 
+// Main nav only (Home, Products, Production, Action Items); Settings is in footer
+const MAIN_NAV_IDS = ['home', 'products', 'production', 'action-items'];
+
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutDashboard,
-  Package,
-  TrendingUp,
-  Truck,
-  ClipboardList,
-  Sprout,
+  LayoutDashboard: Home,
+  Package: ShoppingBag,
+  TrendingUp: Box,
+  Truck: Box,
+  ClipboardList: Rocket,
+  Sprout: Rocket,
   Settings,
 };
 
@@ -38,7 +38,7 @@ export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
-  const { logout, user } = useAuthStore();
+  const { logout } = useAuthStore();
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     products: true,
     production: true,
@@ -63,61 +63,101 @@ export function Sidebar() {
     return false;
   };
 
+  const mainNavItems = NAV_ITEMS.filter((item) => MAIN_NAV_IDS.includes(item.id));
+  const settingsItem = NAV_ITEMS.find((item) => item.id === 'settings');
+
+  const sidebarWidth = sidebarCollapsed ? 80 : 280;
+
   return (
     <motion.aside
       initial={false}
-      animate={{ width: sidebarCollapsed ? 80 : 280 }}
+      animate={{ width: sidebarWidth }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen',
-        'bg-background-secondary border-r border-border',
-        'flex flex-col'
+        'fixed left-0 top-0 z-40 h-screen flex flex-col',
+        'border-r'
       )}
+      style={{
+        background: 'linear-gradient(180deg, #1A2235 0%, #243347 50%, #1A2235 100%)',
+        borderRight: '1px solid #334155',
+      }}
     >
-      {/* Logo */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-border">
+      {/* Header: logo + 1000 Bananas + burger menu (when collapsed: logo only, click to expand) */}
+      <div className={cn(
+        'flex items-center h-16 shrink-0 relative',
+        sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+      )}>
         <AnimatePresence mode="wait">
-          {!sidebarCollapsed && (
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
-              className="flex items-center gap-2"
+          {sidebarCollapsed ? (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="shrink-0 transition-colors cursor-pointer flex items-center justify-center overflow-hidden rounded-[9px] p-[1.12px] w-9 h-9"
+              style={{ background: 'linear-gradient(135deg, #447BF5 0%, #8C3AEC 100%)' }}
+              aria-label="Expand sidebar"
             >
-              <Image
-                src="/logo.png"
-                alt="1000 Bananas"
-                width={32}
-                height={32}
-                className="rounded-lg"
-              />
-              <span className="font-semibold text-foreground-primary">
-                {APP_NAME}
-              </span>
-            </motion.div>
+              <div className="w-full h-full rounded-[7.88px] bg-[#1A2235] flex items-center justify-center">
+                <Image
+                  src="/assets/banana 2 26.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="object-contain"
+                />
+              </div>
+            </button>
+          ) : (
+            <>
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center gap-[11.25px] min-w-0"
+              >
+                <div
+                  className="shrink-0 flex items-center justify-center overflow-hidden rounded-[9px] p-[1.12px] w-9 h-9"
+                  style={{ background: 'linear-gradient(135deg, #447BF5 0%, #8C3AEC 100%)' }}
+                >
+                  <div className="w-full h-full rounded-[7.88px] bg-[#1A2235] flex items-center justify-center">
+                    <Image
+                      src="/assets/banana 2 26.png"
+                      alt=""
+                      width={24}
+                      height={24}
+                      className="object-contain"
+                    />
+                  </div>
+                </div>
+                <Image
+                  src="/assets/1000 Bananas.png"
+                  alt="1000 Bananas"
+                  width={120}
+                  height={28}
+                  className="object-contain h-7 w-auto"
+                />
+              </motion.div>
+              <button
+                onClick={toggleSidebar}
+                className="p-2 rounded-lg transition-colors text-white/80 hover:text-white hover:bg-white/10 shrink-0"
+                aria-label="Collapse sidebar"
+              >
+                <PanelLeft className="w-5 h-5" />
+              </button>
+            </>
           )}
         </AnimatePresence>
-        
-        <button
-          onClick={toggleSidebar}
-          className={cn(
-            'p-2 rounded-lg transition-colors',
-            'hover:bg-background-tertiary text-foreground-secondary',
-            sidebarCollapsed && 'mx-auto'
-          )}
-        >
-          {sidebarCollapsed ? (
-            <ChevronRight className="w-5 h-5" />
-          ) : (
-            <ChevronLeft className="w-5 h-5" />
-          )}
-        </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-        {NAV_ITEMS.map((item) => {
+      {/* Separator line below header */}
+      <div className="h-px shrink-0 bg-[#334155]" aria-hidden />
+
+      {/* Main Navigation */}
+      <nav className={cn(
+        'flex-1 overflow-y-auto scrollbar-hide flex flex-col',
+        sidebarCollapsed ? 'px-2 py-4 space-y-2' : 'px-3 py-4 space-y-1'
+      )}>
+        {mainNavItems.map((item) => {
           const Icon = iconMap[item.icon];
           const hasChildren = 'children' in item && item.children && item.children.length > 0;
           const isExpanded = expandedItems[item.id];
@@ -134,16 +174,17 @@ export function Sidebar() {
                 <button
                   onClick={() => toggleExpanded(item.id)}
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg',
+                    'w-full flex items-center gap-3 rounded-lg',
                     'transition-all duration-200 group',
+                    sidebarCollapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
                     childActive
-                      ? 'text-foreground-primary'
-                      : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
+                      ? 'text-white'
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'
                   )}
                 >
                   <Icon className={cn(
                     'w-5 h-5 flex-shrink-0',
-                    childActive ? 'text-foreground-primary' : 'text-foreground-muted group-hover:text-foreground-secondary'
+                    childActive ? 'text-white' : 'text-white/70 group-hover:text-white'
                   )} />
                   
                   <AnimatePresence>
@@ -161,9 +202,9 @@ export function Sidebar() {
                   </AnimatePresence>
 
                   {!sidebarCollapsed && (
-                    <ChevronDown className={cn(
-                      'w-4 h-4 transition-transform duration-200',
-                      isExpanded ? 'rotate-180' : ''
+                    <ChevronUp className={cn(
+                      'w-4 h-4 transition-transform duration-200 text-white/70',
+                      isExpanded ? '' : 'rotate-180'
                     )} />
                   )}
                 </button>
@@ -177,7 +218,7 @@ export function Sidebar() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="ml-6 pl-3 border-l border-border space-y-1 mt-1">
+                      <div className="ml-6 pl-2 space-y-0.5 mt-0.5">
                         {item.children!.map((child) => {
                           const isChildItemActive = pathname === child.path || 
                             (child.path !== '/dashboard/products' && child.path !== '/dashboard/forecast' && pathname.startsWith(child.path));
@@ -187,14 +228,14 @@ export function Sidebar() {
                               key={child.id}
                               href={child.path}
                               className={cn(
-                                'flex items-center gap-3 px-3 py-2 rounded-lg',
+                                'flex items-center px-3 py-2 rounded-lg text-sm',
                                 'transition-all duration-200',
                                 isChildItemActive
-                                  ? 'text-primary'
-                                  : 'text-foreground-muted hover:bg-background-tertiary hover:text-foreground-primary'
+                                  ? 'text-white'
+                                  : 'text-white/70 hover:bg-white/10 hover:text-white'
                               )}
                             >
-                              <span className="text-sm">{child.label}</span>
+                              {child.label}
                             </Link>
                           );
                         })}
@@ -211,32 +252,17 @@ export function Sidebar() {
               key={item.id}
               href={item.path}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg',
-                'transition-all duration-200 group',
+                'flex items-center gap-3 rounded-lg transition-all duration-200 group',
+                sidebarCollapsed ? 'justify-center p-2.5' : 'px-3 py-2.5',
                 isActive
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
+                  ? 'text-white bg-white/10'
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
               )}
             >
-              {item.id === 'action-items' ? (
-                <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-                  <Image
-                    src="/rocket.png"
-                    alt=""
-                    width={20}
-                    height={20}
-                    className={cn(
-                      'object-contain',
-                      isActive ? 'opacity-100' : 'opacity-70 group-hover:opacity-90'
-                    )}
-                  />
-                </span>
-              ) : (
-                <Icon className={cn(
-                  'w-5 h-5 flex-shrink-0',
-                  isActive ? 'text-primary' : 'text-foreground-muted group-hover:text-foreground-secondary'
-                )} />
-              )}
+              <Icon className={cn(
+                'w-5 h-5 flex-shrink-0',
+                isActive ? 'text-white' : 'text-white/70 group-hover:text-white'
+              )} />
 
               <AnimatePresence>
                 {!sidebarCollapsed && (
@@ -256,7 +282,7 @@ export function Sidebar() {
                 <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  className="px-2 py-0.5 text-xs font-medium bg-danger/20 text-danger rounded-full"
+                  className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full"
                 >
                   {itemWithBadge.badge}
                 </motion.span>
@@ -266,52 +292,37 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User Section */}
-      <div className="p-3 border-t border-border">
-        <div className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-lg',
-          'bg-background-tertiary/50'
-        )}>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-semibold text-sm">
-              {user?.name?.charAt(0) || 'U'}
-            </span>
-          </div>
-          
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                className="flex-1 min-w-0"
-              >
-                <p className="text-sm font-medium text-foreground-primary truncate">
-                  {user?.name || 'User'}
-                </p>
-                <p className="text-xs text-foreground-muted truncate">
-                  {user?.email || 'user@example.com'}
-                </p>
-              </motion.div>
+      {/* Footer: separator line, Settings, Logout */}
+      <div className="p-3 shrink-0 border-t border-[#334155] space-y-0.5">
+        {settingsItem && (
+          <Link
+            href={settingsItem.path}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg w-full',
+              'text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200',
+              pathname.startsWith('/dashboard/settings') ? 'text-white bg-white/10' : '',
+              sidebarCollapsed && 'justify-center'
             )}
-          </AnimatePresence>
-          
-          <AnimatePresence>
+          >
+            <Settings className="w-5 h-5 flex-shrink-0" />
             {!sidebarCollapsed && (
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={handleLogout}
-                className="p-1.5 rounded-md hover:bg-background-tertiary text-foreground-muted 
-                         hover:text-foreground-secondary transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </motion.button>
+              <span className="font-medium text-sm">Settings</span>
             )}
-          </AnimatePresence>
-        </div>
+          </Link>
+        )}
+        <button
+          onClick={handleLogout}
+          className={cn(
+            'flex items-center gap-3 px-3 py-2.5 rounded-lg w-full',
+            'text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200',
+            sidebarCollapsed && 'justify-center'
+          )}
+        >
+          <LogOut className="w-5 h-5 flex-shrink-0" />
+          {!sidebarCollapsed && (
+            <span className="font-medium text-sm">Logout</span>
+          )}
+        </button>
       </div>
     </motion.aside>
   );
