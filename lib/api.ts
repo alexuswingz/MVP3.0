@@ -1,4 +1,5 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL =
+  (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1') as string;
 
 let authFailureHandler: (() => void) | null = null;
 
@@ -71,11 +72,10 @@ export class ApiClient {
     }
 
     let response: Response;
+    const url = `${API_BASE_URL}${endpoint}` as RequestInfo;
+    const requestInit: RequestInit = { ...options, headers };
     try {
-      response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
-      });
+      response = await fetch(url, requestInit);
     } catch (err) {
       const msg = err instanceof TypeError && (err as Error).message === 'Failed to fetch'
         ? `Cannot reach the API server at ${API_BASE_URL}. Make sure the backend is running.`
@@ -88,10 +88,7 @@ export class ApiClient {
         const refreshed = await this.refreshAccessToken();
         if (refreshed) {
           (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
-          const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers,
-          });
+          const retryResponse = await fetch(url, requestInit);
           if (!retryResponse.ok) {
             const message = await this.parseError(retryResponse).catch(() =>
               retryResponse.statusText || `Request failed with status ${retryResponse.status}`

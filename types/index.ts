@@ -36,6 +36,8 @@ export interface Product {
   category: string;
   imageUrl?: string;
   accountId: string;
+  /** When false, product is excluded from forecast/shipment Add Products */
+  isActive?: boolean;
   inventory?: Inventory;
   createdAt: Date;
   updatedAt: Date;

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
+import ProductsFilterDropdown, { type ColumnFilterData } from './ProductsFilterDropdown';
 
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
@@ -58,6 +59,8 @@ interface AddProductsNonTableProps {
   totalPalettes?: number;
   totalBoxes?: number;
   totalWeightLbs?: number;
+  /** Account name for brand filter options (e.g. TPS Nutrients) */
+  account?: string | null;
 }
 
 function getDoiColor(doiValue: number): string {
@@ -70,6 +73,35 @@ function getFbaBarColor(fbaDays: number): string {
   if (fbaDays >= 30) return '#22C55E';
   if (fbaDays >= 20) return '#F97316';
   return '#EF4444';
+}
+
+/** Filter icon (funnel) for column headers - matches 1000bananas style */
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 12 12"
+      fill="none"
+      style={{
+        flexShrink: 0,
+        ...(active
+          ? {
+              filter: 'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)',
+            }
+          : {}),
+      }}
+    >
+      <path
+        d="M1 2h10l-3 4v3l-2 1V6L1 2z"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
 }
 
 function getCheckboxStyle(checked: boolean): React.CSSProperties {
@@ -108,10 +140,17 @@ export function AddProductsNonTable({
   totalPalettes = 0,
   totalBoxes = 0,
   totalWeightLbs = 0,
+  account = null,
 }: AddProductsNonTableProps) {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(() => new Set(initialAddedIds ?? []));
+
+  // Filter icon and dropdown state (replicate 1000bananas Add Products filter)
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, ColumnFilterData>>({});
+  const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const filterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Track if user has interacted with add/remove to prevent sync from overwriting
   const userHasInteracted = useRef(false);
@@ -183,6 +222,190 @@ export function AddProductsNonTable({
   const getLabelsAvailable = (row: NonTableProductRow) =>
     row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
 
+  // Account → brands for product column filter (match 1000bananas)
+  const ACCOUNT_BRAND_MAPPING: Record<string, string[]> = {
+    'TPS Nutrients': ['TPS Nutrients', 'Bloom City', 'TPS Plant Foods'],
+    'The Plant Shoppe, LLC': ['TPS Nutrients', 'TPS Plant Foods', 'Bloom City'],
+    'Total Pest Supply': ['NatureStop', "Ms. Pixie's", "Burke's", 'Mint +'],
+  };
+  const availableBrands = useMemo(() => {
+    if (!account || !ACCOUNT_BRAND_MAPPING[account]) return [];
+    return [...ACCOUNT_BRAND_MAPPING[account]].sort();
+  }, [account]);
+
+  const applyCondition = (value: string | number, conditionType: string, conditionValue: string, numeric: boolean): boolean => {
+    if (!conditionType) return true;
+    const strVal = String(value ?? '').toLowerCase();
+    const strCond = String(conditionValue ?? '').toLowerCase();
+    const numVal = Number(value);
+    const numCond = Number(conditionValue);
+    switch (conditionType) {
+      case 'equals':
+        return numeric ? numVal === numCond : strVal === strCond;
+      case 'notEquals':
+        return numeric ? numVal !== numCond : strVal !== strCond;
+      case 'greaterThan':
+        return numVal > numCond;
+      case 'lessThan':
+        return numVal < numCond;
+      case 'greaterOrEqual':
+        return numVal >= numCond;
+      case 'lessOrEqual':
+        return numVal <= numCond;
+      case 'contains':
+        return strVal.includes(strCond);
+      case 'notContains':
+        return !strVal.includes(strCond);
+      default:
+        return true;
+    }
+  };
+
+  const filteredRows = useMemo(() => {
+    let result = [...rows];
+    Object.entries(columnFilters).forEach(([colKey, filter]) => {
+      if (!filter) return;
+      if (filter.popularFilter && colKey === 'fbaAvailable') {
+        if (filter.popularFilter === 'soldOut') {
+          result = result.filter((r) => (r.inventory ?? 0) === 0);
+        } else if (filter.popularFilter === 'noSalesHistory') {
+          result = result.filter((r) => (r.inventory ?? 0) > 0 && (r.unitsToMake ?? 0) === 0);
+        }
+        return;
+      }
+      if (filter.selectedValues && filter.selectedValues.size > 0) {
+        if (colKey === 'product') {
+          result = result.filter((r) => {
+            const productStr = String(r.product ?? '');
+            const brandStr = String(r.brand ?? '');
+            return filter.selectedValues!.has(productStr) || filter.selectedValues!.has(brandStr);
+          });
+        } else if (colKey === 'unitsToMake') {
+          result = result.filter((r) => {
+            const isAdded = addedIds.has(String(r.id));
+            const wantsAdded = filter.selectedValues!.has('Added');
+            const wantsNotAdded = filter.selectedValues!.has('Not Added');
+            if (wantsAdded && wantsNotAdded) return true;
+            if (wantsAdded) return isAdded;
+            if (wantsNotAdded) return !isAdded;
+            return true;
+          });
+        } else if (colKey === 'doiDays') {
+          result = result.filter((r) => filter.selectedValues!.has(String(r.daysOfInventory ?? '')));
+        }
+      }
+      if (filter.selectedBrands && filter.selectedBrands.size > 0 && colKey === 'product') {
+        result = result.filter((r) => filter.selectedBrands!.has(String(r.brand ?? '')));
+      }
+      if (filter.conditionType && filter.conditionValue !== undefined) {
+        const numeric = colKey === 'fbaAvailable' || colKey === 'unitsToMake' || colKey === 'doiDays';
+        if (colKey === 'product') {
+          result = result.filter((r) =>
+            applyCondition(String(r.product ?? ''), filter.conditionType!, filter.conditionValue ?? '', false)
+          );
+        } else if (colKey === 'doiDays') {
+          result = result.filter((r) =>
+            applyCondition(r.daysOfInventory ?? 0, filter.conditionType!, filter.conditionValue ?? '', true)
+          );
+        } else if (colKey === 'unitsToMake') {
+          result = result.filter((r) =>
+            applyCondition(r.unitsToMake ?? 0, filter.conditionType!, filter.conditionValue ?? '', true)
+          );
+        }
+      }
+    });
+    const sortFilter = Object.values(columnFilters).find((f) => f.sortField && f.sortOrder);
+    if (sortFilter?.sortField && sortFilter.sortOrder) {
+      const key = sortFilter.sortField;
+      const order = sortFilter.sortOrder === 'asc' ? 1 : -1;
+      result = [...result].sort((a, b) => {
+        let aVal: string | number = '';
+        let bVal: string | number = '';
+        if (key === 'product') {
+          aVal = String(a.product ?? '');
+          bVal = String(b.product ?? '');
+        } else if (key === 'unitsToMake') {
+          aVal = Number(a.unitsToMake ?? 0);
+          bVal = Number(b.unitsToMake ?? 0);
+        } else if (key === 'fbaAvailable') {
+          aVal = Number(a.inventory ?? 0);
+          bVal = Number(b.inventory ?? 0);
+        } else if (key === 'doiDays') {
+          aVal = Number(a.daysOfInventory ?? a.fbaAvailableDoi ?? 0);
+          bVal = Number(b.daysOfInventory ?? b.fbaAvailableDoi ?? 0);
+        } else if (key === 'fbaAvailableDoi') {
+          aVal = Number(a.fbaAvailableDoi ?? a.daysOfInventory ?? 0);
+          bVal = Number(b.fbaAvailableDoi ?? b.daysOfInventory ?? 0);
+        }
+        if (typeof aVal === 'number' && typeof bVal === 'number') return (aVal - bVal) * order;
+        return String(aVal).localeCompare(String(bVal)) * order;
+      });
+    }
+    return result;
+  }, [rows, columnFilters, addedIds]);
+
+  const getColumnValues = useCallback((columnKey: string): (string | number)[] => {
+    const values = new Set<string | number>();
+    filteredRows.forEach((row) => {
+      if (columnKey === 'product') {
+        if (row.product) values.add(row.product);
+        if (row.brand) values.add(row.brand);
+      } else if (columnKey === 'unitsToMake') {
+        values.add('Not Added');
+        values.add('Added');
+      } else if (columnKey === 'doiDays') {
+        values.add(row.daysOfInventory ?? 0);
+      } else if (columnKey === 'fbaAvailable') {
+        values.add(row.inventory ?? 0);
+      }
+    });
+    return [...values].sort((a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') return a - b;
+      return String(a).localeCompare(String(b));
+    });
+  }, [filteredRows]);
+
+  const hasActiveFilter = useCallback((columnKey: string): boolean => {
+    const filter = columnFilters[columnKey];
+    if (!filter) return false;
+    if (filter.popularFilter && columnKey === 'fbaAvailable') return true;
+    if (filter.selectedBrands && filter.selectedBrands.size > 0 && columnKey === 'product') return true;
+    if (filter.conditionType) return true;
+    if (filter.sortField && filter.sortOrder) return true;
+    if (!filter.selectedValues || filter.selectedValues.size === 0) return false;
+    const allVals = getColumnValues(columnKey);
+    const allSet = new Set(allVals.map(String));
+    const selSet = new Set(Array.from(filter.selectedValues).map(String));
+    if (allSet.size === 0) return false;
+    const allSelected = allSet.size === selSet.size && [...allSet].every((v) => selSet.has(v));
+    return !allSelected;
+  }, [columnFilters, getColumnValues]);
+
+  const handleApplyFilter = useCallback((columnKey: string, data: ColumnFilterData | null) => {
+    if (data === null) {
+      setColumnFilters((prev) => {
+        const next = { ...prev };
+        delete next[columnKey];
+        return next;
+      });
+      return;
+    }
+    setColumnFilters((prev) => ({ ...prev, [columnKey]: data }));
+  }, []);
+
+  // Close filter dropdown on click outside
+  useEffect(() => {
+    if (!openFilterColumn) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+      const isIcon = Object.values(filterIconRefs.current).some((ref) => ref?.contains(target));
+      const isDropdown = target.closest('[data-filter-dropdown]');
+      if (!isIcon && !isDropdown) setOpenFilterColumn(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [openFilterColumn]);
+
   const toggleSelect = (index: number) => {
     setSelectedIndices((prev) => {
       const next = new Set(prev);
@@ -194,12 +417,12 @@ export function AddProductsNonTable({
   };
 
   const selectAll = () => {
-    if (selectedIndices.size === rows.length) {
+    if (selectedIndices.size === filteredRows.length) {
       setSelectedIndices(new Set());
       setLastSelectedIndex(null);
     } else {
-      setSelectedIndices(new Set(rows.map((_, i) => i)));
-      setLastSelectedIndex(rows.length - 1);
+      setSelectedIndices(new Set(filteredRows.map((_, i) => i)));
+      setLastSelectedIndex(filteredRows.length - 1);
     }
   };
 
@@ -254,7 +477,7 @@ export function AddProductsNonTable({
         const clickedRowIsAdded = prev.has(rowIdStr);
         
         selectedIndices.forEach((selectedIndex) => {
-          const selectedRow = rows[selectedIndex];
+          const selectedRow = filteredRows[selectedIndex];
           if (selectedRow) {
             const selectedRowIdStr = String(selectedRow.id);
             if (clickedRowIsAdded) {
@@ -296,7 +519,7 @@ export function AddProductsNonTable({
     }
   };
 
-  const allSelected = rows.length > 0 && selectedIndices.size === rows.length;
+  const allSelected = filteredRows.length > 0 && selectedIndices.size === filteredRows.length;
 
   // Animate DOI bar fill when Add is clicked: startPct (current blue) -> target%. Bar extends from current fill to full target.
   useEffect(() => {
@@ -341,7 +564,7 @@ export function AddProductsNonTable({
         setQtyValues((prev) => {
           const newValues = { ...prev };
           selectedIndices.forEach((selectedIndex) => {
-            const selectedRow = rows[selectedIndex];
+            const selectedRow = filteredRows[selectedIndex];
             if (selectedRow) {
               const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
               const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;
@@ -369,10 +592,10 @@ export function AddProductsNonTable({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndices, rows, onUnitsOverride]);
+  }, [selectedIndices, filteredRows, onUnitsOverride]);
 
   // Footer totals: compute from added rows only (same formulas as page: boxes = units/24, weight = boxes*12, palettes = products*0.5)
-  const addedEntries = rows
+  const addedEntries = filteredRows
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => addedIds.has(String(row.id)));
   const addedProductCount = addedEntries.length;
@@ -533,16 +756,17 @@ export function AddProductsNonTable({
             }}
           />
           <div
+            className="group"
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 600,
               fontSize: 12,
               textTransform: 'uppercase',
-              color: '#FFFFFF',
+              color: hasActiveFilter('product') || openFilterColumn === 'product' ? '#3B82F6' : '#FFFFFF',
               marginLeft: 20,
               display: 'flex',
               alignItems: 'center',
-              gap: 12,
+              gap: 8,
             }}
           >
             <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -554,42 +778,163 @@ export function AddProductsNonTable({
               />
             </label>
             <span>PRODUCTS</span>
+            {hasActiveFilter('product') && (
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: '#10B981',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <button
+              ref={(el) => {
+                filterIconRefs.current['product'] = el;
+              }}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenFilterColumn((prev) => (prev === 'product' ? null : 'product'));
+              }}
+              className={hasActiveFilter('product') || openFilterColumn === 'product' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+              style={{
+                transition: 'opacity 0.2s',
+                padding: 2,
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Filter products"
+            >
+              <FilterIcon active={hasActiveFilter('product') || openFilterColumn === 'product'} />
+            </button>
           </div>
           <div
+            className="group"
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 600,
               fontSize: 12,
               textTransform: 'uppercase',
-              color: '#FFFFFF',
+              color: hasActiveFilter('fbaAvailable') || openFilterColumn === 'fbaAvailable' ? '#3B82F6' : '#FFFFFF',
               textAlign: 'center',
               paddingLeft: 16,
-              marginLeft: -630,
+              marginLeft: -280,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              position: 'relative',
             }}
           >
-            INVENTORY
+            <span>INVENTORY</span>
+            {hasActiveFilter('fbaAvailable') && (
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: '#10B981',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <button
+              ref={(el) => {
+                filterIconRefs.current['fbaAvailable'] = el;
+              }}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenFilterColumn((prev) => (prev === 'fbaAvailable' ? null : 'fbaAvailable'));
+              }}
+              className={hasActiveFilter('fbaAvailable') || openFilterColumn === 'fbaAvailable' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+              style={{
+                transition: 'opacity 0.2s',
+                padding: 2,
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Filter inventory"
+            >
+              <FilterIcon active={hasActiveFilter('fbaAvailable') || openFilterColumn === 'fbaAvailable'} />
+            </button>
           </div>
           <div
+            className="group"
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 600,
               fontSize: 12,
               textTransform: 'uppercase',
-              color: '#FFFFFF',
+              color: hasActiveFilter('unitsToMake') || openFilterColumn === 'unitsToMake' ? '#3B82F6' : '#FFFFFF',
               textAlign: 'center',
               paddingLeft: 16,
-              marginLeft: -590,
+              marginLeft: -240,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
             }}
           >
-            UNITS TO MAKE
+            <span>UNITS TO MAKE</span>
+            {hasActiveFilter('unitsToMake') && (
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  backgroundColor: '#10B981',
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <button
+              ref={(el) => {
+                filterIconRefs.current['unitsToMake'] = el;
+              }}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenFilterColumn((prev) => (prev === 'unitsToMake' ? null : 'unitsToMake'));
+              }}
+              className={hasActiveFilter('unitsToMake') || openFilterColumn === 'unitsToMake' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+              style={{
+                transition: 'opacity 0.2s',
+                padding: 2,
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Filter units to make"
+            >
+              <FilterIcon active={hasActiveFilter('unitsToMake') || openFilterColumn === 'unitsToMake'} />
+            </button>
           </div>
           <div
+            className="group"
             style={{
               fontFamily: 'Inter, sans-serif',
               fontWeight: 600,
               fontSize: 12,
               textTransform: 'uppercase',
-              color: '#FFFFFF',
+              color: hasActiveFilter('doiDays') || openFilterColumn === 'doiDays' ? '#3B82F6' : '#FFFFFF',
               textAlign: 'center',
               paddingLeft: 16,
               marginLeft: -275,
@@ -601,6 +946,43 @@ export function AddProductsNonTable({
           >
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: -130 }}>
               <span>DAYS OF INVENTORY</span>
+              {hasActiveFilter('doiDays') && (
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor: '#10B981',
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <button
+                ref={(el) => {
+                  filterIconRefs.current['doiDays'] = el;
+                }}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOpenFilterColumn((prev) => (prev === 'doiDays' ? null : 'doiDays'));
+                }}
+                className={hasActiveFilter('doiDays') || openFilterColumn === 'doiDays' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+                style={{
+                  transition: 'opacity 0.2s',
+                  padding: 2,
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Filter days of inventory"
+              >
+                <FilterIcon active={hasActiveFilter('doiDays') || openFilterColumn === 'doiDays'} />
+              </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', marginLeft: -160, marginTop: -3 }}>
               <button
@@ -649,9 +1031,27 @@ export function AddProductsNonTable({
           </div>
         </div>
 
+        {/* Filter dropdown (portal) */}
+        {openFilterColumn && filterIconRefs.current[openFilterColumn] && (
+          <ProductsFilterDropdown
+            filterIconRef={{
+              get current() {
+                return filterIconRefs.current[openFilterColumn];
+              },
+            } as React.RefObject<HTMLButtonElement | null>}
+            columnKey={openFilterColumn}
+            availableValues={getColumnValues(openFilterColumn)}
+            currentFilter={columnFilters[openFilterColumn] ?? {}}
+            onApply={(data) => handleApplyFilter(openFilterColumn, data)}
+            onClose={() => setOpenFilterColumn(null)}
+            account={account ?? undefined}
+            availableBrands={availableBrands}
+          />
+        )}
+
         {/* Product rows - no inner scroll; main page scroll only */}
         <div style={{ overflowX: 'hidden' }}>
-          {rows.map((row, index) => {
+          {filteredRows.map((row, index) => {
             const isSelected = selectedIndices.has(index);
             const isAdded = addedIds.has(String(row.id));
             const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
@@ -1149,7 +1549,7 @@ export function AddProductsNonTable({
                               setQtyValues((prev) => {
                                 const newValues = { ...prev };
                                 selectedIndices.forEach((selectedIndex) => {
-                                  const selectedRow = rows[selectedIndex];
+                                  const selectedRow = filteredRows[selectedIndex];
                                   if (selectedRow) {
                                     const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
                                     const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;
@@ -1203,7 +1603,7 @@ export function AddProductsNonTable({
                               setQtyValues((prev) => {
                                 const newValues = { ...prev };
                                 selectedIndices.forEach((selectedIndex) => {
-                                  const selectedRow = rows[selectedIndex];
+                                  const selectedRow = filteredRows[selectedIndex];
                                   if (selectedRow) {
                                     const currentQty = newValues[selectedIndex] ?? (selectedRow.unitsToMake != null ? Number(selectedRow.unitsToMake) : 0);
                                     const numQty = typeof currentQty === 'number' ? currentQty : parseInt(String(currentQty).replace(/,/g, ''), 10) || 0;

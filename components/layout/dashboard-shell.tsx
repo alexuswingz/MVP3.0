@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Sidebar } from './sidebar';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
+import { SimpleToaster } from '@/lib/toast';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -24,6 +25,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
           onClick={() => useUIStore.getState().setSidebarOpen(false)}
         />
       )}
+
+      {/* Toast - rendered in dashboard for reliable visibility */}
+      <SimpleToaster />
 
       {/* Main Content - full height, sidebar only */}
       <motion.main

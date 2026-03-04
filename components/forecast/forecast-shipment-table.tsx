@@ -510,6 +510,7 @@ export function NewShipmentTable({
                         alignItems: 'center',
                         gap: 4,
                       }}
+                      title={totalInv.toLocaleString()}
                     >
                       {totalInv === 0 && (
                         <span

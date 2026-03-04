@@ -475,15 +475,33 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
     return dateString || String(dateInput);
   };
 
-  // Format launch date
+  // Format launch date as "Feb. 15, 2026"
   const formatLaunchDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    if (!isNaN(date.getTime())) {
+    if (!dateString || typeof dateString !== 'string') return '';
+    const raw = dateString.trim();
+    if (!raw) return '';
+    let date = null;
+    // YYYY-MM-DD
+    if (raw.includes('-') && raw.length >= 10) {
+      const [y, m, d] = raw.slice(0, 10).split('-').map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) date = new Date(y, m - 1, d);
+    }
+    // MM/DD/YYYY
+    if (!date && raw.includes('/')) {
+      const parts = raw.split('/');
+      if (parts.length >= 3) {
+        const month = parseInt(parts[0], 10) - 1;
+        const day = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        if (!isNaN(month) && !isNaN(day) && !isNaN(year)) date = new Date(year, month, day);
+      }
+    }
+    if (!date && !isNaN(new Date(raw).getTime())) date = new Date(raw);
+    if (date && !isNaN(date.getTime())) {
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return `${monthNames[date.getMonth()]}. ${date.getDate()}, ${date.getFullYear()}`;
     }
-    return dateString;
+    return raw;
   };
 
   const handleDeleteClaim = (claimId) => {
@@ -496,7 +514,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: Math.max(0, (productData.claimed || 0) - claim.units),
+          claimed: Math.max(0, Number(productData.claimed || 0) - Number(claim.units || 0)),
         };
         onUpdateProduct(updatedProduct);
       }
@@ -637,7 +655,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: (productData.claimed || 0) + parseInt(editClaimUnits),
+          claimed: Number(productData.claimed || 0) + Number(parseInt(editClaimUnits, 10) || 0),
         };
         onUpdateProduct(updatedProduct);
       }
@@ -816,7 +834,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: (productData.claimed || 0) + parseInt(claimUnits),
+          claimed: Number(productData.claimed || 0) + Number(parseInt(claimUnits, 10) || 0),
         };
         onUpdateProduct(updatedProduct);
       }
@@ -1153,10 +1171,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                   {productData.asin && (
                     <>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>{productData.asin}</span>
+                        <span style={{ color: '#64758B', fontSize: '0.75rem' }}>{productData.asin}</span>
                         <Copy
-                          className="cursor-pointer flex-shrink-0 text-muted-foreground hover:text-foreground"
-                          style={{ width: 14, height: 14 }}
+                          className="cursor-pointer flex-shrink-0 hover:opacity-80"
+                          style={{ width: 14, height: 14, color: '#64758B' }}
                           onClick={async (e) => {
                             e.stopPropagation();
                             try {
@@ -1184,20 +1202,20 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                         />
                       </div>
                       {(productData.brand || productData.size) && (
-                        <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>•</span>
+                        <span style={{ color: '#64758B', fontSize: '0.75rem' }}>•</span>
                       )}
                     </>
                   )}
                   {productData.brand && (
                     <>
-                      <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>{productData.brand}</span>
+                      <span style={{ color: '#64758B', fontSize: '0.75rem' }}>{productData.brand}</span>
                       {productData.size && (
-                        <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>•</span>
+                        <span style={{ color: '#64758B', fontSize: '0.75rem' }}>•</span>
                       )}
                     </>
                   )}
                   {productData.size && (
-                    <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>{productData.size}</span>
+                    <span style={{ color: '#64758B', fontSize: '0.75rem' }}>{productData.size}</span>
                   )}
                 </div>
               </div>

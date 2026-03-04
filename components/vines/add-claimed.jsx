@@ -630,7 +630,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
       if (onUpdateRow) {
         const updatedRow = {
           ...productData,
-          claimed: (productData.claimed || 0) + parseInt(claimUnits),
+          claimed: Number(productData.claimed || 0) + Number(parseInt(claimUnits, 10) || 0),
           claimHistory: updatedHistory,
         };
         onUpdateRow(updatedRow);
@@ -663,7 +663,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
       if (onUpdateRow) {
         const updatedRow = {
           ...productData,
-          claimed: Math.max(0, (productData.claimed || 0) - claim.units),
+          claimed: Math.max(0, Number(productData.claimed || 0) - Number(claim.units || 0)),
           claimHistory: updatedHistory,
         };
         onUpdateRow(updatedRow);
@@ -923,71 +923,61 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#FFFFFF', margin: 0, marginBottom: '0.5rem' }}>
                   {productData.productName || 'N/A'}
                 </h3>
-                {/* Size below title */}
-                {productData.size && (
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <span style={{ color: '#FFFFFF', fontSize: '1.125rem', fontWeight: 400 }}>
-                      {productData.size}
-                    </span>
-                  </div>
-                )}
-                
-                {/* Metadata below in smaller, lighter gray text */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem', alignItems: 'center' }}>
+                {/* Metadata: ASIN (copy icon) • Brand • Size */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginBottom: '0.75rem', alignItems: 'center' }}>
+                  {productData.asin && (
+                    <>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>{productData.asin}</span>
+                        <img
+                          src="/assets/copyy.png"
+                          alt="Copy"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              if (navigator.clipboard?.writeText) {
+                                await navigator.clipboard.writeText(productData.asin);
+                              } else {
+                                const textArea = document.createElement('textarea');
+                                textArea.value = productData.asin;
+                                textArea.style.position = 'fixed';
+                                textArea.style.left = '-999999px';
+                                document.body.appendChild(textArea);
+                                textArea.focus();
+                                textArea.select();
+                                try { document.execCommand('copy'); } finally { document.body.removeChild(textArea); }
+                              }
+                              toast.success('ASIN copied to clipboard', { description: productData.asin, duration: 2000 });
+                            } catch (err) {
+                              toast.error('Failed to copy ASIN', { description: 'Please try again', duration: 2000 });
+                            }
+                          }}
+                          style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0 }}
+                        />
+                      </div>
+                      {(productData.brand || productData.size) && (
+                        <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>•</span>
+                      )}
+                    </>
+                  )}
                   {productData.brand && (
-                    <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>{productData.brand}</span>
+                    <>
+                      <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>{productData.brand}</span>
+                      {productData.size && <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>•</span>}
+                    </>
                   )}
                   {productData.size && (
                     <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>{productData.size}</span>
                   )}
-                  {productData.asin && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>{productData.asin}</span>
-                      <img 
-                        src="/assets/copyy.png" 
-                        alt="Copy" 
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            // Try modern clipboard API first
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                              await navigator.clipboard.writeText(productData.asin);
-                            } else {
-                              // Fallback for non-secure contexts or older browsers
-                              const textArea = document.createElement('textarea');
-                              textArea.value = productData.asin;
-                              textArea.style.position = 'fixed';
-                              textArea.style.left = '-999999px';
-                              textArea.style.top = '-999999px';
-                              document.body.appendChild(textArea);
-                              textArea.focus();
-                              textArea.select();
-                              try {
-                                document.execCommand('copy');
-                              } finally {
-                                document.body.removeChild(textArea);
-                              }
-                            }
-                            toast.success('ASIN copied to clipboard', {
-                              description: productData.asin,
-                              duration: 2000,
-                            });
-                          } catch (err) {
-                            console.error('Failed to copy ASIN:', err);
-                            toast.error('Failed to copy ASIN', {
-                              description: 'Please try again',
-                              duration: 2000,
-                            });
-                          }
-                        }}
-                        style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0 }} 
-                      />
-                    </div>
-                  )}
                   {productData.launchDate && (
-                    <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>
-                      Launched: {formatLaunchDate(productData.launchDate)}
-                    </span>
+                    <>
+                      {(productData.asin || productData.brand || productData.size) && (
+                        <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>•</span>
+                      )}
+                      <span style={{ color: '#9CA3AF', fontSize: '0.875rem' }}>
+                        Launched: {formatLaunchDate(productData.launchDate)}
+                      </span>
+                    </>
                   )}
                 </div>
                 <div

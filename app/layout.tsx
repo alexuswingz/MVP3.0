@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { SimpleToaster } from '@/lib/toast';
 import './globals.css';
 
 const inter = Inter({ 
@@ -22,7 +21,6 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.variable} font-sans overflow-x-hidden`}>
         {children}
-        <SimpleToaster />
       </body>
     </html>
   );

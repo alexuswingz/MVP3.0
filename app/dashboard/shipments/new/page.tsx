@@ -1373,6 +1373,7 @@ export default function NewShipmentAddProductsPage() {
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
                 totalWeightLbs={totalWeightLbs}
+                account={shipmentData?.account ?? undefined}
               />
             )
           ) : urlShipmentId && loadedShipmentError ? (
