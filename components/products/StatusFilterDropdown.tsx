@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const FILTER_WIDTH = 204;
@@ -19,7 +19,7 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   borderWidth: BORDER_WIDTH,
   borderStyle: 'solid',
   borderColor: '#374151',
-  backgroundColor: '#1F2937',
+  backgroundColor: '#1A222C',
   padding: '16px',
   display: 'flex',
   flexDirection: 'column',
@@ -63,6 +63,8 @@ interface StatusFilterDropdownProps {
   resultCount: number;
 }
 
+const CONDITION_OPTIONS: ConditionType[] = ['Greater than', 'Less than', 'Equal to'];
+
 export function StatusFilterDropdown({
   anchorRect,
   isOpen,
@@ -74,6 +76,19 @@ export function StatusFilterDropdown({
   resultCount,
 }: StatusFilterDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const conditionDropdownRef = useRef<HTMLDivElement>(null);
+  const [conditionDropdownOpen, setConditionDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!conditionDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (conditionDropdownRef.current?.contains(target)) return;
+      setConditionDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [conditionDropdownOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -132,7 +147,7 @@ export function StatusFilterDropdown({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: '#FFFFFF',
+            color: '#C7C7CC',
             fontSize: TEXT_SIZE,
             padding: '4px 0',
             textAlign: 'left',
@@ -162,7 +177,7 @@ export function StatusFilterDropdown({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            color: '#FFFFFF',
+            color: '#C7C7CC',
             fontSize: TEXT_SIZE,
             padding: '4px 0',
             textAlign: 'left',
@@ -191,11 +206,13 @@ export function StatusFilterDropdown({
 
       {/* Numerical filter */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <label style={{ color: '#9CA3AF', fontSize: TEXT_SIZE, marginLeft: -8 }}>Filter by condition:</label>
+        <label style={{ color: '#9CA3AF', fontSize: TEXT_SIZE, marginLeft: -12 }}>Filter by condition:</label>
         <div
+          ref={conditionDropdownRef}
           style={{
+            position: 'relative',
             width: 172,
-            height: 28,
+            minHeight: 28,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -215,77 +232,148 @@ export function StatusFilterDropdown({
             marginTop: -4,
           }}
         >
-        <select
-          value={filter.conditionType}
-          onChange={(e) =>
-            onFilterChange({
-              ...filter,
-              conditionType: e.target.value as ConditionType,
-            })
-          }
-          style={{
-            flex: 1,
-            minWidth: 0,
-            height: '100%',
-            padding: 0,
-            border: 'none',
-            borderRadius: 0,
-            backgroundColor: 'transparent',
-            color: '#FFFFFF',
-            fontSize: TEXT_SIZE,
-            outline: 'none',
-            boxSizing: 'border-box',
-            appearance: 'none',
-            backgroundImage: 'none',
-          }}
-        >
-          <option value="Greater than">Greater than</option>
-          <option value="Less than">Less than</option>
-          <option value="Equal to">Equal to</option>
-        </select>
-        <ChevronDown style={{ width: 14, height: 14, color: '#9CA3AF', flexShrink: 0 }} />
+          <button
+            type="button"
+            onClick={() => setConditionDropdownOpen((o) => !o)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: '100%',
+              padding: 0,
+              border: 'none',
+              borderRadius: 0,
+              backgroundColor: 'transparent',
+              color: '#C7C7CC',
+              fontSize: TEXT_SIZE,
+              outline: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            {filter.conditionType}
+          </button>
+          <ChevronDown style={{ width: 14, height: 14, color: '#9CA3AF', flexShrink: 0 }} />
+          {conditionDropdownOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                left: -1,
+                right: -1,
+                top: '100%',
+                marginTop: 4,
+                backgroundColor: '#1A222C',
+                border: '1px solid #374151',
+                borderRadius: 4,
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
+                zIndex: 10001,
+                overflow: 'hidden',
+                minWidth: '100%',
+              }}
+            >
+              {CONDITION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    onFilterChange({ ...filter, conditionType: opt });
+                    setConditionDropdownOpen(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    background: filter.conditionType === opt ? '#374151' : 'transparent',
+                    color: '#C7C7CC',
+                    fontSize: TEXT_SIZE,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <div
-          style={{
-            width: 150,
-            height: 27,
-            gap: 8,
-            opacity: 1,
-            borderRadius: 4,
-            borderWidth: 1,
-            borderStyle: 'solid',
-            borderColor: '#374151',
-            paddingTop: 6,
-            paddingRight: 8,
-            paddingBottom: 6,
-            paddingLeft: 8,
-            backgroundColor: '#1F2937',
-            boxSizing: 'border-box',
-            alignSelf: 'flex-start',
-            marginLeft: -8,
-            marginTop: -4,
-          }}
-        >
-        <input
-          type="text"
-          placeholder="Value here..."
-          value={filter.conditionValue}
-          onChange={(e) =>
-            onFilterChange({ ...filter, conditionValue: e.target.value })
-          }
-          style={{
-            width: '100%',
-            height: '100%',
-            padding: 0,
-            border: 'none',
-            borderRadius: 0,
-            backgroundColor: 'transparent',
-            color: '#FFFFFF',
-            fontSize: TEXT_SIZE,
-            outline: 'none',
-            boxSizing: 'border-box',
-          }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginLeft: -8, marginTop: -4 }}>
+          <div
+            style={{
+              width: 150,
+              height: 27,
+              opacity: 1,
+              borderRadius: 4,
+              borderWidth: 1,
+              borderStyle: 'solid',
+              borderColor: '#374151',
+              paddingTop: 6,
+              paddingRight: 8,
+              paddingBottom: 6,
+              paddingLeft: 8,
+              backgroundColor: '#1F2937',
+              boxSizing: 'border-box',
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Value here..."
+              value={filter.conditionValue}
+              onChange={(e) =>
+                onFilterChange({ ...filter, conditionValue: e.target.value })
+              }
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: 0,
+                border: 'none',
+                borderRadius: 0,
+                backgroundColor: 'transparent',
+                color: '#FFFFFF',
+                fontSize: TEXT_SIZE,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, gap: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                const num = parseInt(filter.conditionValue, 10) || 0;
+                onFilterChange({ ...filter, conditionValue: String(num + 1) });
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Increment value"
+            >
+              <ChevronUp style={{ width: 14, height: 14, color: '#9CA3AF' }} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const num = parseInt(filter.conditionValue, 10) || 0;
+                onFilterChange({ ...filter, conditionValue: String(Math.max(0, num - 1)) });
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Decrement value"
+            >
+              <ChevronDown style={{ width: 14, height: 14, color: '#9CA3AF' }} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -301,13 +389,15 @@ export function StatusFilterDropdown({
 
       {/* Status filter by condition */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        <label style={{ color: '#9CA3AF', fontSize: TEXT_SIZE, marginLeft: -8 }}>Filter by condition:</label>
+        <label style={{ color: '#9CA3AF', fontSize: TEXT_SIZE, marginLeft: -12 }}>Filter by condition:</label>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
             flexWrap: 'wrap',
+            marginLeft: -12,
+            marginTop: -8,
           }}
         >
           <button
@@ -318,13 +408,13 @@ export function StatusFilterDropdown({
               border: 'none',
               cursor: 'pointer',
               color: '#3B82F6',
-              fontSize: TEXT_SIZE,
+              fontSize: 10,
               padding: 0,
             }}
           >
             Select all
           </button>
-          <span style={{ color: '#9CA3AF', fontSize: TEXT_SIZE }}>|</span>
+          <span style={{ color: '#9CA3AF', fontSize: 10 }}>|</span>
           <button
             type="button"
             onClick={handleClearAll}
@@ -332,8 +422,8 @@ export function StatusFilterDropdown({
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: '#9CA3AF',
-              fontSize: TEXT_SIZE,
+              color: '#3B82F6',
+              fontSize: 10,
               padding: 0,
             }}
           >
@@ -349,41 +439,77 @@ export function StatusFilterDropdown({
             {resultCount.toLocaleString()} results
           </span>
         </div>
-        <div style={{ position: 'relative' }}>
-          <Search
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginLeft: -8 }}>
+          <div
             style={{
-              position: 'absolute',
-              left: 8,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 14,
-              height: 14,
-              color: '#9CA3AF',
-              pointerEvents: 'none',
-            }}
-          />
-          <input
-            type="text"
-            placeholder="Search statuses..."
-            value={filter.statusSearch}
-            onChange={(e) =>
-              onFilterChange({ ...filter, statusSearch: e.target.value })
-            }
-            style={{
-              width: '100%',
-              height: 32,
-              padding: '6px 8px 6px 28px',
+              width: 150,
+              height: 27,
+              position: 'relative',
+              opacity: 1,
               borderRadius: 4,
-              border: '1px solid #374151',
-              backgroundColor: '#374151',
-              color: '#FFFFFF',
-              fontSize: TEXT_SIZE,
-              outline: 'none',
+              borderWidth: 1,
+              borderStyle: 'solid',
+              borderColor: '#374151',
+              paddingTop: 6,
+              paddingRight: 8,
+              paddingBottom: 6,
+              paddingLeft: 8,
+              backgroundColor: '#1F2937',
               boxSizing: 'border-box',
             }}
-          />
+          >
+            <Search
+              style={{
+                position: 'absolute',
+                left: 8,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 14,
+                height: 14,
+                color: '#9CA3AF',
+                pointerEvents: 'none',
+              }}
+            />
+            <input
+              type="text"
+              placeholder=""
+              value={filter.statusSearch}
+              onChange={(e) =>
+                onFilterChange({ ...filter, statusSearch: e.target.value })
+              }
+              style={{
+                width: '100%',
+                height: '100%',
+                padding: 0,
+                paddingLeft: 20,
+                border: 'none',
+                borderRadius: 0,
+                backgroundColor: 'transparent',
+                color: '#FFFFFF',
+                fontSize: TEXT_SIZE,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, gap: 0 }}>
+            <ChevronUp style={{ width: 14, height: 14, color: '#9CA3AF' }} />
+            <ChevronDown style={{ width: 14, height: 14, color: '#9CA3AF' }} />
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            marginTop: -2,
+            padding: 12,
+            borderRadius: 8,
+            border: '1px solid #1F2937',
+            backgroundColor: '#1F2937',
+            marginLeft: -12,
+          }}
+        >
           {(['Active', 'Inactive'] as const).map((status) => {
             const searchLower = filter.statusSearch.toLowerCase();
             const statusLower = status.toLowerCase();
@@ -421,9 +547,10 @@ export function StatusFilterDropdown({
                   style={{
                     width: 16,
                     height: 16,
-                    accentColor: '#3B82F6',
+                    accentColor: '#007BFF',
                     cursor: 'pointer',
                   }}
+                  className="status-filter-checkbox"
                 />
                 {status}
               </label>
@@ -439,6 +566,7 @@ export function StatusFilterDropdown({
           backgroundColor: '#374151',
           marginLeft: -16,
           marginRight: -16,
+          marginTop: 8,
         }}
       />
 
@@ -446,6 +574,7 @@ export function StatusFilterDropdown({
       <div
         style={{
           display: 'flex',
+          justifyContent: 'space-between',
           gap: 8,
           marginTop: 'auto',
           paddingTop: '8px',
@@ -463,13 +592,16 @@ export function StatusFilterDropdown({
             paddingLeft: 12,
             borderRadius: 4,
             opacity: 1,
-            border: '1px solid #374151',
-            backgroundColor: '#374151',
+            border: '1px solid #252F42',
+            backgroundColor: '#252F42',
             color: '#FFFFFF',
             fontSize: TEXT_SIZE,
             fontWeight: 500,
             cursor: 'pointer',
             boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           Reset
@@ -493,6 +625,9 @@ export function StatusFilterDropdown({
             fontWeight: 500,
             cursor: 'pointer',
             boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           Apply

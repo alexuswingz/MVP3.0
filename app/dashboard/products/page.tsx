@@ -59,6 +59,7 @@ export default function ProductsPage() {
   const [statusFilterAnchor, setStatusFilterAnchor] = useState<DOMRect | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
+  const [fadingMap, setFadingMap] = useState<Record<string, boolean>>({});
   const statusHeaderRef = useRef<HTMLTableCellElement>(null);
   const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats, updateProduct, setProductActive } = useProductStore();
   const theme = useUIStore((s) => s.theme);
@@ -77,7 +78,9 @@ export default function ProductsPage() {
     [products]
   );
 
-  const handleStatusFilterClick = useCallback(() => {
+  const handleStatusFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (statusFilterOpen) {
       setStatusFilterOpen(false);
       setStatusFilterAnchor(null);
@@ -108,7 +111,9 @@ export default function ProductsPage() {
     if (!showActive || !showInactive) {
       list = list.filter((p) => {
         const isActive = p.isActive !== false;
-        return (isActive && showActive) || (!isActive && showInactive);
+        const passes = (isActive && showActive) || (!isActive && showInactive);
+        // While a row is in fadingMap, keep it visible even if it no longer matches
+        return passes || fadingMap[p.id];
       });
     }
     // Sort by status (Active first = asc, Inactive first = desc)
@@ -122,7 +127,7 @@ export default function ProductsPage() {
       });
     }
     return list;
-  }, [products, searchQuery, appliedStatusFilter]);
+  }, [products, searchQuery, appliedStatusFilter, fadingMap]);
 
   const statusFilterResultCount = useMemo(() => {
     const showActive = statusFilter.activeChecked;
@@ -136,6 +141,11 @@ export default function ProductsPage() {
     }
     return count;
   }, [products, statusFilter.activeChecked, statusFilter.inactiveChecked]);
+
+  const hasActiveStatusFilter =
+    !appliedStatusFilter.activeChecked ||
+    !appliedStatusFilter.inactiveChecked ||
+    appliedStatusFilter.sortOrder != null;
 
   // Manual refresh - products come from API, toggles derive from products
   const handleRefresh = useCallback(async () => {
@@ -151,18 +161,40 @@ export default function ProductsPage() {
     async (id: string) => {
       const product = products.find((p) => p.id === id);
       if (!product) return;
+
       const nextActive = !(product.isActive !== false);
+
+      // Optimistically update local state
       setProductActive(id, nextActive);
+
+       // If this toggle will move the row *out* of the currently applied
+       // status filter, keep it visible briefly and fade it out.
+       const showActive = appliedStatusFilter.activeChecked;
+       const showInactive = appliedStatusFilter.inactiveChecked;
+       const passesAfterToggle =
+         (nextActive && showActive) || (!nextActive && showInactive);
+       if (!passesAfterToggle && (showActive !== showInactive)) {
+         setFadingMap((prev) => ({ ...prev, [id]: true }));
+         setTimeout(() => {
+           setFadingMap((prev) => {
+             const copy = { ...prev };
+             delete copy[id];
+             return copy;
+           });
+         }, 250);
+       }
+
       try {
         await updateProduct(id, { isActive: nextActive });
       } catch (err) {
+        // Roll back status change on error
         setProductActive(id, !nextActive);
         toast.error('Failed to update product status', {
           description: err instanceof Error ? err.message : 'Try refreshing the page.',
         });
       }
     },
-    [products, updateProduct, setProductActive]
+    [products, updateProduct, setProductActive, appliedStatusFilter]
   );
 
   return (
@@ -325,9 +357,10 @@ export default function ProductsPage() {
                   style={{
                     padding: '1rem 1rem',
                     width: '10%',
-                    backgroundColor: 'inherit',
-                    color: statusFilterOpen ? '#3B82F6' : '#9CA3AF',
+                    color: statusFilterOpen || hasActiveStatusFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
+                    position: 'relative',
+                    zIndex: 101,
                   }}
                 >
                   STATUS
@@ -402,7 +435,14 @@ export default function ProductsPage() {
               const isActive = activeIds.has(product.id);
               const ROW_BG = isDarkMode ? '#1A2235' : '#FFFFFF';
               const BORDER_COLOR = isDarkMode ? '#374151' : '#E5E7EB';
-              const rowOpacity = isActive ? 1 : 0.45;
+              const showActive = appliedStatusFilter.activeChecked;
+              const showInactive = appliedStatusFilter.inactiveChecked;
+              const isActivePassingFilter =
+                (isActive && showActive) || (!isActive && showInactive);
+              let rowOpacity = isActive ? 1 : 0.45;
+              if (fadingMap[product.id] && !isActivePassingFilter) {
+                rowOpacity = 0;
+              }
               return (
                 <React.Fragment key={product.id}>
                   <tr className="transition-opacity duration-200" style={{ height: 1, backgroundColor: ROW_BG, opacity: rowOpacity }}>
