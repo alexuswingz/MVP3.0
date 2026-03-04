@@ -1,21 +1,23 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Search,
-  Settings,
   ChevronDown,
   Copy,
   MoreVertical,
-  TrendingUp,
-  RefreshCw,
 } from 'lucide-react';
 import { useProductStore } from '@/stores/product-store';
 import { useUIStore } from '@/stores/ui-store';
 import { toast } from '@/lib/toast';
+import {
+  StatusFilterDropdown,
+  DEFAULT_FILTER,
+  type StatusFilterState,
+} from '@/components/products/StatusFilterDropdown';
 
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
@@ -53,6 +55,11 @@ export default function ProductsPage() {
   const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace>('Amazon');
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+  const [statusFilterAnchor, setStatusFilterAnchor] = useState<DOMRect | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
+  const statusHeaderRef = useRef<HTMLTableCellElement>(null);
   const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats, updateProduct, setProductActive } = useProductStore();
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
@@ -70,17 +77,65 @@ export default function ProductsPage() {
     [products]
   );
 
-  // Client-side filtering - no API call needed for search
+  const handleStatusFilterClick = useCallback(() => {
+    if (statusFilterOpen) {
+      setStatusFilterOpen(false);
+      setStatusFilterAnchor(null);
+    } else {
+      const rect = statusHeaderRef.current?.getBoundingClientRect();
+      if (rect) {
+        setStatusFilterAnchor(rect);
+        setStatusFilterOpen(true);
+      }
+    }
+  }, [statusFilterOpen]);
+
+  // Client-side filtering - search first, then status filter, then sort
   const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    const query = searchQuery.toLowerCase();
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(query) ||
-        p.asin.toLowerCase().includes(query) ||
-        p.sku.toLowerCase().includes(query)
-    );
-  }, [products, searchQuery]);
+    let list = products;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.asin.toLowerCase().includes(query) ||
+          p.sku.toLowerCase().includes(query)
+      );
+    }
+    // Apply status filter (Active / Inactive)
+    const showActive = appliedStatusFilter.activeChecked;
+    const showInactive = appliedStatusFilter.inactiveChecked;
+    if (!showActive || !showInactive) {
+      list = list.filter((p) => {
+        const isActive = p.isActive !== false;
+        return (isActive && showActive) || (!isActive && showInactive);
+      });
+    }
+    // Sort by status (Active first = asc, Inactive first = desc)
+    if (appliedStatusFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aActive = a.isActive !== false ? 1 : 0;
+        const bActive = b.isActive !== false ? 1 : 0;
+        return appliedStatusFilter.sortOrder === 'asc'
+          ? aActive - bActive
+          : bActive - aActive;
+      });
+    }
+    return list;
+  }, [products, searchQuery, appliedStatusFilter]);
+
+  const statusFilterResultCount = useMemo(() => {
+    const showActive = statusFilter.activeChecked;
+    const showInactive = statusFilter.inactiveChecked;
+    let count = products.length;
+    if (!showActive || !showInactive) {
+      count = products.filter((p) => {
+        const isActive = p.isActive !== false;
+        return (isActive && showActive) || (!isActive && showInactive);
+      }).length;
+    }
+    return count;
+  }, [products, statusFilter.activeChecked, statusFilter.inactiveChecked]);
 
   // Manual refresh - products come from API, toggles derive from products
   const handleRefresh = useCallback(async () => {
@@ -255,12 +310,23 @@ export default function ProductsPage() {
             >
               <tr style={{ height: 'auto' }}>
                 <th
-                  className="text-center text-xs font-bold uppercase tracking-wider"
+                  ref={statusHeaderRef}
+                  data-status-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleStatusFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleStatusFilterClick();
+                    }
+                  }}
+                  className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '10%',
                     backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: statusFilterOpen ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
                 >
@@ -596,6 +662,27 @@ export default function ProductsPage() {
           </div>
         </div>
       </motion.div>
+
+      <StatusFilterDropdown
+        anchorRect={statusFilterAnchor}
+        isOpen={statusFilterOpen}
+        onClose={() => {
+          setStatusFilterOpen(false);
+          setStatusFilterAnchor(null);
+        }}
+        filter={statusFilter}
+        onFilterChange={setStatusFilter}
+        onApply={() => {
+          setAppliedStatusFilter(statusFilter);
+          setStatusFilterOpen(false);
+          setStatusFilterAnchor(null);
+        }}
+        onReset={() => {
+          setStatusFilter(DEFAULT_FILTER);
+          setAppliedStatusFilter(DEFAULT_FILTER);
+        }}
+        resultCount={statusFilterResultCount}
+      />
     </div>
   );
 }

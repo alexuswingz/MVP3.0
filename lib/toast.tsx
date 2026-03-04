@@ -95,7 +95,14 @@ export function SimpleToaster() {
 
   const toaster = (
     <div
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] flex flex-col items-center gap-2 w-full max-w-[716px] px-4"
+      className="flex flex-col items-center gap-2 w-full max-w-[716px] px-4"
+      style={{
+        position: 'fixed',
+        top: 24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 2147483647,
+      }}
       aria-live="polite"
     >
       {items.map((item) =>
@@ -105,7 +112,7 @@ export function SimpleToaster() {
             style={{
               width: '100%',
               maxWidth: 716,
-              minHeight: 36,
+              height: 36,
               padding: '8px 12px',
               borderRadius: 12,
               backgroundColor: '#1B3221',
@@ -113,6 +120,7 @@ export function SimpleToaster() {
               display: 'flex',
               alignItems: 'center',
               gap: 24,
+              opacity: 1,
             }}
           >
             <div
@@ -131,7 +139,7 @@ export function SimpleToaster() {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <div style={{ flex: 1, minWidth: 0, color: '#34C759', fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ flex: 1, minWidth: 0, color: '#34C759', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {typeof item.message === 'object' && item.message !== null ? item.message : String(item.message)}
             </div>
             <button

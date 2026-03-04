@@ -340,7 +340,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDeleteRow }) => {
+const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDeleteRow, onUpdateEnrolled }) => {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const [openFilterColumn, setOpenFilterColumn] = useState(null);
@@ -2099,141 +2099,9 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                             const savedRow = { ...row, isNew: false };
                             onUpdateRow(savedRow);
                             
-                            // Show toast notification
-                            const toastId = toast.success('', {
-                              description: (
-                                <div style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '24px',
-                                  minWidth: '400px',
-                                  width: 'fit-content',
-                                  maxWidth: '95vw',
-                                  height: '36px',
-                                  paddingTop: '8px',
-                                  paddingRight: '12px',
-                                  paddingBottom: '8px',
-                                  paddingLeft: '12px',
-                                  borderRadius: '12px',
-                                  backgroundColor: '#F0FDF4',
-                                  color: '#34C759',
-                                  margin: '0 auto',
-                                  overflow: 'visible',
-                                }}>
-                                  {/* Check Icon */}
-                                  <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="#34C759"
-                                    strokeWidth="3"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ flexShrink: 0 }}
-                                  >
-                                    <path d="M20 6L9 17l-5-5" />
-                                  </svg>
-                                  {/* Vine Created Text */}
-                                  <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    flexShrink: 0,
-                                    overflow: 'visible',
-                                  }}>
-                                    <span style={{
-                                      fontSize: '0.875rem',
-                                      fontWeight: 500,
-                                      color: '#34C759',
-                                      whiteSpace: 'nowrap',
-                                      flexShrink: 0,
-                                    }}>
-                                      Vine created for{' '}
-                                    </span>
-                                    {row.productName && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'visible',
-                                        flexShrink: 0,
-                                      }}>
-                                        {row.productName}
-                                      </span>
-                                    )}
-                                    {row.size && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                      }}>
-                                        {' • ' + row.size}
-                                      </span>
-                                    )}
-                                    {row.asin && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                      }}>
-                                        {' • ' + row.asin}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Close Button (X) */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toast.dismiss(toastId);
-                                    }}
-                                    style={{
-                                      background: 'transparent',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      padding: '4px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      flexShrink: 0,
-                                      color: '#34C759',
-                                    }}
-                                  >
-                                    <svg
-                                      width="16"
-                                      height="16"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                  </button>
-                                </div>
-                              ),
-                              duration: 4000,
-                              icon: null,
-                              closeButton: false,
-                              style: {
-                                background: 'transparent',
-                                padding: 0,
-                                border: 'none',
-                                boxShadow: 'none',
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                              },
-                              className: 'claim-entry-submitted-toast',
-                            });
+                            // Show vine created notification (dark green #1B3221, text #34C759)
+                            const parts = ['Vine created for', row.productName, row.size, row.asin].filter(Boolean);
+                            toast.vineCreated(parts.join(' • '), { duration: 4000 });
                           }
                         }}
                         style={{
