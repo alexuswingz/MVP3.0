@@ -905,12 +905,12 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const BORDER_COLOR = isDarkMode ? '#374151' : '#E5E7EB';
 
   const columns = [
-    { key: 'status', label: 'STATUS', width: '12%', align: 'left' },
+    { key: 'status', label: 'STATUS', width: '12%', minWidth: '90px', align: 'left' },
     { key: 'productName', label: 'PRODUCT NAME', width: '35%', align: 'left' },
-    { key: 'launchDate', label: 'LAUNCH DATE', width: '12%', align: 'left' },
-    { key: 'claimed', label: 'CLAIMED', width: '12%', align: 'center' },
-    { key: 'enrolled', label: 'ENROLLED', width: '12%', align: 'center' },
-    { key: 'action', label: 'ACTIONS', width: '12%', align: 'center' },
+    { key: 'launchDate', label: 'LAUNCH DATE', width: '12%', minWidth: '140px', align: 'left' },
+    { key: 'claimed', label: 'CLAIMED', width: '12%', minWidth: '80px', align: 'center' },
+    { key: 'enrolled', label: 'ENROLLED', width: '12%', minWidth: '80px', align: 'center' },
+    { key: 'action', label: 'ACTIONS', width: '12%', minWidth: '100px', align: 'center' },
   ];
 
   return (
@@ -949,7 +949,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                 style={{
                   padding: '1rem 1.25rem 1.25rem 1.25rem',
                   width: col.width,
-                  ...(col.key === 'action' ? { minWidth: '100px' } : {}),
+                  ...(col.minWidth ? { minWidth: col.minWidth } : {}),
                   height: 'auto',
                   backgroundColor: HEADER_BG,
                   color: '#9CA3AF',
@@ -1804,8 +1804,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       borderTop: 'none',
                       height: 'auto',
                       minHeight: '40px',
+                      minWidth: '140px',
                       display: 'table-cell',
                       position: 'relative',
+                      boxSizing: 'border-box',
                     }}
                     onClick={(e) => {
                       // Don't trigger row expansion when clicking on date picker
@@ -1936,7 +1938,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                     )}
                   </td>
 
-                  {/* CLAIMED - hidden when creating new vine */}
+                  {/* CLAIMED - no content when creating new vine; only show count after vine exists */}
                   <td
                     style={{
                       padding: '0.75rem 1.25rem',
@@ -1946,14 +1948,15 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       borderTop: 'none',
                       height: 'auto',
                       minHeight: '40px',
+                      minWidth: '80px',
                       display: 'table-cell',
                     }}
                   >
-                    {isNewRow ? null : (row.claimed > 0 ? (
+                    {!isNewRow && row.claimed > 0 ? (
                       <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>
                         {row.claimed}
                       </span>
-                    ) : null)}
+                    ) : null}
                   </td>
 
                   {/* ENROLLED - editable only when creating new vine; read-only after vine is added */}
@@ -1966,6 +1969,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       borderTop: 'none',
                       height: 'auto',
                       minHeight: '40px',
+                      minWidth: '80px',
                       display: 'table-cell',
                     }}
                   >
@@ -2011,56 +2015,6 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                     ) : (
                       <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>{row.enrolled ?? 0}</span>
                     )}
-                  </td>
-
-                  {/* ENROLLED */}
-                  <td
-                    style={{
-                      padding: '0.75rem 1.25rem',
-                      verticalAlign: 'middle',
-                      textAlign: 'center',
-                      backgroundColor: 'inherit',
-                      borderTop: 'none',
-                      height: 'auto',
-                      minHeight: '40px',
-                      display: 'table-cell',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.enrolled ?? 0}
-                        onChange={(e) => {
-                          if (!onUpdateRow) return;
-                          const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
-                          onUpdateRow({ ...row, enrolled: Math.max(0, inputValue) });
-                        }}
-                        onBlur={() => {
-                          const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
-                          if (onUpdateEnrolled && productId != null) {
-                            onUpdateEnrolled(productId, row.enrolled ?? 0);
-                          }
-                        }}
-                        className="no-spinner"
-                        style={{
-                          width: '72px',
-                          height: '27px',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: '#374151',
-                          backgroundColor: '#374151',
-                          color: '#FFFFFF',
-                          fontSize: '0.875rem',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          textAlign: 'center',
-                        }}
-                        onWheel={(e) => e.target.blur()}
-                      />
-                    </div>
                   </td>
 
                   {/* ACTIONS */}
@@ -2378,14 +2332,16 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         onUpdateClaim={onUpdateClaim}
         onUpdateLaunchDate={onUpdateLaunchDate}
         onAddClaim={(newClaim) => {
-          // Update the row's claimed count
+          // Update the row's claimed count (sum of all claim entries)
           if (onUpdateRow && selectedVineRow) {
             const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
+            const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+            const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
             const updatedRow = {
               ...selectedVineRow,
               productId,
-              claimed: (selectedVineRow.claimed || 0) + (newClaim.units || 0),
-              claimHistory: [...(selectedVineRow.claimHistory || []), newClaim],
+              claimed: claimedTotal,
+              claimHistory: updatedHistory,
             };
             // Update the local state so the modal reflects the changes immediately
             setSelectedVineRow(updatedRow);
@@ -2599,16 +2555,17 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
               </button>
               <button
                 onClick={() => {
-                    if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
-                    const units = parseInt(claimUnits);
+                    if (claimDate && claimUnits && parseInt(claimUnits, 10) > 0) {
+                    const units = parseInt(claimUnits, 10);
                     const newClaim = { id: Date.now(), date: claimDate, units };
                     const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+                    const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
                     const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
                     if (onUpdateRow) {
                       const updatedRow = {
                         ...selectedVineRow,
                         productId,
-                        claimed: (selectedVineRow.claimed || 0) + units,
+                        claimed: claimedTotal,
                         claimHistory: updatedHistory,
                       };
                       onUpdateRow(updatedRow);

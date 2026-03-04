@@ -68,7 +68,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
       statusColor: status === 'Concluded' ? '#10B981' : '#3B82F6',
       productName: first.product_name || '',
       brand: first.brand_name || '',
-      size: '',
+      size: first.product_size ?? '',
       asin: first.product_asin || '',
       launchDate,
       claimed,
@@ -91,7 +91,7 @@ const VineTracker = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchVineClaims = useCallback(async () => {
+  const fetchVineClaims = useCallback(async (productIdToTop?: number) => {
     try {
       setError(null);
       const claims = await api.getVineClaims({ ordering: '-claim_date' });
@@ -110,7 +110,12 @@ const VineTracker = () => {
               p.productId != null &&
               !apiProductIds.has(p.productId))
         );
-        return [...localOnly, ...fromApi];
+        const merged = [...localOnly, ...fromApi];
+        if (productIdToTop == null) return merged;
+        const idx = merged.findIndex((r) => (r.productId ?? r.id) === productIdToTop);
+        if (idx <= 0) return merged;
+        const row = merged[idx];
+        return [row, ...merged.slice(0, idx), ...merged.slice(idx + 1)];
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load vine claims');
@@ -240,12 +245,11 @@ const VineTracker = () => {
             await api.createVineClaim({
               product_id: productId,
               claim_date: claimDate,
-              units_claimed: nc.units || 0,
+              units_claimed: nc.units ?? 0,
               notes: '',
             });
           }
-          await fetchVineClaims();
-          toast.success('Vine claim saved.');
+          await fetchVineClaims(productId);
           return;
         } catch (e) {
           const msg = e instanceof Error ? e.message : 'Failed to save claim';
@@ -285,7 +289,6 @@ const VineTracker = () => {
         setError(null);
         await api.updateProduct(productId, { launch_date: normalized });
         await fetchVineClaims();
-        toast.success('Launch date saved.');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to save launch date';
         setError(msg);
@@ -302,7 +305,6 @@ const VineTracker = () => {
         setError(null);
         await api.updateProduct(productId, { vine_units_enrolled: normalized });
         await fetchVineClaims();
-        toast.success('Enrolled units saved.');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to save enrolled units';
         setError(msg);
@@ -357,9 +359,8 @@ const VineTracker = () => {
               : p
           )
         );
-        toast.success(
-          'Vine saved and added to the list. Add claim entries below; it will persist after refresh once you add your first claim.'
-        );
+        const label = [row.productName, row.size, row.asin].filter(Boolean).join(' • ') || 'Vine created';
+        toast.vineCreated(`Vine created for ${label}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to create vine';
         setError(msg);

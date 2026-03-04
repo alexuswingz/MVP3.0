@@ -618,6 +618,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
         const dateB = parseDateForSort(b.date);
         return dateA - dateB; // Sort ascending (oldest first, newest at bottom)
       });
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 
@@ -626,11 +627,11 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
         onAddClaim(newClaim);
       }
 
-      // Update the row's claimed count
+      // Update the row's claimed count (sum of all claim entries)
       if (onUpdateRow) {
         const updatedRow = {
           ...productData,
-          claimed: Number(productData.claimed || 0) + Number(parseInt(claimUnits, 10) || 0),
+          claimed: claimedTotal,
           claimHistory: updatedHistory,
         };
         onUpdateRow(updatedRow);
@@ -657,13 +658,14 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
     const claim = claimHistory.find(c => c.id === claimId);
     if (claim) {
       const updatedHistory = claimHistory.filter(c => c.id !== claimId);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
       setClaimHistory(updatedHistory);
 
-      // Update the row's claimed count
+      // Update the row's claimed count (sum of all claim entries)
       if (onUpdateRow) {
         const updatedRow = {
           ...productData,
-          claimed: Math.max(0, Number(productData.claimed || 0) - Number(claim.units || 0)),
+          claimed: claimedTotal,
           claimHistory: updatedHistory,
         };
         onUpdateRow(updatedRow);
@@ -736,6 +738,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
       const dateB = parseDateForSort(b.date);
       return dateA - dateB;
     });
+    const claimedTotal = sortedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
 
     setClaimHistory(sortedHistory);
 
@@ -744,6 +747,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
       const updatedRow = {
         ...productData,
         claimHistory: sortedHistory,
+        claimed: claimedTotal,
       };
       onUpdateRow(updatedRow);
     }

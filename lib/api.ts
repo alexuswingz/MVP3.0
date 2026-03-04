@@ -728,6 +728,7 @@ interface VineClaimResponse {
   product_asin: string;
   product_name: string;
   product_sku: string;
+  product_size?: string;
   brand_name: string | null;
   product_launch_date?: string | null;
   product_vine_units_enrolled?: number | null;

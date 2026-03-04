@@ -295,8 +295,6 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
   const [showActionsColumn, setShowActionsColumn] = useState(false);
   const [showInputRow, setShowInputRow] = useState(false);
   const claimDateInputRef = useRef(null);
-  const [showLaunchDatePicker, setShowLaunchDatePicker] = useState(false);
-  const launchDateInputRef = useRef(null);
   const [claimValidationError, setClaimValidationError] = useState(null);
 
   useEffect(() => {
@@ -325,9 +323,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     }
   }, [isOpen, productData]);
 
-  // Handle click outside to close action menu, edit modal, and launch date picker
+  // Handle click outside to close action menu and edit modal
   useEffect(() => {
-    if (!actionMenuId && !editModalClaimId && !showAddClaimModal && !showLaunchDatePicker) return;
+    if (!actionMenuId && !editModalClaimId && !showAddClaimModal) return;
 
     const handleClickOutside = (event) => {
       if (actionMenuId && !event.target.closest('[data-action-menu]') && !event.target.closest('[data-action-button]')) {
@@ -338,9 +336,6 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         setShowAddClaimModal(false);
         setEditClaimDate('');
         setEditClaimUnits('');
-      }
-      if (showLaunchDatePicker && launchDateInputRef.current && !launchDateInputRef.current.contains(event.target) && !event.target.closest('[data-date-picker-calendar]')) {
-        setShowLaunchDatePicker(false);
       }
     };
 
@@ -353,7 +348,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [actionMenuId, editModalClaimId, showAddClaimModal, showLaunchDatePicker]);
+  }, [actionMenuId, editModalClaimId, showAddClaimModal]);
 
   if (!isOpen || !productData) return null;
 
@@ -531,13 +526,14 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     const claim = claimHistory.find(c => c.id === claimId);
     if (claim) {
       const updatedHistory = claimHistory.filter(c => c.id !== claimId);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
       setClaimHistory(updatedHistory);
 
       if (onUpdateProduct) {
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: Math.max(0, Number(productData.claimed || 0) - Number(claim.units || 0)),
+          claimed: claimedTotal,
         };
         onUpdateProduct(updatedProduct);
       }
@@ -700,12 +696,13 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     const updatedHistory = claimHistory.map(c =>
       c.id === claimId ? { ...c, date: editClaimDate, units } : c
     );
+    const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
     setClaimHistory(updatedHistory);
     if (onUpdateProduct) {
       const updatedProduct = {
         ...productData,
         claimHistory: updatedHistory,
-        claimed: (productData.claimed || 0) - oldUnits + units,
+        claimed: claimedTotal,
       };
       onUpdateProduct(updatedProduct);
     }
@@ -743,15 +740,17 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         });
         return;
       }
+      const unitsEntered = parseInt(editClaimUnits, 10) || 0;
       const newClaim = {
         id: Date.now(),
         date: editClaimDate,
-        units: parseInt(editClaimUnits),
+        units: unitsEntered,
       };
 
       // Append new entry to the bottom of the table (no sorting)
       // New entry always goes to the end regardless of date
       const updatedHistory = [...claimHistory, newClaim];
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 
@@ -760,146 +759,14 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: Number(productData.claimed || 0) + Number(parseInt(editClaimUnits, 10) || 0),
+          claimed: claimedTotal,
         };
         onUpdateProduct(updatedProduct);
       }
       setClaimValidationError(null);
 
-      const toastId = toast.success('', {
-        description: (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '24px',
-            minWidth: '400px',
-            width: 'fit-content',
-            maxWidth: '95vw',
-            height: '36px',
-            paddingTop: '8px',
-            paddingRight: '12px',
-            paddingBottom: '8px',
-            paddingLeft: '12px',
-            borderRadius: '12px',
-            backgroundColor: '#F0FDF4',
-            color: '#34C759',
-            margin: '0 auto',
-            overflow: 'visible',
-          }}>
-            {/* Check Icon */}
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#34C759"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ flexShrink: 0 }}
-            >
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            {/* Claim Entry Text */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              flexShrink: 0,
-              overflow: 'visible',
-            }}>
-              <span style={{
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                color: '#34C759',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}>
-                Claim entry submitted for{' '}
-              </span>
-              {productData?.productName && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  overflow: 'visible',
-                  flexShrink: 0,
-                }}>
-                  {productData.productName}
-                </span>
-              )}
-              {productData?.size && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}>
-                  {' • ' + productData.size}
-                </span>
-              )}
-              {productData?.asin && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}>
-                  {' • ' + productData.asin}
-                </span>
-              )}
-            </div>
-            {/* Close Button (X) */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toast.dismiss(toastId);
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                color: '#34C759',
-              }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        ),
-        duration: 4000,
-        icon: null,
-        closeButton: false,
-        style: {
-          background: 'transparent',
-          padding: 0,
-          border: 'none',
-          boxShadow: 'none',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        className: 'claim-entry-submitted-toast',
-      });
+      const claimLabel = `Claim entry submitted for ${[productData?.productName, productData?.size, productData?.asin].filter(Boolean).join(' • ') || 'product'}`;
+      toast.vineCreated(claimLabel);
 
       setShowAddClaimModal(false);
       setEditClaimDate('');
@@ -944,15 +811,17 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         });
         return;
       }
+      const unitsEntered = parseInt(claimUnits, 10) || 0;
       const newClaim = {
         id: Date.now(),
         date: claimDate,
-        units: parseInt(claimUnits),
+        units: unitsEntered,
       };
 
       // Append new entry to the bottom of the table (no sorting)
       // New entry always goes to the end regardless of date
       const updatedHistory = [...claimHistory, newClaim];
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 
@@ -961,146 +830,14 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         const updatedProduct = {
           ...productData,
           claimHistory: updatedHistory,
-          claimed: Number(productData.claimed || 0) + Number(parseInt(claimUnits, 10) || 0),
+          claimed: claimedTotal,
         };
         onUpdateProduct(updatedProduct);
       }
       setClaimValidationError(null);
 
-      const toastId2 = toast.success('', {
-        description: (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '24px',
-            minWidth: '400px',
-            width: 'fit-content',
-            maxWidth: '95vw',
-            height: '36px',
-            paddingTop: '8px',
-            paddingRight: '12px',
-            paddingBottom: '8px',
-            paddingLeft: '12px',
-            borderRadius: '12px',
-            backgroundColor: '#F0FDF4',
-            color: '#34C759',
-            margin: '0 auto',
-            overflow: 'visible',
-          }}>
-            {/* Check Icon */}
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#34C759"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ flexShrink: 0 }}
-            >
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            {/* Claim Entry Text */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              flexShrink: 0,
-              overflow: 'visible',
-            }}>
-              <span style={{
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                color: '#34C759',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}>
-                Claim entry submitted for{' '}
-              </span>
-              {productData?.productName && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  overflow: 'visible',
-                  flexShrink: 0,
-                }}>
-                  {productData.productName}
-                </span>
-              )}
-              {productData?.size && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}>
-                  {' • ' + productData.size}
-                </span>
-              )}
-              {productData?.asin && (
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  color: '#34C759',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}>
-                  {' • ' + productData.asin}
-                </span>
-              )}
-            </div>
-            {/* Close Button (X) */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toast.dismiss(toastId2);
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                color: '#34C759',
-              }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        ),
-        duration: 4000,
-        icon: null,
-        closeButton: false,
-        style: {
-          background: 'transparent',
-          padding: 0,
-          border: 'none',
-          boxShadow: 'none',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
-        className: 'claim-entry-submitted-toast',
-      });
+      const claimLabel = `Claim entry submitted for ${[productData?.productName, productData?.size, productData?.asin].filter(Boolean).join(' • ') || 'product'}`;
+      toast.vineCreated(claimLabel);
 
       // Reset form and hide input row after adding
       setClaimDate('');
@@ -1377,52 +1114,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>Launch date:</span>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      ref={launchDateInputRef}
-                      type="text"
-                      placeholder="MM/DD/YYYY"
-                      value={productData.launchDate || ''}
-                      onChange={(e) => {
-                        if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: e.target.value });
-                      }}
-                      onBlur={() => {
-                        const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
-                        const raw = (productData.launchDate || '').trim();
-                        if (onUpdateLaunchDate && productId != null && raw) {
-                          const apiDate = claimDateToApiFormat(raw);
-                          if (apiDate) onUpdateLaunchDate(productId, raw);
-                        }
-                      }}
-                      onFocus={() => setShowLaunchDatePicker(true)}
-                      onClick={() => setShowLaunchDatePicker(true)}
-                      style={{
-                        width: '110px',
-                        height: '28px',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        border: '1px solid #374151',
-                        backgroundColor: '#374151',
-                        color: '#FFFFFF',
-                        fontSize: '0.75rem',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                    {showLaunchDatePicker && launchDateInputRef.current && (
-                      <CalendarDropdown
-                        value={productData.launchDate || ''}
-                        onChange={(date) => {
-                          if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: date });
-                          setShowLaunchDatePicker(false);
-                          const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
-                          if (onUpdateLaunchDate && productId != null && date) onUpdateLaunchDate(productId, date);
-                        }}
-                        onClose={() => setShowLaunchDatePicker(false)}
-                        inputRef={launchDateInputRef.current}
-                      />
-                    )}
-                  </div>
+                  <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>
+                    {formatLaunchDate(productData.launchDate) || productData.launchDate || '—'}
+                  </span>
                 </div>
               </div>
             </div>
