@@ -533,8 +533,8 @@ export function AddProductsTable({
               <span
                 style={{
                   position: 'absolute',
-                  top: 0,
-                  left: 0,
+                  top: -6,
+                  left: -15,
                   display: 'inline-flex',
                   flexShrink: 0,
                   zIndex: 3,
