@@ -230,6 +230,7 @@ interface ProductResponse {
   category: string;
   status: string;
   launch_date: string | null;
+  vine_units_enrolled?: number | null;
   image_url: string;
   is_hazmat: boolean;
   is_active: boolean;
@@ -430,6 +431,54 @@ class ExtendedApiClient extends ApiClient {
 
   async getShipmentStats(): Promise<ShipmentStats> {
     return this.request<ShipmentStats>('/shipments/stats/');
+  }
+
+  // Vine claims CRUD
+  async getVineClaims(params?: {
+    product?: number;
+    review_received?: boolean;
+    ordering?: string;
+  }): Promise<VineClaimResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.product != null) searchParams.set('product', params.product.toString());
+    if (params?.review_received != null) searchParams.set('review_received', String(params.review_received));
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+    const query = searchParams.toString();
+    const response = await this.request<VineClaimResponse[] | { results: VineClaimResponse[] }>(
+      `/vine-claims/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async getVineClaim(id: number): Promise<VineClaimResponse> {
+    return this.request<VineClaimResponse>(`/vine-claims/${id}/`);
+  }
+
+  async createVineClaim(data: VineClaimCreateInput): Promise<VineClaimResponse> {
+    return this.request<VineClaimResponse>('/vine-claims/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateVineClaim(id: number, data: VineClaimUpdateInput): Promise<VineClaimResponse> {
+    return this.request<VineClaimResponse>(`/vine-claims/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteVineClaim(id: number): Promise<void> {
+    return this.request(`/vine-claims/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async setVineStatus(data: { product_id: number; status: 'Awaiting Reviews' | 'Concluded' }): Promise<{ updated: number; review_received: boolean }> {
+    return this.request<{ updated: number; review_received: boolean }>('/vine-claims/set-status/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
   // Amazon Account API methods
@@ -674,6 +723,44 @@ interface GenerateForecastsResponse {
   error_details: { product_id: number; asin: string; error: string }[];
 }
 
+// Vine claim types
+interface VineClaimResponse {
+  id: number;
+  product: number;
+  product_id?: number;
+  product_asin: string;
+  product_name: string;
+  product_sku: string;
+  brand_name: string | null;
+  product_launch_date?: string | null;
+  product_vine_units_enrolled?: number | null;
+  claim_date: string;
+  units_claimed: number;
+  review_received: boolean;
+  review_date: string | null;
+  review_rating: string | null;
+  notes: string;
+}
+
+interface VineClaimCreateInput {
+  product_id: number;
+  claim_date: string;
+  units_claimed?: number;
+  review_received?: boolean;
+  review_date?: string | null;
+  review_rating?: string | null;
+  notes?: string;
+}
+
+interface VineClaimUpdateInput {
+  claim_date?: string;
+  units_claimed?: number;
+  review_received?: boolean;
+  review_date?: string | null;
+  review_rating?: string | null;
+  notes?: string;
+}
+
 // Shipment types
 type ShipmentStatus = 'planning' | 'ready' | 'shipped' | 'in_transit' | 'receiving' | 'received' | 'cancelled';
 type ShipmentType = 'fba' | 'awd' | 'mfg' | 'hazmat';
@@ -821,12 +908,12 @@ interface SyncTriggerResponse {
 }
 
 export const api = new ExtendedApiClient();
-export type { 
-  UserResponse, 
-  TokenResponse, 
-  RegisterResponse, 
-  ProductResponse, 
-  ProductsListResponse, 
+export type {
+  UserResponse,
+  TokenResponse,
+  RegisterResponse,
+  ProductResponse,
+  ProductsListResponse,
   ProductStatsResponse,
   InventoryBreakdown,
   ForecastTableRow,
@@ -835,6 +922,9 @@ export type {
   AlgorithmResult,
   WeeklyForecast,
   GenerateForecastsResponse,
+  VineClaimResponse,
+  VineClaimCreateInput,
+  VineClaimUpdateInput,
   ShipmentStatus,
   ShipmentType,
   ShipmentItem,

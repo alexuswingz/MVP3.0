@@ -340,7 +340,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDeleteRow }) => {
+const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, onUpdateClaim, onUpdateLaunchDate, onUpdateEnrolled, onSetVineStatus, onAddNewRow, onDeleteRow }) => {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const [openFilterColumn, setOpenFilterColumn] = useState(null);
@@ -371,6 +371,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
   const [isOpenedFromPlusButton, setIsOpenedFromPlusButton] = useState(false);
   const claimDateInputRef = useRef(null);
   const [openThreeDotsMenuId, setOpenThreeDotsMenuId] = useState(null);
+  const [threeDotsMenuPosition, setThreeDotsMenuPosition] = useState({ top: 0, left: 0 });
   const threeDotsMenuRefs = useRef({});
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const statusDropdownRefs = useRef({});
@@ -463,6 +464,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
             const tpsProduct = tpsMap[asin] || {};
             
             return {
+              id: item.id,
               // Primary fields from production inventory (has brand_name, size, child_asin)
               product_name: item.product_name || tpsProduct.product_name || '',
               brand_name: item.brand_name || tpsProduct.brand || tpsProduct.brand_name || '',
@@ -1173,7 +1175,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                         >
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Awaiting Reviews' }); setOpenStatusDropdownId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateRow({ ...row, status: 'Awaiting Reviews' });
+                              const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                              if (onSetVineStatus && productId != null) onSetVineStatus(productId, 'Awaiting Reviews');
+                              setOpenStatusDropdownId(null);
+                            }}
                             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
                           >
                             <img src="/assets/awaiting.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
@@ -1181,7 +1189,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onUpdateRow({ ...row, status: 'Concluded' }); setOpenStatusDropdownId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateRow({ ...row, status: 'Concluded' });
+                              const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                              if (onSetVineStatus && productId != null) onSetVineStatus(productId, 'Concluded');
+                              setOpenStatusDropdownId(null);
+                            }}
                             style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #374151' }}
                           >
                             <img src="/assets/complete.png" alt="" style={{ width: '1rem', height: '1rem', flexShrink: 0 }} />
@@ -1555,6 +1569,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                                             brand: brand,
                                             size: size,
                                             asin: asin || '',
+                                            ...(product.id != null && { productId: product.id }),
                                           };
                                           if (onUpdateRow) {
                                             onUpdateRow({ ...row, ...selectedProduct });
@@ -1842,21 +1857,18 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                               value={row.launchDate || ''}
                               placeholder="MM/DD/YYYY"
                               onChange={(e) => {
-                                if (onUpdateRow && row.productName) {
+                                if (onUpdateRow) {
                                   onUpdateRow({ ...row, launchDate: e.target.value });
                                 }
                               }}
-                              onFocus={() => {
-                                if (row.productName) {
-                                  setOpenDatePickerId(row.id);
+                              onBlur={() => {
+                                const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                                if (onUpdateLaunchDate && productId != null && (row.launchDate || '').trim()) {
+                                  onUpdateLaunchDate(productId, (row.launchDate || '').trim());
                                 }
                               }}
-                              onClick={() => {
-                                if (row.productName) {
-                                  setOpenDatePickerId(row.id);
-                                }
-                              }}
-                              disabled={!row.productName}
+                              onFocus={() => setOpenDatePickerId(row.id)}
+                              onClick={() => setOpenDatePickerId(row.id)}
                               style={{
                                 width: '129px',
                                 height: '28px',
@@ -1869,17 +1881,17 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                                 borderStyle: 'solid',
                                 borderColor: '#374151',
                                 backgroundColor: '#374151',
-                                color: row.productName ? '#FFFFFF' : '#6B7280',
+                                color: '#FFFFFF',
                                 fontSize: '0.875rem',
                                 outline: 'none',
                                 boxSizing: 'border-box',
-                                cursor: row.productName ? 'text' : 'not-allowed',
+                                cursor: 'text',
                               }}
                             />
                           </div>
                           
                           {/* Calendar Dropdown */}
-                          {openDatePickerId === row.id && dateInputRefs.current[row.id] && row.productName && (
+                          {openDatePickerId === row.id && dateInputRefs.current[row.id] && (
                             <CalendarDropdown
                               value={row.launchDate || ''}
                               onChange={(date) => {
@@ -1887,6 +1899,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                                   onUpdateRow({ ...row, launchDate: date });
                                 }
                                 setOpenDatePickerId(null);
+                                const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                                if (onUpdateLaunchDate && productId != null && date) {
+                                  onUpdateLaunchDate(productId, date);
+                                }
                               }}
                               onClose={() => setOpenDatePickerId(null)}
                               inputRef={dateInputRefs.current[row.id]}
@@ -1989,67 +2005,41 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       display: 'table-cell',
                     }}
                   >
-                    {isNewRow ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          value={row.enrolled || 0}
-                          onChange={(e) => {
-                            if (onUpdateRow) {
-                              const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
-                              let enrolledValue = Math.max(0, inputValue);
-                              
-                              // Enforce maximum of 30
-                              if (enrolledValue > 30) {
-                                enrolledValue = 30;
-                                toast.error('Enrolled units cannot exceed 30', {
-                                  description: 'The maximum allowed value is 30',
-                                  duration: 3000,
-                                });
-                              }
-                              
-                              onUpdateRow({ ...row, enrolled: enrolledValue });
-                            }
-                          }}
-                          onBlur={(e) => {
-                            // Ensure value is clamped on blur as well
-                            if (onUpdateRow) {
-                              const currentValue = parseInt(e.target.value) || 0;
-                              if (currentValue > 30) {
-                                onUpdateRow({ ...row, enrolled: 30 });
-                                toast.error('Enrolled units cannot exceed 30', {
-                                  description: 'The value has been set to 30',
-                                  duration: 3000,
-                                });
-                              }
-                            }
-                          }}
-                          className="no-spinner"
-                          style={{
-                            width: '72px',
-                            height: '27px',
-                            padding: '6px',
-                            borderRadius: '4px',
-                            borderWidth: '1px',
-                            borderStyle: 'solid',
-                            borderColor: '#374151',
-                            backgroundColor: '#374151',
-                            color: '#FFFFFF',
-                            fontSize: '0.875rem',
-                            outline: 'none',
-                            boxSizing: 'border-box',
-                            textAlign: 'center',
-                          }}
-                          onWheel={(e) => e.target.blur()}
-                        />
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>
-                        {row.enrolled || 0}
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        value={row.enrolled ?? 0}
+                        onChange={(e) => {
+                          if (!onUpdateRow) return;
+                          const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
+                          onUpdateRow({ ...row, enrolled: Math.max(0, inputValue) });
+                        }}
+                        onBlur={() => {
+                          const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                          if (onUpdateEnrolled && productId != null) {
+                            onUpdateEnrolled(productId, row.enrolled ?? 0);
+                          }
+                        }}
+                        className="no-spinner"
+                        style={{
+                          width: '72px',
+                          height: '27px',
+                          padding: '6px',
+                          borderRadius: '4px',
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: '#374151',
+                          backgroundColor: '#374151',
+                          color: '#FFFFFF',
+                          fontSize: '0.875rem',
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          textAlign: 'center',
+                        }}
+                        onWheel={(e) => e.target.blur()}
+                      />
+                    </div>
                   </td>
 
                   {/* ACTIONS */}
@@ -2073,148 +2063,11 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                       <button
                         type="button"
                         onClick={() => {
-                          if (onUpdateRow) {
-                            // Remove isNew flag and save the row
-                            const savedRow = { ...row, isNew: false };
-                            onUpdateRow(savedRow);
-                            
-                            // Show toast notification
-                            const toastId = toast.success('', {
-                              description: (
-                                <div style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '24px',
-                                  minWidth: '400px',
-                                  width: 'fit-content',
-                                  maxWidth: '95vw',
-                                  height: '36px',
-                                  paddingTop: '8px',
-                                  paddingRight: '12px',
-                                  paddingBottom: '8px',
-                                  paddingLeft: '12px',
-                                  borderRadius: '12px',
-                                  backgroundColor: '#F0FDF4',
-                                  color: '#34C759',
-                                  margin: '0 auto',
-                                  overflow: 'visible',
-                                }}>
-                                  {/* Check Icon */}
-                                  <svg
-                                    width="20"
-                                    height="20"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="#34C759"
-                                    strokeWidth="3"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ flexShrink: 0 }}
-                                  >
-                                    <path d="M20 6L9 17l-5-5" />
-                                  </svg>
-                                  {/* Vine Created Text */}
-                                  <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    flexShrink: 0,
-                                    overflow: 'visible',
-                                  }}>
-                                    <span style={{
-                                      fontSize: '0.875rem',
-                                      fontWeight: 500,
-                                      color: '#34C759',
-                                      whiteSpace: 'nowrap',
-                                      flexShrink: 0,
-                                    }}>
-                                      Vine created for{' '}
-                                    </span>
-                                    {row.productName && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        overflow: 'visible',
-                                        flexShrink: 0,
-                                      }}>
-                                        {row.productName}
-                                      </span>
-                                    )}
-                                    {row.size && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                      }}>
-                                        {' • ' + row.size}
-                                      </span>
-                                    )}
-                                    {row.asin && (
-                                      <span style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: 500,
-                                        color: '#34C759',
-                                        whiteSpace: 'nowrap',
-                                        flexShrink: 0,
-                                      }}>
-                                        {' • ' + row.asin}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Close Button (X) */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toast.dismiss(toastId);
-                                    }}
-                                    style={{
-                                      background: 'transparent',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      padding: '4px',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      flexShrink: 0,
-                                      color: '#34C759',
-                                    }}
-                                  >
-                                    <svg
-                                      width="16"
-                                      height="16"
-                                      viewBox="0 0 24 24"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                                    </svg>
-                                  </button>
-                                </div>
-                              ),
-                              duration: 4000,
-                              icon: null,
-                              closeButton: false,
-                              style: {
-                                background: 'transparent',
-                                padding: 0,
-                                border: 'none',
-                                boxShadow: 'none',
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                              },
-                              className: 'claim-entry-submitted-toast',
-                            });
+                          if (onConfirmNewVine) {
+                            onConfirmNewVine(row);
                           }
                         }}
+                        disabled={!row.productName && !row.asin}
                         style={{
                           width: '63px',
                           height: '23px',
@@ -2224,18 +2077,22 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                           paddingLeft: '12px',
                           borderRadius: '4px',
                           border: 'none',
-                          backgroundColor: '#3B82F6',
+                          backgroundColor: (row.productName || row.asin) ? '#3B82F6' : '#374151',
                           color: '#FFFFFF',
                           fontSize: '0.875rem',
                           fontWeight: 500,
-                          cursor: 'pointer',
+                          cursor: (row.productName || row.asin) ? 'pointer' : 'not-allowed',
                           boxSizing: 'border-box',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563EB'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3B82F6'}
+                        onMouseEnter={(e) => {
+                          if (row.productName || row.asin) e.currentTarget.style.backgroundColor = '#2563EB';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (row.productName || row.asin) e.currentTarget.style.backgroundColor = '#3B82F6';
+                        }}
                       >
                         Create
                       </button>
@@ -2291,7 +2148,21 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setOpenThreeDotsMenuId(openThreeDotsMenuId === row.id ? null : row.id);
+                              if (openThreeDotsMenuId === row.id) {
+                                setOpenThreeDotsMenuId(null);
+                              } else {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const menuWidth = 180;
+                                const menuHeight = 100;
+                                let top = rect.bottom + 8;
+                                let left = rect.right - menuWidth;
+                                if (top + menuHeight > window.innerHeight - 16) top = rect.top - menuHeight - 8;
+                                if (top < 16) top = 16;
+                                if (left < 16) left = 16;
+                                if (left + menuWidth > window.innerWidth - 16) left = window.innerWidth - menuWidth - 16;
+                                setThreeDotsMenuPosition({ top, left });
+                                setOpenThreeDotsMenuId(row.id);
+                              }
                             }}
                             style={{
                               display: 'inline-flex',
@@ -2321,120 +2192,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
                             </svg>
                           </button>
                           
-                          {/* Three dots dropdown menu */}
-                          {openThreeDotsMenuId === row.id && (
-                            <div
-                              id={`three-dots-menu-${row.id}`}
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                right: 0,
-                                marginTop: '8px',
-                                backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
-                                border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
-                                borderRadius: '8px',
-                                padding: '4px',
-                                minWidth: '180px',
-                                zIndex: 1000,
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                              }}
-                            >
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setOpenThreeDotsMenuId(null);
-                                  handleOpenVineDetailsModal(row, false);
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  textAlign: 'left',
-                                  fontSize: '14px',
-                                  color: isDarkMode ? '#FFFFFF' : '#111827',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }}
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                                Edit Vine Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setOpenThreeDotsMenuId(null);
-                                  // Delete the row
-                                  if (window.confirm(`Are you sure you want to delete "${row.productName || 'this product'}"?`)) {
-                                    if (onDeleteRow) {
-                                      onDeleteRow(row.id);
-                                    } else if (onUpdateRow) {
-                                      // Fallback: mark as deleted if no delete handler provided
-                                      onUpdateRow({ ...row, status: 'archived', isDeleted: true });
-                                    }
-                                  }
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  textAlign: 'left',
-                                  fontSize: '14px',
-                                  color: '#EF4444',
-                                  backgroundColor: 'transparent',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  borderRadius: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6';
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = 'transparent';
-                                }}
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <polyline points="3 6 5 6 21 6"></polyline>
-                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                                </svg>
-                                Delete
-                              </button>
-                            </div>
-                          )}
+                          {/* Three dots menu is rendered in a portal below to avoid overflow clipping */}
                         </div>
                       </div>
                     )}
@@ -2474,10 +2232,113 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
         }
       `}</style>
 
+      {/* Three dots dropdown menu - portal so it's not clipped by table overflow */}
+      {openThreeDotsMenuId && (() => {
+        const row = rows.find((r) => r.id === openThreeDotsMenuId);
+        if (!row) return null;
+        return createPortal(
+          <div
+            id={`three-dots-menu-${openThreeDotsMenuId}`}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: `${threeDotsMenuPosition.top}px`,
+              left: `${threeDotsMenuPosition.left}px`,
+              zIndex: 10000,
+              backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+              border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
+              borderRadius: '8px',
+              padding: '6px 0',
+              minWidth: '180px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenThreeDotsMenuId(null);
+                handleOpenVineDetailsModal(row, false);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                textAlign: 'left',
+                fontSize: '14px',
+                color: isDarkMode ? '#FFFFFF' : '#111827',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit Vine Details
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenThreeDotsMenuId(null);
+                if (window.confirm(`Are you sure you want to delete "${row.productName || 'this product'}"?`)) {
+                  if (onDeleteRow) onDeleteRow(row.id);
+                  else if (onUpdateRow) onUpdateRow({ ...row, status: 'archived', isDeleted: true });
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                textAlign: 'left',
+                fontSize: '14px',
+                color: '#EF4444',
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderRadius: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#F3F4F6'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Delete
+            </button>
+          </div>,
+          document.body
+        );
+      })()}
+
       {/* Vine Details Modal */}
       <VineDetailsModal
         isOpen={showVineDetailsModal}
-        onClose={() => {
+        onClose={async () => {
+          const productId = selectedVineRow?.productId ?? (typeof selectedVineRow?.id === 'number' ? selectedVineRow?.id : null);
+          const launchDateRaw = (selectedVineRow?.launchDate || '').trim();
+          if (onUpdateLaunchDate && productId != null && launchDateRaw) {
+            try {
+              await onUpdateLaunchDate(productId, launchDateRaw);
+            } catch (_) {
+              /* toast already shown by parent */
+            }
+          }
           setShowVineDetailsModal(false);
           setSelectedVineRow(null);
           setClaimDate('');
@@ -2493,11 +2354,15 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
             onUpdateRow(updatedProduct);
           }
         }}
+        onUpdateClaim={onUpdateClaim}
+        onUpdateLaunchDate={onUpdateLaunchDate}
         onAddClaim={(newClaim) => {
           // Update the row's claimed count
           if (onUpdateRow && selectedVineRow) {
+            const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
             const updatedRow = {
               ...selectedVineRow,
+              productId,
               claimed: (selectedVineRow.claimed || 0) + (newClaim.units || 0),
               claimHistory: [...(selectedVineRow.claimHistory || []), newClaim],
             };
@@ -2713,21 +2578,20 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onAddNewRow, onDelet
               </button>
               <button
                 onClick={() => {
-                  if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
-                    // Update the row's claimed count
+                    if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
+                    const units = parseInt(claimUnits);
+                    const newClaim = { id: Date.now(), date: claimDate, units };
+                    const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+                    const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
                     if (onUpdateRow) {
                       const updatedRow = {
                         ...selectedVineRow,
-                        claimed: (selectedVineRow.claimed || 0) + parseInt(claimUnits),
+                        productId,
+                        claimed: (selectedVineRow.claimed || 0) + units,
+                        claimHistory: updatedHistory,
                       };
                       onUpdateRow(updatedRow);
                     }
-                    
-                    // Show toast notification
-                    toast.success('Claim entry submitted', {
-                      description: `${parseInt(claimUnits)} unit(s) claimed${selectedVineRow.productName ? ' for ' + selectedVineRow.productName : ''}`,
-                      duration: 3000,
-                    });
                     
                     // Close modal and reset everything
                     setClaimDate('');

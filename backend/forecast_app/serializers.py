@@ -78,17 +78,38 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
 
 class ProductCreateUpdateSerializer(serializers.ModelSerializer):
+    vine_units_enrolled = serializers.IntegerField(
+        source='extended.vine_units_enrolled',
+        required=False,
+        allow_null=True
+    )
+
     class Meta:
         model = Product
         fields = [
             'asin', 'parent_asin', 'sku', 'upc', 'name', 
             'size', 'product_type', 'category', 'status', 
-            'launch_date', 'image_url', 'is_hazmat', 'is_active', 'brand'
+            'launch_date', 'image_url', 'is_hazmat', 'is_active', 'brand',
+            'vine_units_enrolled'
         ]
     
     def create(self, validated_data):
+        extended_data = validated_data.pop('extended', None)
         validated_data['user'] = self.context['request'].user
-        return super().create(validated_data)
+        product = super().create(validated_data)
+        if extended_data:
+            ProductExtended.objects.update_or_create(product=product, defaults=extended_data)
+        return product
+
+    def update(self, instance, validated_data):
+        extended_data = validated_data.pop('extended', None)
+        product = super().update(instance, validated_data)
+        if extended_data is not None:
+            ext, _ = ProductExtended.objects.get_or_create(product=product)
+            for key, value in extended_data.items():
+                setattr(ext, key, value)
+            ext.save()
+        return product
 
 
 class DOISettingsSerializer(serializers.ModelSerializer):
