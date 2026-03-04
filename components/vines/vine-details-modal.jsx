@@ -526,7 +526,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     const claim = claimHistory.find(c => c.id === claimId);
     if (claim) {
       const updatedHistory = claimHistory.filter(c => c.id !== claimId);
-      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
       setClaimHistory(updatedHistory);
 
       if (onUpdateProduct) {
@@ -696,7 +696,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     const updatedHistory = claimHistory.map(c =>
       c.id === claimId ? { ...c, date: editClaimDate, units } : c
     );
-    const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+    const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
     setClaimHistory(updatedHistory);
     if (onUpdateProduct) {
       const updatedProduct = {
@@ -750,7 +750,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       // Append new entry to the bottom of the table (no sorting)
       // New entry always goes to the end regardless of date
       const updatedHistory = [...claimHistory, newClaim];
-      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 
@@ -821,7 +821,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       // Append new entry to the bottom of the table (no sorting)
       // New entry always goes to the end regardless of date
       const updatedHistory = [...claimHistory, newClaim];
-      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 

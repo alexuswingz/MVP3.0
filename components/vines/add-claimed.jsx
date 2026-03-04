@@ -618,7 +618,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
         const dateB = parseDateForSort(b.date);
         return dateA - dateB; // Sort ascending (oldest first, newest at bottom)
       });
-      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
 
       setClaimHistory(updatedHistory);
 
@@ -658,7 +658,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
     const claim = claimHistory.find(c => c.id === claimId);
     if (claim) {
       const updatedHistory = claimHistory.filter(c => c.id !== claimId);
-      const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+      const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
       setClaimHistory(updatedHistory);
 
       // Update the row's claimed count (sum of all claim entries)
@@ -738,7 +738,7 @@ const AddClaimed = ({ isOpen, onClose, productData, onAddClaim, onUpdateRow }) =
       const dateB = parseDateForSort(b.date);
       return dateA - dateB;
     });
-    const claimedTotal = sortedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+    const claimedTotal = sortedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
 
     setClaimHistory(sortedHistory);
 

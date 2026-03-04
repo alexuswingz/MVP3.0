@@ -141,7 +141,7 @@ export function SimpleToaster() {
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <div style={{ flex: 1, minWidth: 0, color: '#34C759', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ flex: 1, minWidth: 0, color: '#34C759', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {typeof item.message === 'object' && item.message !== null ? item.message : String(item.message)}
             </div>
             <button

@@ -605,6 +605,17 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
     }
   }, [openProductDropdownId]);
 
+  // Sync selectedVineRow with table data so modal always matches the table
+  useEffect(() => {
+    if (selectedVineRow && rows?.length > 0) {
+      const match = rows.find((r) => (r.productId ?? r.id) === (selectedVineRow.productId ?? selectedVineRow.id));
+      if (match) {
+        setSelectedVineRow(match);
+        setClaimHistory(match.claimHistory || []);
+      }
+    }
+  }, [rows]);
+
   // Handle filter icon click
   const handleFilterClick = (columnKey, e) => {
     e.stopPropagation();
@@ -2336,7 +2347,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
           if (onUpdateRow && selectedVineRow) {
             const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
             const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
-            const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+            const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
             const updatedRow = {
               ...selectedVineRow,
               productId,
@@ -2559,7 +2570,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                     const units = parseInt(claimUnits, 10);
                     const newClaim = { id: Date.now(), date: claimDate, units };
                     const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
-                    const claimedTotal = updatedHistory.reduce((sum, c) => sum + (c.units || 0), 0);
+                    const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
                     const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
                     if (onUpdateRow) {
                       const updatedRow = {

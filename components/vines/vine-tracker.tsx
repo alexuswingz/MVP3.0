@@ -52,7 +52,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
   const rows: VineProductRow[] = [];
   byProduct.forEach((productClaims, productId) => {
     const first = productClaims[0];
-    const claimed = productClaims.reduce((s, c) => s + c.units_claimed, 0);
+    const claimed = productClaims.reduce((s, c) => s + Number(c.units_claimed || 0), 0);
     const allConcluded = productClaims.every((c) => c.review_received);
     const status = allConcluded ? 'Concluded' : 'Awaiting Reviews';
     const launchDate = first.product_launch_date && typeof first.product_launch_date === 'string'
@@ -198,9 +198,15 @@ const VineTracker = () => {
     async (updatedRow: VineProductRow) => {
       const prev = vineProducts.find((p) => p.id === updatedRow.id);
       const prevClaimIds = new Set((prev?.claimHistory || []).map((c) => String(c.id)));
-      const newClaims = (updatedRow.claimHistory || []).filter(
-        (c) => !prevClaimIds.has(String(c.id)) || (typeof c.id === 'string' && String(c.id).startsWith('new-'))
+      const prevClaimKeys = new Set(
+        (prev?.claimHistory || []).map((c) => `${claimDateToApiFormat(String(c.date))}|${c.units ?? 0}`)
       );
+      const newClaims = (updatedRow.claimHistory || []).filter((c) => {
+        if (prevClaimIds.has(String(c.id))) return false;
+        const key = `${claimDateToApiFormat(String(c.date))}|${c.units ?? 0}`;
+        if (prevClaimKeys.has(key)) return false;
+        return true;
+      });
       // Resolve productId: explicit productId or row.id when it's the product id (API-sourced rows)
       const productId =
         updatedRow.productId != null && typeof updatedRow.productId === 'number'
@@ -218,7 +224,7 @@ const VineTracker = () => {
         }
         const enrolled = updatedRow.enrolled ?? 0;
         const alreadyClaimed = prev?.claimed ?? 0;
-        const totalNew = newClaims.reduce((s, c) => s + (c.units || 0), 0);
+        const totalNew = newClaims.reduce((s, c) => s + Number(c.units || 0), 0);
         const attemptedTotal = alreadyClaimed + totalNew;
         if (enrolled <= 0 && totalNew > 0) {
           const msg = 'Set enrolled units first (cannot claim units when enrolled is 0).';
