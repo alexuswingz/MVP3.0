@@ -5,7 +5,6 @@ import { useTheme } from '@/context/ThemeContext';
 import VineTrackerHeader from './vine-tracker-header';
 import SummaryCards from './summary-cards';
 import VineTrackerTable from './vine-tracker-table';
-import { toast } from '@/lib/toast';
 
 const VineTracker = () => {
   const { isDarkMode } = useTheme();
@@ -142,8 +141,6 @@ const VineTracker = () => {
       isNew: true,
     };
     setVineProducts((prev) => [newRow, ...prev]);
-    // Show toast for presentation demo (visible even without filling form)
-    toast.vineCreated('Vine created', { duration: 4000 });
   };
 
   const handleUpdateRow = (updatedRow: (typeof vineProducts)[0]) => {
