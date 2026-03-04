@@ -12,19 +12,34 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
 
   const parseDate = (dateString) => {
     if (!dateString) return null;
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      const month = parseInt(parts[0]) - 1;
-      const day = parseInt(parts[1]);
-      const year = parseInt(parts[2]);
+    // MM/DD/YYYY
+    const slashParts = dateString.split('/');
+    if (slashParts.length === 3) {
+      const month = parseInt(slashParts[0], 10) - 1;
+      const day = parseInt(slashParts[1], 10);
+      const year = parseInt(slashParts[2], 10);
       if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
         return new Date(year, month, day);
+      }
+    }
+    // YYYY-MM-DD
+    if (dateString.includes('-') && dateString.length >= 10) {
+      const [y, m, d] = dateString.slice(0, 10).split('-').map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m - 1, d);
       }
     }
     return null;
   };
 
   const selectedDate = parseDate(value);
+
+  // Sync calendar month when value changes so picker opens on the right month
+  useEffect(() => {
+    if (selectedDate && !isNaN(selectedDate.getTime())) {
+      setCurrentMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+    }
+  }, [value]);
 
   const formatDate = (date) => {
     if (!date) return '';
@@ -260,7 +275,7 @@ const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
   );
 };
 
-const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAddClaim, onOpenAddClaimed }) => {
+const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpdateClaim, onUpdateLaunchDate, onAddClaim, onOpenAddClaimed }) => {
   const { isDarkMode } = useTheme();
   const [claimHistory, setClaimHistory] = useState([]);
   const [actionMenuId, setActionMenuId] = useState(null);
@@ -280,6 +295,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
   const [showActionsColumn, setShowActionsColumn] = useState(false);
   const [showInputRow, setShowInputRow] = useState(false);
   const claimDateInputRef = useRef(null);
+  const [showLaunchDatePicker, setShowLaunchDatePicker] = useState(false);
+  const launchDateInputRef = useRef(null);
+  const [claimValidationError, setClaimValidationError] = useState(null);
 
   useEffect(() => {
     if (isOpen && productData) {
@@ -296,18 +314,20 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
       // Reset input row state when modal opens, but show ACTIONS column if there are claims
       setShowInputRow(false);
       setShowActionsColumn(history.length > 0);
+      setClaimValidationError(null);
     } else {
       // Reset when modal closes
       setShowAddClaimModal(false);
       setShowInputRow(false);
       setShowActionsColumn(false);
       setEditModalClaimId(null);
+      setClaimValidationError(null);
     }
   }, [isOpen, productData]);
 
-  // Handle click outside to close action menu and edit modal
+  // Handle click outside to close action menu, edit modal, and launch date picker
   useEffect(() => {
-    if (!actionMenuId && !editModalClaimId && !showAddClaimModal) return;
+    if (!actionMenuId && !editModalClaimId && !showAddClaimModal && !showLaunchDatePicker) return;
 
     const handleClickOutside = (event) => {
       if (actionMenuId && !event.target.closest('[data-action-menu]') && !event.target.closest('[data-action-button]')) {
@@ -319,18 +339,21 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         setEditClaimDate('');
         setEditClaimUnits('');
       }
+      if (showLaunchDatePicker && launchDateInputRef.current && !launchDateInputRef.current.contains(event.target) && !event.target.closest('[data-date-picker-calendar]')) {
+        setShowLaunchDatePicker(false);
+      }
     };
 
-    // Add a small delay before attaching the listener to prevent immediate closure
+    // Delay attaching listener so the click that opened the menu doesn't close it
     const timeoutId = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
-    }, 100);
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [actionMenuId, editModalClaimId, showAddClaimModal]);
+  }, [actionMenuId, editModalClaimId, showAddClaimModal, showLaunchDatePicker]);
 
   if (!isOpen || !productData) return null;
 
@@ -580,19 +603,22 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
       }
       setActionMenuId(null);
     } else {
-      // Show action menu
+      // Show action menu (position so it stays visible above the modal)
       const buttonRect = e.currentTarget.getBoundingClientRect();
-      const menuWidth = 150;
-      const menuHeight = 100;
+      const menuWidth = 160;
+      const menuHeight = 140;
       
+      // Prefer opening below the button; flip above if not enough space
       let top = buttonRect.bottom + 8;
-      let left = buttonRect.left;
-      
-      // Adjust if menu would go off screen
-      if (top + menuHeight > window.innerHeight) {
+      if (top + menuHeight > window.innerHeight - 16) {
         top = buttonRect.top - menuHeight - 8;
       }
-      if (left + menuWidth > window.innerWidth) {
+      if (top < 16) top = 16;
+      
+      // Open to the left of the button so the menu stays in view (ACTIONS column is on the right)
+      let left = buttonRect.right - menuWidth;
+      if (left < 16) left = 16;
+      if (left + menuWidth > window.innerWidth - 16) {
         left = window.innerWidth - menuWidth - 16;
       }
       
@@ -601,29 +627,87 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
     }
   };
 
-  const handleSaveEdit = (claimId) => {
-    if (editClaimDate && editClaimUnits && parseInt(editClaimUnits) > 0) {
-      const claim = claimHistory.find(c => c.id === claimId);
-      if (claim) {
-        const oldUnits = claim.units;
-        // Update the claim without sorting - keep original order
-        const updatedHistory = claimHistory.map(c => 
-          c.id === claimId 
-            ? { ...c, date: editClaimDate, units: parseInt(editClaimUnits) }
-            : c
-        );
+  const claimDateToApiFormat = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) return dateStr;
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const [mm, dd, yyyy] = parts;
+      return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+    }
+    return dateStr;
+  };
 
-        setClaimHistory(updatedHistory);
+  const handleSaveEdit = async (claimId) => {
+    if (!editClaimDate || !editClaimUnits || parseInt(editClaimUnits, 10) <= 0) {
+      setEditingClaimId(null);
+      setEditModalClaimId(null);
+      setShowAddClaimModal(false);
+      setEditClaimDate('');
+      setEditClaimUnits('');
+      setShowEditClaimDatePicker(false);
+      return;
+    }
+    const claim = claimHistory.find(c => c.id === claimId);
+    if (!claim) {
+      setEditModalClaimId(null);
+      setShowEditClaimDatePicker(false);
+      return;
+    }
+    const oldUnits = claim.units;
+    const units = parseInt(editClaimUnits, 10);
 
-        if (onUpdateProduct) {
-          const updatedProduct = {
-            ...productData,
-            claimHistory: updatedHistory,
-            claimed: (productData.claimed || 0) - oldUnits + parseInt(editClaimUnits),
-          };
-          onUpdateProduct(updatedProduct);
-        }
+    // Validation: claimed must not exceed enrolled
+    const enrolled = productData.enrolled ?? 0;
+    const baseClaimed = (productData.claimed || 0) - oldUnits;
+    const newTotalClaimed = baseClaimed + units;
+    if (enrolled > 0 && newTotalClaimed > enrolled) {
+      const remaining = Math.max(0, enrolled - baseClaimed);
+      const msg = `Cannot save claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+      setClaimValidationError(msg);
+      toast.error('Claim exceeds enrolled units', {
+        description: `You can only claim ${remaining} more unit(s).`,
+        duration: 3500,
+      });
+      return;
+    }
+    if (enrolled <= 0 && units > 0) {
+      const msg = 'Cannot save claim. Set enrolled units first.';
+      setClaimValidationError(msg);
+      toast.error('Set enrolled units first', {
+        description: 'You cannot add claimed units when enrolled is 0.',
+        duration: 3000,
+      });
+      return;
+    }
+
+    // Persist edit to API when this is an existing claim (numeric id)
+    if (typeof claimId === 'number' && onUpdateClaim) {
+      const claimDate = claimDateToApiFormat(editClaimDate);
+      if (!claimDate) {
+        toast.error('Invalid claim date. Use MM/DD/YYYY or YYYY-MM-DD.');
+        return;
       }
+      try {
+        await onUpdateClaim(claimId, { claim_date: claimDate, units_claimed: units });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update claim');
+        return;
+      }
+    }
+
+    // Update local state
+    const updatedHistory = claimHistory.map(c =>
+      c.id === claimId ? { ...c, date: editClaimDate, units } : c
+    );
+    setClaimHistory(updatedHistory);
+    if (onUpdateProduct) {
+      const updatedProduct = {
+        ...productData,
+        claimHistory: updatedHistory,
+        claimed: (productData.claimed || 0) - oldUnits + units,
+      };
+      onUpdateProduct(updatedProduct);
     }
     setEditingClaimId(null);
     setEditModalClaimId(null);
@@ -631,10 +715,34 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
     setEditClaimDate('');
     setEditClaimUnits('');
     setShowEditClaimDatePicker(false);
+    setClaimValidationError(null);
   };
 
   const handleSaveAddClaim = () => {
     if (editClaimDate && editClaimUnits && parseInt(editClaimUnits) > 0) {
+      const enrolled = productData.enrolled ?? 0;
+      const unitsToAdd = parseInt(editClaimUnits);
+      const newTotalClaimed = (productData.claimed || 0) + unitsToAdd;
+      if (enrolled > 0 && newTotalClaimed > enrolled) {
+        const existingClaimed = productData.claimed || 0;
+        const remaining = Math.max(0, enrolled - existingClaimed);
+        const msg = `Cannot add claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+        setClaimValidationError(msg);
+        toast.error('Claim exceeds enrolled units', {
+          description: `You can only claim ${remaining} more unit(s).`,
+          duration: 3500,
+        });
+        return;
+      }
+      if (enrolled <= 0 && unitsToAdd > 0) {
+        const msg = 'Cannot add claim. Set enrolled units first.';
+        setClaimValidationError(msg);
+        toast.error('Set enrolled units first', {
+          description: 'You cannot add claimed units when enrolled is 0.',
+          duration: 3000,
+        });
+        return;
+      }
       const newClaim = {
         id: Date.now(),
         date: editClaimDate,
@@ -647,10 +755,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
 
       setClaimHistory(updatedHistory);
 
-      if (onAddClaim) {
-        onAddClaim(newClaim);
-      }
-
+      // Notify parent once via onUpdateProduct only; do not also call onAddClaim to avoid duplicate API creates
       if (onUpdateProduct) {
         const updatedProduct = {
           ...productData,
@@ -659,6 +764,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         };
         onUpdateProduct(updatedProduct);
       }
+      setClaimValidationError(null);
 
       const toastId = toast.success('', {
         description: (
@@ -809,11 +915,35 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
     setEditClaimDate('');
     setEditClaimUnits('');
     setShowEditClaimDatePicker(false);
+    setClaimValidationError(null);
   };
 
   // Handle adding new claim entry
   const handleAddClaim = () => {
     if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
+      const enrolled = productData.enrolled ?? 0;
+      const unitsToAdd = parseInt(claimUnits);
+      const newTotalClaimed = (productData.claimed || 0) + unitsToAdd;
+      if (enrolled > 0 && newTotalClaimed > enrolled) {
+        const existingClaimed = productData.claimed || 0;
+        const remaining = Math.max(0, enrolled - existingClaimed);
+        const msg = `Cannot add claim. Total claimed units cannot exceed enrolled units. Remaining claimable units: ${remaining}.`;
+        setClaimValidationError(msg);
+        toast.error('Claim exceeds enrolled units', {
+          description: `You can only claim ${remaining} more unit(s).`,
+          duration: 3500,
+        });
+        return;
+      }
+      if (enrolled <= 0 && unitsToAdd > 0) {
+        const msg = 'Cannot add claim. Set enrolled units first.';
+        setClaimValidationError(msg);
+        toast.error('Set enrolled units first', {
+          description: 'You cannot add claimed units when enrolled is 0.',
+          duration: 3000,
+        });
+        return;
+      }
       const newClaim = {
         id: Date.now(),
         date: claimDate,
@@ -826,10 +956,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
 
       setClaimHistory(updatedHistory);
 
-      if (onAddClaim) {
-        onAddClaim(newClaim);
-      }
-
+      // Notify parent once via onUpdateProduct only; do not also call onAddClaim to avoid duplicate API creates
       if (onUpdateProduct) {
         const updatedProduct = {
           ...productData,
@@ -838,6 +965,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         };
         onUpdateProduct(updatedProduct);
       }
+      setClaimValidationError(null);
 
       const toastId2 = toast.success('', {
         description: (
@@ -1247,11 +1375,55 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                 >
                   Active
                 </div>
-                {productData.launchDate && (
-                  <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>
-                    DATE LAUNCHED: {formatLaunchDate(productData.launchDate).toUpperCase()}
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>Launch date:</span>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      ref={launchDateInputRef}
+                      type="text"
+                      placeholder="MM/DD/YYYY"
+                      value={productData.launchDate || ''}
+                      onChange={(e) => {
+                        if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: e.target.value });
+                      }}
+                      onBlur={() => {
+                        const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
+                        const raw = (productData.launchDate || '').trim();
+                        if (onUpdateLaunchDate && productId != null && raw) {
+                          const apiDate = claimDateToApiFormat(raw);
+                          if (apiDate) onUpdateLaunchDate(productId, raw);
+                        }
+                      }}
+                      onFocus={() => setShowLaunchDatePicker(true)}
+                      onClick={() => setShowLaunchDatePicker(true)}
+                      style={{
+                        width: '110px',
+                        height: '28px',
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid #374151',
+                        backgroundColor: '#374151',
+                        color: '#FFFFFF',
+                        fontSize: '0.75rem',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    {showLaunchDatePicker && launchDateInputRef.current && (
+                      <CalendarDropdown
+                        value={productData.launchDate || ''}
+                        onChange={(date) => {
+                          if (onUpdateProduct) onUpdateProduct({ ...productData, launchDate: date });
+                          setShowLaunchDatePicker(false);
+                          const productId = productData.productId ?? (typeof productData.id === 'number' ? productData.id : null);
+                          if (onUpdateLaunchDate && productId != null && date) onUpdateLaunchDate(productId, date);
+                        }}
+                        onClose={() => setShowLaunchDatePicker(false)}
+                        inputRef={launchDateInputRef.current}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1596,7 +1768,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                         <input
                           type="number"
                           value={claimUnits}
-                          onChange={(e) => setClaimUnits(e.target.value)}
+                          onChange={(e) => {
+                            setClaimUnits(e.target.value);
+                            if (claimValidationError) setClaimValidationError(null);
+                          }}
                           className="no-spinner"
                           style={{
                             width: '70px',
@@ -1617,6 +1792,11 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                           min="0"
                         />
                       </div>
+                      {claimValidationError && (
+                        <div style={{ marginTop: '6px', fontSize: '12px', color: '#F59E0B', textAlign: 'center' }}>
+                          {claimValidationError}
+                        </div>
+                      )}
                     </td>
                     <td
                       style={{ 
@@ -1777,37 +1957,59 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
         </div>
       </div>
 
-      {/* Action Menu Popup */}
+      {/* Action Menu Popup - z-index above modal overlay (99999) so options are visible */}
       {actionMenuId && createPortal(
         <div
           data-action-menu
+          role="menu"
           style={{
             position: 'fixed',
             top: `${actionMenuPosition.top}px`,
             left: `${actionMenuPosition.left}px`,
-            zIndex: 1001,
-            minWidth: '150px',
-            padding: '8px',
+            zIndex: 100000,
+            minWidth: '160px',
+            padding: '8px 0',
             backgroundColor: '#1F2937',
             border: '1px solid #374151',
             borderRadius: '8px',
             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
           }}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          <div style={{ color: '#FFFFFF', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '8px 12px', borderBottom: '1px solid #374151', marginBottom: '4px' }}>
-            ACTIONS
+          <div style={{ color: '#9CA3AF', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 12px 8px', borderBottom: '1px solid #374151', marginBottom: '4px' }}>
+            Actions
           </div>
           <button
+            type="button"
+            role="menuitem"
             onClick={() => {
               const claim = claimHistory.find(c => c.id === actionMenuId);
               if (claim) {
-                handleDeleteClaim(actionMenuId);
+                let dateValue = '';
+                if (claim.date) {
+                  const date = new Date(claim.date);
+                  if (!isNaN(date.getTime())) {
+                    dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                  } else if (claim.date.includes('-') && claim.date.length === 10) {
+                    dateValue = claim.date;
+                  } else {
+                    const parts = claim.date.split('/');
+                    if (parts.length === 3) {
+                      dateValue = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+                    }
+                  }
+                }
+                setEditClaimDate(dateValue);
+                setEditClaimUnits(claim.units != null ? String(claim.units) : '0');
+                setEditModalPosition({ top: Math.min(120, window.innerHeight - 280), left: Math.max(16, (window.innerWidth - 400) / 2) });
+                setEditModalClaimId(actionMenuId);
               }
+              setActionMenuId(null);
             }}
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '10px 12px',
               background: 'none',
               border: 'none',
               color: '#FFFFFF',
@@ -1818,12 +2020,38 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
               alignItems: 'center',
               gap: '8px',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#374151';
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#374151'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>Edit</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const claim = claimHistory.find(c => c.id === actionMenuId);
+              if (claim) handleDeleteClaim(actionMenuId);
+              setActionMenuId(null);
             }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              background: 'none',
+              border: 'none',
+              color: '#FFFFFF',
+              fontSize: '0.875rem',
+              textAlign: 'left',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#374151'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="3 6 5 6 21 6"></polyline>
@@ -2049,7 +2277,10 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
               <input
                 type="number"
                 value={editClaimUnits}
-                onChange={(e) => setEditClaimUnits(e.target.value)}
+                onChange={(e) => {
+                  setEditClaimUnits(e.target.value);
+                  if (claimValidationError) setClaimValidationError(null);
+                }}
                 placeholder="0"
                 min="0"
                       className="no-spinner"
@@ -2069,6 +2300,11 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onAdd
                       }}
                       onWheel={(e) => e.target.blur()}
               />
+              {claimValidationError && (
+                <div style={{ marginTop: '6px', fontSize: '12px', color: '#F59E0B' }}>
+                  {claimValidationError}
+                </div>
+              )}
             </div>
                 </div>
               </div>
