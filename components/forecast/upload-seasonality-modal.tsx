@@ -186,8 +186,26 @@ export function UploadSeasonalityModal({
     }
   };
 
-  const handleDownloadTemplate = () => {
-    console.log('Download template');
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch('/api/seasonality/template');
+      if (!response.ok) {
+        console.error('Failed to download seasonality template');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Seasonality Data Template.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading seasonality template', error);
+    }
   };
 
   const handleClose = () => {
