@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Search, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const FILTER_WIDTH = 204;
@@ -29,47 +29,36 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   fontSize: TEXT_SIZE,
 };
 
-export type SortOrder = 'asc' | 'desc' | null;
-export interface StatusFilterState {
-  sortOrder: SortOrder;
-  activeChecked: boolean;
-  inactiveChecked: boolean;
-  statusSearch: string;
+export type MarketplaceSortOrder = 'asc' | 'desc' | null;
+
+export interface MarketplaceFilterState {
+  sortOrder: MarketplaceSortOrder;
+  walmartChecked: boolean;
+  amazonChecked: boolean;
 }
 
-const DEFAULT_FILTER: StatusFilterState = {
+export const DEFAULT_MARKETPLACE_FILTER: MarketplaceFilterState = {
   sortOrder: null,
-  activeChecked: true,
-  inactiveChecked: true,
-  statusSearch: '',
+  walmartChecked: true,
+  amazonChecked: true,
 };
 
-interface StatusFilterDropdownProps {
+interface MarketplaceFilterDropdownProps {
   anchorRect: DOMRect | null;
   isOpen: boolean;
   onClose: () => void;
-  filter: StatusFilterState;
-  onFilterChange: (filter: StatusFilterState) => void;
+  filter: MarketplaceFilterState;
+  onFilterChange: (filter: MarketplaceFilterState) => void;
   onApply: () => void;
   onReset: () => void;
   resultCount: number;
   hasChanges?: boolean;
-  /** Section label, e.g. "Filter by values:" */
-  label?: string;
-  /** Label for first checkbox (maps to activeChecked) */
-  activeLabel?: string;
-  /** Label for second checkbox (maps to inactiveChecked) */
-  inactiveLabel?: string;
-  /** Data attribute for outside-click trigger element, e.g. "data-status-filter-trigger" or "data-vine-status-filter-trigger" */
   triggerDataAttribute?: string;
 }
 
-const DEFAULT_LABEL = 'Filter by values:';
-const DEFAULT_ACTIVE_LABEL = 'Active';
-const DEFAULT_INACTIVE_LABEL = 'Inactive';
-const DEFAULT_TRIGGER_ATTR = 'data-status-filter-trigger';
+const MARKETPLACE_LABELS = ['Walmart', 'Amazon'] as const;
 
-export function StatusFilterDropdown({
+export function MarketplaceFilterDropdown({
   anchorRect,
   isOpen,
   onClose,
@@ -79,16 +68,10 @@ export function StatusFilterDropdown({
   onReset,
   resultCount,
   hasChanges = false,
-  label = DEFAULT_LABEL,
-  activeLabel = DEFAULT_ACTIVE_LABEL,
-  inactiveLabel = DEFAULT_INACTIVE_LABEL,
-  triggerDataAttribute = DEFAULT_TRIGGER_ATTR,
-}: StatusFilterDropdownProps) {
+  triggerDataAttribute = 'data-marketplace-filter-trigger',
+}: MarketplaceFilterDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const conditionDropdownRef = useRef<HTMLDivElement>(null);
-  const [valuesExpanded, setValuesExpanded] = useState(true);
-
-  const valueLabels = [activeLabel, inactiveLabel] as const;
+  const [valuesExpanded, setValuesExpanded] = React.useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -109,18 +92,18 @@ export function StatusFilterDropdown({
   const left = anchorRect.left;
 
   const handleSelectAll = () => {
-    onFilterChange({ ...filter, activeChecked: true, inactiveChecked: true });
+    onFilterChange({ ...filter, walmartChecked: true, amazonChecked: true });
   };
 
   const handleClearAll = () => {
-    onFilterChange({ ...filter, activeChecked: false, inactiveChecked: false });
+    onFilterChange({ ...filter, walmartChecked: false, amazonChecked: false });
   };
 
   const content = (
     <div
       ref={dropdownRef}
       role="dialog"
-      aria-label="Status filter"
+      aria-label="Marketplace filter"
       style={{
         ...DROPDOWN_STYLE,
         position: 'fixed',
@@ -204,7 +187,7 @@ export function StatusFilterDropdown({
         }}
       />
 
-      {/* Status filter by values */}
+      {/* Marketplace filter by values */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button
           type="button"
@@ -221,7 +204,7 @@ export function StatusFilterDropdown({
             marginLeft: -12,
           }}
         >
-          <span style={{ color: '#9CA3AF', fontSize: TEXT_SIZE }}>{label}</span>
+          <span style={{ color: '#9CA3AF', fontSize: TEXT_SIZE }}>Filter by values:</span>
           <ChevronDown
             style={{
               width: 12,
@@ -287,68 +270,6 @@ export function StatusFilterDropdown({
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                alignSelf: 'flex-start',
-                marginLeft: -12,
-              }}
-            >
-              <div
-                style={{
-                  width: 188,
-                  height: 24,
-                  position: 'relative',
-                  opacity: 1,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderStyle: 'solid',
-                  borderColor: '#374151',
-                  paddingTop: 6,
-                  paddingRight: 8,
-                  paddingBottom: 6,
-                  paddingLeft: 8,
-                  backgroundColor: '#1F2937',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <Search
-                  style={{
-                    position: 'absolute',
-                    left: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 14,
-                    height: 14,
-                    color: '#9CA3AF',
-                    pointerEvents: 'none',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder=""
-                  value={filter.statusSearch}
-                  onChange={(e) =>
-                    onFilterChange({ ...filter, statusSearch: e.target.value })
-                  }
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    padding: 0,
-                    paddingLeft: 20,
-                    border: 'none',
-                    borderRadius: 0,
-                    backgroundColor: 'transparent',
-                    color: '#FFFFFF',
-                    fontSize: TEXT_SIZE,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
                 marginTop: -2,
@@ -360,14 +281,12 @@ export function StatusFilterDropdown({
                 width: 188,
               }}
             >
-              {valueLabels.map((statusLabel, idx) => {
-                const searchLower = filter.statusSearch.toLowerCase();
-                const statusLower = statusLabel.toLowerCase();
-                if (searchLower && !statusLower.includes(searchLower)) return null;
-                const checked = idx === 0 ? filter.activeChecked : filter.inactiveChecked;
+              {MARKETPLACE_LABELS.map((label) => {
+                const checked =
+                  label === 'Walmart' ? filter.walmartChecked : filter.amazonChecked;
                 return (
                   <label
-                    key={statusLabel}
+                    key={label}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -381,16 +300,10 @@ export function StatusFilterDropdown({
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => {
-                        if (idx === 0) {
-                          onFilterChange({
-                            ...filter,
-                            activeChecked: e.target.checked,
-                          });
+                        if (label === 'Walmart') {
+                          onFilterChange({ ...filter, walmartChecked: e.target.checked });
                         } else {
-                          onFilterChange({
-                            ...filter,
-                            inactiveChecked: e.target.checked,
-                          });
+                          onFilterChange({ ...filter, amazonChecked: e.target.checked });
                         }
                       }}
                       style={{
@@ -399,9 +312,9 @@ export function StatusFilterDropdown({
                         accentColor: '#007BFF',
                         cursor: 'pointer',
                       }}
-                      className="status-filter-checkbox"
+                      className="marketplace-filter-checkbox"
                     />
-                    {statusLabel}
+                    {label}
                   </label>
                 );
               })}
@@ -490,5 +403,3 @@ export function StatusFilterDropdown({
 
   return createPortal(content, document.body);
 }
-
-export { DEFAULT_FILTER };

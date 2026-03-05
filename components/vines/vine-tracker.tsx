@@ -137,6 +137,49 @@ const VineTracker = () => {
     setSearchValue(value);
   };
 
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    let filtered = vineProducts.filter((p) => !p.isNew);
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      filtered = filtered.filter(
+        (row) =>
+          (row.productName || '').toLowerCase().includes(q) ||
+          (row.brand || '').toLowerCase().includes(q) ||
+          (row.asin || '').toLowerCase().includes(q) ||
+          (row.status || '').toLowerCase().includes(q)
+      );
+    }
+    const headers = ['Status', 'Product Name', 'Brand', 'Size', 'ASIN', 'Launch Date', 'Claimed', 'Enrolled'];
+    const rows = filtered.map((p) =>
+      [
+        escapeCsv(p.status ?? ''),
+        escapeCsv(p.productName ?? ''),
+        escapeCsv(p.brand ?? ''),
+        escapeCsv(p.size ?? ''),
+        escapeCsv(p.asin ?? ''),
+        escapeCsv(p.launchDate ?? ''),
+        String(p.claimed ?? 0),
+        String(p.enrolled ?? 0),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vine-products.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Vine products exported as CSV');
+  }, [vineProducts, searchValue]);
+
   /** True if there is an unsaved new-vine row with any data entered */
   const hasUnsavedNewVine = useMemo(
     () =>
@@ -427,7 +470,7 @@ const VineTracker = () => {
       className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden"
     >
       <div className="flex-shrink-0">
-        <VineTrackerHeader onSearch={handleSearch} onNewVineClick={handleNewVine} />
+        <VineTrackerHeader onSearch={handleSearch} onNewVineClick={handleNewVine} onExportCsv={handleExportCsv} />
       </div>
       {error && (
         <div className="text-sm text-amber-500 px-2">

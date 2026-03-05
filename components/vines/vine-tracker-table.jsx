@@ -7,6 +7,11 @@ import { toast } from '@/lib/toast';
 import AddClaimed from './add-claimed';
 import VineDetailsModal from './vine-details-modal';
 import ProductsFilterDropdown from '@/production/new-shipment/components/ProductsFilterDropdown';
+import { StatusFilterDropdown, DEFAULT_FILTER } from '@/components/products/StatusFilterDropdown';
+import {
+  VineDropdownFilter,
+  DEFAULT_VINE_PRODUCTS_FILTER,
+} from './vine-dropdown-filter';
 
 // Calendar Dropdown Component
 const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
@@ -376,6 +381,17 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const threeDotsMenuRefs = useRef({});
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const statusDropdownRefs = useRef({});
+  const [vineStatusFilterOpen, setVineStatusFilterOpen] = useState(false);
+  const [vineStatusAnchor, setVineStatusAnchor] = useState(null);
+  const [vineStatusFilter, setVineStatusFilter] = useState(DEFAULT_FILTER);
+  const [appliedVineStatusFilter, setAppliedVineStatusFilter] = useState(DEFAULT_FILTER);
+  const vineStatusHeaderRef = useRef(null);
+
+  const [vineProductsFilterOpen, setVineProductsFilterOpen] = useState(false);
+  const [vineProductsAnchor, setVineProductsAnchor] = useState(null);
+  const [vineProductsFilter, setVineProductsFilter] = useState(DEFAULT_VINE_PRODUCTS_FILTER);
+  const [appliedVineProductsFilter, setAppliedVineProductsFilter] = useState(DEFAULT_VINE_PRODUCTS_FILTER);
+  const vineProductsHeaderRef = useRef(null);
 
   // Handler function to open the vine details modal - used by both plus button and row click
   const handleOpenVineDetailsModal = (row, focusOnClaimEntry = false) => {
@@ -420,6 +436,80 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
     const hasSorting = sortConfig.field === key && sortConfig.order !== '';
     return hasFilter || hasSorting;
   };
+
+  const handleVineStatusHeaderClick = () => {
+    setVineStatusAnchor(vineStatusHeaderRef.current?.getBoundingClientRect() ?? null);
+    setVineStatusFilterOpen((prev) => !prev);
+  };
+
+  const handleVineProductsHeaderClick = () => {
+    setVineProductsAnchor(vineProductsHeaderRef.current?.getBoundingClientRect() ?? null);
+    setVineProductsFilterOpen((prev) => !prev);
+  };
+
+  const hasActiveVineStatusFilter = useMemo(
+    () => JSON.stringify(appliedVineStatusFilter) !== JSON.stringify(DEFAULT_FILTER),
+    [appliedVineStatusFilter]
+  );
+
+  const vineStatusFilterHasChanges = useMemo(
+    () => JSON.stringify(vineStatusFilter) !== JSON.stringify(appliedVineStatusFilter),
+    [vineStatusFilter, appliedVineStatusFilter]
+  );
+
+  const vineStatusResultCount = 2;
+
+  const vineProductNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.productName)
+            .filter((name) => typeof name === 'string' && name.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineBrands = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.brand)
+            .filter((brand) => typeof brand === 'string' && brand.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineSizes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.size)
+            .filter((size) => typeof size === 'string' && size.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineProductsFilterHasChanges = useMemo(
+    () => JSON.stringify(vineProductsFilter) !== JSON.stringify(appliedVineProductsFilter),
+    [vineProductsFilter, appliedVineProductsFilter]
+  );
+
+  const hasActiveVineProductsFilter = useMemo(() => {
+    const { sortOrder, condition, selectedValues, selectedBrands, selectedSizes } =
+      appliedVineProductsFilter;
+    const hasSort = sortOrder != null;
+    const hasCondition = condition !== 'None';
+    const hasValues = Array.isArray(selectedValues) && selectedValues.length > 0;
+    const hasBrands = Array.isArray(selectedBrands) && selectedBrands.length > 0;
+    const hasSizes = Array.isArray(selectedSizes) && selectedSizes.length > 0;
+    return hasSort || hasCondition || hasValues || hasBrands || hasSizes;
+  }, [appliedVineProductsFilter]);
 
   // Fetch planning products when dropdown opens
   useEffect(() => {
@@ -895,8 +985,72 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       });
     });
 
-    // Apply sorting
-    if (sortedRowOrder) {
+    // Apply vine status filter (Awaiting Reviews / Concluded)
+    const { activeChecked, inactiveChecked, sortOrder: vineSortOrder } = appliedVineStatusFilter;
+    const vineStatusActive = activeChecked || inactiveChecked;
+    if (!activeChecked && !inactiveChecked) {
+      filteredRows = [];
+    } else if (vineStatusActive) {
+      filteredRows = filteredRows.filter((row) => {
+        const s = (row.status || 'Awaiting Reviews').trim();
+        const isAwaiting = s === 'Awaiting Reviews';
+        const isConcluded = s === 'Concluded';
+        if (isAwaiting && activeChecked) return true;
+        if (isConcluded && inactiveChecked) return true;
+        return false;
+      });
+    }
+
+    // Apply vine products filter (product name / brand / size)
+    const {
+      selectedValues: vineSelectedValues,
+      selectedBrands: vineSelectedBrands,
+      selectedSizes: vineSelectedSizes,
+      sortOrder: vineProductsSortOrder,
+    } = appliedVineProductsFilter;
+
+    if (
+      (vineSelectedValues && vineSelectedValues.length > 0) ||
+      (vineSelectedBrands && vineSelectedBrands.length > 0) ||
+      (vineSelectedSizes && vineSelectedSizes.length > 0)
+    ) {
+      const valuesSet = vineSelectedValues ? new Set(vineSelectedValues) : null;
+      const brandsSet = vineSelectedBrands ? new Set(vineSelectedBrands) : null;
+      const sizesSet = vineSelectedSizes ? new Set(vineSelectedSizes) : null;
+
+      filteredRows = filteredRows.filter((row) => {
+        const name = row.productName || '';
+        const brand = row.brand || '';
+        const size = row.size || '';
+
+        const matchesValue = valuesSet ? valuesSet.has(name) : true;
+        const matchesBrand = brandsSet ? brandsSet.has(brand) : true;
+        const matchesSize = sizesSet ? sizesSet.has(size) : true;
+
+        return matchesValue && matchesBrand && matchesSize;
+      });
+    }
+
+    // Determine sorting: vine products sort (name) has priority, then vine status, then manual column sort
+    if (vineProductsSortOrder) {
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const aName = (a.productName || '').toLowerCase();
+        const bName = (b.productName || '').toLowerCase();
+        if (aName === bName) return 0;
+        const cmp = aName < bName ? -1 : 1;
+        return vineProductsSortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (vineSortOrder === 'asc' || vineSortOrder === 'desc') {
+      const order = vineSortOrder === 'asc' ? 1 : -1;
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const aStatus = (a.status || 'Awaiting Reviews').trim();
+        const bStatus = (b.status || 'Awaiting Reviews').trim();
+        const aVal = aStatus === 'Awaiting Reviews' ? 0 : 1;
+        const bVal = bStatus === 'Awaiting Reviews' ? 0 : 1;
+        return (aVal - bVal) * order;
+      });
+    } else if (sortedRowOrder) {
+      // Apply manual column sort when no filter-based sort is active
       const sortedMap = new Map(sortedRowOrder.map((id, index) => [id, index]));
       filteredRows.sort((a, b) => {
         const aIndex = sortedMap.get(a.id) ?? Infinity;
@@ -950,6 +1104,25 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
             {columns.map((col) => (
               <th
                 key={col.key}
+                ref={
+                  col.key === 'status'
+                    ? vineStatusHeaderRef
+                    : col.key === 'productName'
+                    ? vineProductsHeaderRef
+                    : undefined
+                }
+                {...(col.key === 'status'
+                  ? { 'data-vine-status-filter-trigger': true }
+                  : col.key === 'productName'
+                  ? { 'data-vine-products-filter-trigger': true }
+                  : {})}
+                onClick={
+                  col.key === 'status'
+                    ? handleVineStatusHeaderClick
+                    : col.key === 'productName'
+                    ? handleVineProductsHeaderClick
+                    : undefined
+                }
                 className={`${
                   col.align === 'right'
                     ? 'text-right'
@@ -982,10 +1155,40 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                 >
                   <span
                     style={{
-                      color: (isFilterActive(col.key) || openFilterColumn === col.key) ? '#007AFF' : '#9CA3AF',
+                      color:
+                        col.key === 'status'
+                          ? vineStatusFilterOpen || hasActiveVineStatusFilter
+                            ? '#3B82F6'
+                            : '#9CA3AF'
+                          : col.key === 'productName'
+                          ? vineProductsFilterOpen || hasActiveVineProductsFilter
+                            ? '#3B82F6'
+                            : '#9CA3AF'
+                          : isFilterActive(col.key) || openFilterColumn === col.key
+                          ? '#007AFF'
+                          : '#9CA3AF',
                     }}
+                    className="inline-flex items-center gap-1.5"
                   >
                     {col.label}
+                    {col.key === 'status' && hasActiveVineStatusFilter && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {col.key === 'productName' && hasActiveVineProductsFilter && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
                   </span>
                 </div>
               </th>
@@ -1032,6 +1235,12 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       position: 'relative',
                       display: 'table-row',
                       cursor: !row.isNew && row.productName ? 'pointer' : 'default',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = isDarkMode ? '#1A2636' : '#E5E7EB';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = ROW_BG;
                     }}
                   onClick={(e) => {
                     // DEBUG: Log all clicks to see what's happening
@@ -2205,6 +2414,56 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
           onClose={() => setOpenFilterColumn(null)}
         />
       )}
+
+      <VineDropdownFilter
+        anchorRect={vineProductsAnchor}
+        isOpen={vineProductsFilterOpen}
+        onClose={() => {
+          setVineProductsFilterOpen(false);
+          setVineProductsAnchor(null);
+        }}
+        filter={vineProductsFilter}
+        onFilterChange={setVineProductsFilter}
+        onApply={() => {
+          setAppliedVineProductsFilter(vineProductsFilter);
+          setVineProductsFilterOpen(false);
+          setVineProductsAnchor(null);
+        }}
+        onReset={() => {
+          setVineProductsFilter(DEFAULT_VINE_PRODUCTS_FILTER);
+          setAppliedVineProductsFilter(DEFAULT_VINE_PRODUCTS_FILTER);
+        }}
+        hasChanges={vineProductsFilterHasChanges}
+        availableValues={vineProductNames}
+        availableBrands={vineBrands}
+        availableSizes={vineSizes}
+      />
+
+      <StatusFilterDropdown
+        anchorRect={vineStatusAnchor}
+        isOpen={vineStatusFilterOpen}
+        onClose={() => {
+          setVineStatusFilterOpen(false);
+          setVineStatusAnchor(null);
+        }}
+        filter={vineStatusFilter}
+        onFilterChange={setVineStatusFilter}
+        onApply={() => {
+          setAppliedVineStatusFilter(vineStatusFilter);
+          setVineStatusFilterOpen(false);
+          setVineStatusAnchor(null);
+        }}
+        onReset={() => {
+          setVineStatusFilter(DEFAULT_FILTER);
+          setAppliedVineStatusFilter(DEFAULT_FILTER);
+        }}
+        resultCount={vineStatusResultCount}
+        hasChanges={vineStatusFilterHasChanges}
+        label="Filter by values:"
+        activeLabel="Awaiting Reviews"
+        inactiveLabel="Concluded"
+        triggerDataAttribute="data-vine-status-filter-trigger"
+      />
 
       {/* CSS to hide number input spinners */}
       <style>{`

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/ui/rich-text-editor';
+import { toast } from '@/lib/toast';
 
 type TicketDetail = {
   ticketId: string;
@@ -707,6 +708,9 @@ export function ActionItems() {
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
   const rowMenuRef = useRef<HTMLDivElement>(null);
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const [newItem, setNewItem] = useState({
     product: '',
     productId: '',
@@ -868,6 +872,53 @@ export function ActionItems() {
     );
   }, [tableItems, search]);
 
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        settingsButtonRef.current?.contains(target) ||
+        settingsDropdownRef.current?.contains(target)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const headers = ['Status', 'Product Name', 'Product ID', 'Category', 'Subject', 'Assignee', 'Due Date'];
+    const rows = filteredTableItems.map((row) =>
+      [
+        escapeCsv(row.status ?? ''),
+        escapeCsv(row.productName ?? ''),
+        escapeCsv(row.productId ?? ''),
+        escapeCsv(row.category ?? ''),
+        escapeCsv(row.subject ?? ''),
+        escapeCsv(row.assignee ?? ''),
+        escapeCsv(row.dueDate ?? ''),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'action-items.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    setSettingsDropdownOpen(false);
+    toast.success('Action items exported as CSV');
+  }, [filteredTableItems]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-6 -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden text-foreground-primary relative" style={{ backgroundColor: '#0B111E' }}>
       {showActionCreatedToast && (
@@ -987,11 +1038,44 @@ export function ActionItems() {
               </svg>
               <span className="whitespace-nowrap">New Action Item</span>
             </button>
-            <button className="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Settings">
-              <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.53c.04-.32.07-.65.07-1 0-.35-.03-.68-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0014 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.32-.07.65-.07 1 0 .35.03.68.07 1l-2.11 1.63c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.39 1.06.73 1.69.98l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.63z" />
-              </svg>
-            </button>
+            <div className="relative">
+              <button
+                ref={settingsButtonRef}
+                type="button"
+                onClick={() => setSettingsDropdownOpen((o) => !o)}
+                className="flex items-center justify-center p-2 rounded-lg hover:bg-white/5 transition-colors"
+                title="Settings"
+                aria-label="Settings"
+                aria-expanded={settingsDropdownOpen}
+                aria-haspopup="true"
+              >
+                <Image src="/assets/settings-icon.png" alt="Settings" width={24} height={24} />
+              </button>
+              {settingsDropdownOpen && (
+                <div
+                  ref={settingsDropdownRef}
+                  role="menu"
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+                  style={{
+                    backgroundColor: '#1E293B',
+                    borderColor: '#334155',
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleExportCsv}
+                    className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+                    style={{
+                      color: '#F9FAFB',
+                      backgroundColor: 'transparent',
+                    }}
+                  >
+                    Export as CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
