@@ -10,12 +10,12 @@ import React, {
 import { createPortal } from 'react-dom';
 
 const DROPDOWN_THEME = {
-  bg: '#1A2235',
-  border: '#374151',
-  shadow: '0 18px 45px rgba(0, 0, 0, 0.85)',
+  bg: '#0F172A',
+  border: '#334155',
+  shadow: '0 2px 4px 2px rgba(0, 0, 0, 0.15)',
   headerText: '#E5E7EB',
   subtleText: '#9CA3AF',
-  sectionBorder: '#374151',
+  sectionBorder: '#334155',
   inputBg: '#111827',
   inputBorder: '#4B5563',
   inputText: '#E5E7EB',
@@ -41,6 +41,7 @@ export type ColumnFilterData = {
   sortField?: string;
   selectedValues?: Set<string>;
   selectedBrands?: Set<string> | null;
+  selectedSizes?: Set<string> | null;
   conditionType?: string;
   conditionValue?: string;
   popularFilter?: 'soldOut' | 'noSalesHistory' | 'bestSellers' | null;
@@ -56,6 +57,8 @@ export interface ProductsFilterDropdownProps {
   /** For product column: brands for this account */
   account?: string | null;
   availableBrands?: string[];
+  /** For product column: unique sizes from product rows */
+  availableSizes?: string[];
 }
 
 const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdownProps>(
@@ -69,6 +72,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
       onClose,
       account,
       availableBrands = [],
+      availableSizes = [],
     },
     ref
   ) {
@@ -79,15 +83,20 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
     const [filterConditionExpanded, setFilterConditionExpanded] = useState(false);
     const [filterValuesExpanded, setFilterValuesExpanded] = useState(false);
     const [brandFilterExpanded, setBrandFilterExpanded] = useState(false);
+    const [sizeFilterExpanded, setSizeFilterExpanded] = useState(false);
     const [popularFilterExpanded, setPopularFilterExpanded] = useState(true);
     const [popularFilterMenuOpen, setPopularFilterMenuOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [brandSearchTerm, setBrandSearchTerm] = useState('');
+    const [sizeSearchTerm, setSizeSearchTerm] = useState('');
     const [conditionMenuOpen, setConditionMenuOpen] = useState(false);
+    const [conditionMenuPosition, setConditionMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+    const conditionTriggerRef = useRef<HTMLButtonElement>(null);
 
     const cur = currentFilter as ColumnFilterData;
     const existingValues = cur?.selectedValues;
     const existingBrands = cur?.selectedBrands;
+    const existingSizes = cur?.selectedSizes;
     const existingCondition = cur?.conditionType ?? '';
     const existingConditionValue = cur?.conditionValue ?? '';
     const existingPopular = cur?.popularFilter ?? null;
@@ -110,6 +119,16 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
       }
       return new Set();
     });
+    const [selectedSizes, setSelectedSizes] = useState<Set<string>>(() => {
+      if (columnKey === 'product' && availableSizes.length > 0) {
+        if (existingSizes && (existingSizes instanceof Set ? existingSizes.size > 0 : Array.isArray(existingSizes))) {
+          const arr = existingSizes instanceof Set ? Array.from(existingSizes) : existingSizes;
+          return new Set(arr.map(String));
+        }
+        return new Set(availableSizes);
+      }
+      return new Set();
+    });
     const [conditionType, setConditionType] = useState(existingCondition);
     const [conditionValue, setConditionValue] = useState(existingConditionValue);
     const [popularFilter, setPopularFilter] = useState<string | null>(existingPopular ?? null);
@@ -121,6 +140,15 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
       columnKey === 'fbaAvailable' || columnKey === 'unitsToMake' || columnKey === 'doiDays';
 
     useEffect(() => {
+      if (conditionMenuOpen && conditionTriggerRef.current) {
+        const rect = conditionTriggerRef.current.getBoundingClientRect();
+        setConditionMenuPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      } else if (!conditionMenuOpen) {
+        setConditionMenuPosition(null);
+      }
+    }, [conditionMenuOpen]);
+
+    useEffect(() => {
       if (!filterIconRef?.current) {
         setIsPositioned(false);
         return;
@@ -128,11 +156,12 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
       const rect = (filterIconRef.current as HTMLElement).getBoundingClientRect();
       const dropdownWidth = 204;
       const dropdownHeight = 400;
-      let left = rect.left;
-      let top = rect.bottom + 8;
-      if (left + dropdownWidth > window.innerWidth) left = window.innerWidth - dropdownWidth - 16;
-      if (top + dropdownHeight > window.innerHeight) top = rect.top - dropdownHeight - 8;
+      const gap = 8;
+      // Position dropdown to the left of the filter icon (right edge of dropdown = left edge of icon - gap), offset 20px right
+      let left = rect.left - dropdownWidth - gap + 20;
+      let top = rect.bottom + gap;
       if (left < 16) left = 16;
+      if (top + dropdownHeight > window.innerHeight) top = rect.top - dropdownHeight - gap;
       if (top < 16) top = 16;
       setPosition({ top, left });
       requestAnimationFrame(() => setIsPositioned(true));
@@ -149,9 +178,13 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
       setSortOrder('');
       setSearchTerm('');
       setBrandSearchTerm('');
+      setSizeSearchTerm('');
       setSelectedValues(new Set(stringValues));
       if (columnKey === 'product' && availableBrands.length > 0) {
         setSelectedBrands(new Set(availableBrands));
+      }
+      if (columnKey === 'product' && availableSizes.length > 0) {
+        setSelectedSizes(new Set(availableSizes));
       }
       setConditionType('');
       setConditionValue('');
@@ -173,6 +206,12 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
           selectedBrands.size === availableBrands.length &&
           availableBrands.every((b) => selectedBrands.has(b));
         filterData.selectedBrands = allBrandsSelected ? undefined : selectedBrands;
+      }
+      if (columnKey === 'product' && availableSizes.length > 0) {
+        const allSizesSelected =
+          selectedSizes.size === availableSizes.length &&
+          availableSizes.every((s) => selectedSizes.has(s));
+        filterData.selectedSizes = allSizesSelected ? undefined : selectedSizes;
       }
       if (columnKey === 'fbaAvailable' && popularFilter) {
         filterData.popularFilter = popularFilter as 'soldOut' | 'noSalesHistory' | 'bestSellers';
@@ -198,6 +237,19 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         return next;
       });
     };
+
+    const handleToggleSize = (size: string) => {
+      setSelectedSizes((prev) => {
+        const next = new Set(prev);
+        if (next.has(size)) next.delete(size);
+        else next.add(size);
+        return next;
+      });
+    };
+
+    const filteredSizes = availableSizes.filter((s) =>
+      s.toLowerCase().includes(sizeSearchTerm.toLowerCase())
+    );
 
     const content = (
       <div
@@ -349,6 +401,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                               conditionType: conditionType || undefined,
                               conditionValue: conditionValue || undefined,
                               selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
+                              selectedSizes: columnKey === 'product' ? selectedSizes : undefined,
                             });
                             onClose();
                           }}
@@ -381,73 +434,90 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
               Sort by Total Inventory
             </div>
           )}
-          <div
-            onClick={() => {
-              if (onApply) {
-                onApply({
-                  sortOrder: 'asc',
-                  sortField: columnKey,
-                  selectedValues: selectedValues.size < stringValues.length ? selectedValues : undefined,
-                  conditionType: conditionType || undefined,
-                  conditionValue: conditionValue || undefined,
-                  selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
-                  popularFilter: columnKey === 'fbaAvailable' ? (popularFilter as 'soldOut' | 'noSalesHistory' | 'bestSellers') : undefined,
-                });
-              }
-              setSortOrder('asc');
-              onClose();
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: 6,
-              cursor: 'pointer',
-              borderRadius: 4,
-              marginBottom: 6,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = theme.hoverRow;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <span style={{ fontSize: 12, color: theme.headerText }}>Low to High</span>
-          </div>
-          <div
-            onClick={() => {
-              if (onApply) {
-                onApply({
-                  sortOrder: 'desc',
-                  sortField: columnKey,
-                  selectedValues: selectedValues.size < stringValues.length ? selectedValues : undefined,
-                  conditionType: conditionType || undefined,
-                  conditionValue: conditionValue || undefined,
-                  selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
-                  popularFilter: columnKey === 'fbaAvailable' ? (popularFilter as 'soldOut' | 'noSalesHistory' | 'bestSellers') : undefined,
-                });
-              }
-              setSortOrder('desc');
-              onClose();
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: 6,
-              cursor: 'pointer',
-              borderRadius: 4,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = theme.hoverRow;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }}
-          >
-            <span style={{ fontSize: 12, color: theme.headerText }}>High to Low</span>
-          </div>
+          {(() => {
+            const isNumericColumn = columnKey !== 'product';
+            const ascendingLabel = isNumericColumn ? 'Low to High' : 'Sort ascending';
+            const descendingLabel = isNumericColumn ? 'High to Low' : 'Sort descending';
+            return (
+              <>
+                <div
+                  onClick={() => {
+                    if (onApply) {
+                      onApply({
+                        sortOrder: 'asc',
+                        sortField: columnKey,
+                        selectedValues: selectedValues.size < stringValues.length ? selectedValues : undefined,
+                        conditionType: conditionType || undefined,
+                        conditionValue: conditionValue || undefined,
+                        selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
+                        selectedSizes: columnKey === 'product' ? selectedSizes : undefined,
+                        popularFilter: columnKey === 'fbaAvailable' ? (popularFilter as 'soldOut' | 'noSalesHistory' | 'bestSellers') : undefined,
+                      });
+                    }
+                    setSortOrder('asc');
+                    onClose();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: 6,
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                    marginBottom: 6,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = theme.hoverRow;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <svg style={{ width: 16, height: 16, color: theme.subtleText, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  <span style={{ fontSize: 12, color: theme.headerText }}>{ascendingLabel}</span>
+                </div>
+                <div
+                  onClick={() => {
+                    if (onApply) {
+                      onApply({
+                        sortOrder: 'desc',
+                        sortField: columnKey,
+                        selectedValues: selectedValues.size < stringValues.length ? selectedValues : undefined,
+                        conditionType: conditionType || undefined,
+                        conditionValue: conditionValue || undefined,
+                        selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
+                        selectedSizes: columnKey === 'product' ? selectedSizes : undefined,
+                        popularFilter: columnKey === 'fbaAvailable' ? (popularFilter as 'soldOut' | 'noSalesHistory' | 'bestSellers') : undefined,
+                      });
+                    }
+                    setSortOrder('desc');
+                    onClose();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: 6,
+                    cursor: 'pointer',
+                    borderRadius: 4,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = theme.hoverRow;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <svg style={{ width: 16, height: 16, color: theme.subtleText, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                  </svg>
+                  <span style={{ fontSize: 12, color: theme.headerText }}>{descendingLabel}</span>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Sort by FBA Inventory - only for Days of Inventory column */}
           {columnKey === 'doiDays' && (
@@ -467,6 +537,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                       conditionType: conditionType || undefined,
                       conditionValue: conditionValue || undefined,
                       selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
+                      selectedSizes: columnKey === 'product' ? selectedSizes : undefined,
                     });
                   }
                   onClose();
@@ -487,6 +558,9 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
+                <svg style={{ width: 16, height: 16, color: theme.subtleText, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                </svg>
                 <span style={{ fontSize: 12, color: theme.headerText }}>FBA Low to High</span>
               </div>
               <div
@@ -499,6 +573,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                       conditionType: conditionType || undefined,
                       conditionValue: conditionValue || undefined,
                       selectedBrands: columnKey === 'product' ? selectedBrands : undefined,
+                      selectedSizes: columnKey === 'product' ? selectedSizes : undefined,
                     });
                   }
                   onClose();
@@ -518,6 +593,9 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
+                <svg style={{ width: 16, height: 16, color: theme.subtleText, flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                </svg>
                 <span style={{ fontSize: 12, color: theme.headerText }}>FBA High to Low</span>
               </div>
             </>
@@ -568,6 +646,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
             <div style={{ padding: '0 12px 8px 12px' }}>
               <div style={{ position: 'relative', marginBottom: 8 }}>
                 <button
+                  ref={conditionTriggerRef}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -609,47 +688,52 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                     />
                   </svg>
                 </button>
-                {conditionMenuOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      marginTop: 4,
-                      backgroundColor: theme.bg,
-                      borderRadius: 10,
-                      border: `1px solid ${theme.border}`,
-                      boxShadow: theme.shadow,
-                      padding: '4px 0',
-                      zIndex: 10001,
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {CONDITIONS.map((c) => (
-                      <button
-                        key={c.value}
-                        type="button"
-                        onClick={() => {
-                          setConditionType(c.value);
-                          setConditionMenuOpen(false);
-                        }}
-                        style={{
-                          width: '100%',
-                          textAlign: 'left',
-                          padding: '6px 10px',
-                          backgroundColor: c.value === conditionType ? 'rgba(59,130,246,0.15)' : 'transparent',
-                          color: theme.valueText,
-                          fontSize: 12,
-                          border: 'none',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {conditionMenuOpen &&
+                  conditionMenuPosition &&
+                  typeof document !== 'undefined' &&
+                  createPortal(
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: conditionMenuPosition.top,
+                        left: conditionMenuPosition.left,
+                        width: conditionMenuPosition.width,
+                        maxHeight: 280,
+                        overflowY: 'auto',
+                        backgroundColor: theme.bg,
+                        borderRadius: 10,
+                        border: `1px solid ${theme.border}`,
+                        boxShadow: theme.shadow,
+                        padding: '4px 0',
+                        zIndex: 10001,
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {CONDITIONS.map((c) => (
+                        <button
+                          key={c.value}
+                          type="button"
+                          onClick={() => {
+                            setConditionType(c.value);
+                            setConditionMenuOpen(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '6px 10px',
+                            backgroundColor: c.value === conditionType ? 'rgba(59,130,246,0.15)' : 'transparent',
+                            color: theme.valueText,
+                            fontSize: 12,
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>,
+                    document.body
+                  )}
               </div>
               {conditionType &&
                 conditionType !== 'isEmpty' &&
@@ -678,7 +762,124 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
             )}
         </div>
 
-        {/* Brand filter (product column only) */}
+        {/* Filter by values */}
+        {(columnKey === 'product' || columnKey === 'unitsToMake' || columnKey === 'doiDays') && (
+          <div style={{ borderBottom: `1px solid ${theme.border}` }}>
+            <div
+              onClick={() => setFilterValuesExpanded(!filterValuesExpanded)}
+              style={{
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 12,
+                  color: selectedValues.size > 0 ? '#3B82F6' : theme.subtleText,
+                  fontWeight: selectedValues.size > 0 ? 500 : 400,
+                }}
+              >
+                Filter by values: {selectedValues.size > 0 && <span style={{ color: '#10B981' }}>●</span>}
+              </span>
+              <svg
+                width={10}
+                height={10}
+                viewBox="0 0 12 12"
+                fill="none"
+                style={{
+                  transform: filterValuesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                }}
+              >
+                <path
+                  d="M3 4.5L6 7.5L9 4.5"
+                  stroke={theme.subtleText}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            {filterValuesExpanded && (
+              <div style={{ padding: '0 12px 8px 12px' }}>
+                {stringValues.length > 5 && (
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search..."
+                    style={{
+                      width: '100%',
+                      padding: '5px 8px',
+                      marginBottom: 8,
+                      border: `1px solid ${theme.inputBorder}`,
+                      borderRadius: 4,
+                      fontSize: 11,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      backgroundColor: theme.inputBg,
+                      color: theme.inputText,
+                    }}
+                  />
+                )}
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: 188,
+                    maxHeight: 132,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    minWidth: 0,
+                    borderRadius: 4,
+                    padding: 4,
+                    backgroundColor: '#1E293B',
+                  }}
+                >
+                  {filteredValues.map((value) => (
+                    <label
+                      key={value}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 0 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedValues.has(value)}
+                        onChange={() => handleToggleValue(value)}
+                        style={{
+                          width: 14,
+                          height: 14,
+                          cursor: 'pointer',
+                          accentColor: '#3B82F6',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: theme.valueText,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0,
+                        }}
+                        title={String(value)}
+                      >
+                        {value}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Filter by brand (product column only) */}
         {columnKey === 'product' && availableBrands.length > 0 && (
           <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
@@ -746,11 +947,26 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                     color: theme.inputText,
                   }}
                 />
-                <div style={{ maxHeight: 120, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: 188,
+                    maxHeight: 132,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    minWidth: 0,
+                    borderRadius: 4,
+                    padding: 4,
+                    backgroundColor: '#1E293B',
+                  }}
+                >
                   {filteredBrands.map((brand) => (
                     <label
                       key={brand}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 0 }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 0 }}
                     >
                       <input
                         type="checkbox"
@@ -785,11 +1001,11 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
           </div>
         )}
 
-        {/* Filter by values */}
-        {(columnKey === 'product' || columnKey === 'unitsToMake' || columnKey === 'doiDays') && (
-          <div>
+        {/* Filter by size (product column only) */}
+        {columnKey === 'product' && availableSizes.length > 0 && (
+          <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
-              onClick={() => setFilterValuesExpanded(!filterValuesExpanded)}
+              onClick={() => setSizeFilterExpanded(!sizeFilterExpanded)}
               style={{
                 padding: '8px 12px',
                 display: 'flex',
@@ -802,11 +1018,18 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
               <span
                 style={{
                   fontSize: 12,
-                  color: selectedValues.size > 0 ? '#3B82F6' : theme.subtleText,
-                  fontWeight: selectedValues.size > 0 ? 500 : 400,
+                  color:
+                    selectedSizes.size > 0 && selectedSizes.size < availableSizes.length
+                      ? '#3B82F6'
+                      : theme.subtleText,
+                  fontWeight:
+                    selectedSizes.size > 0 && selectedSizes.size < availableSizes.length ? 500 : 400,
                 }}
               >
-                Filter by values: {selectedValues.size > 0 && <span style={{ color: '#10B981' }}>●</span>}
+                Filter by size:{' '}
+                {selectedSizes.size > 0 && selectedSizes.size < availableSizes.length && (
+                  <span style={{ color: '#10B981' }}>●</span>
+                )}
               </span>
               <svg
                 width={10}
@@ -814,7 +1037,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                 viewBox="0 0 12 12"
                 fill="none"
                 style={{
-                  transform: filterValuesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transform: sizeFilterExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
                 }}
               >
                 <path
@@ -826,38 +1049,51 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                 />
               </svg>
             </div>
-            {filterValuesExpanded && (
+            {sizeFilterExpanded && (
               <div style={{ padding: '0 12px 8px 12px' }}>
-                {stringValues.length > 5 && (
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search..."
-                    style={{
-                      width: '100%',
-                      padding: '5px 8px',
-                      marginBottom: 8,
-                      border: `1px solid ${theme.inputBorder}`,
-                      borderRadius: 4,
-                      fontSize: 11,
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      backgroundColor: theme.inputBg,
-                      color: theme.inputText,
-                    }}
-                  />
-                )}
-                <div style={{ maxHeight: 120, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                  {filteredValues.map((value) => (
+                <input
+                  type="text"
+                  value={sizeSearchTerm}
+                  onChange={(e) => setSizeSearchTerm(e.target.value)}
+                  placeholder="Search sizes..."
+                  style={{
+                    width: '100%',
+                    padding: '5px 8px',
+                    marginBottom: 8,
+                    border: `1px solid ${theme.inputBorder}`,
+                    borderRadius: 4,
+                    fontSize: 11,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    backgroundColor: theme.inputBg,
+                    color: theme.inputText,
+                  }}
+                />
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: 188,
+                    maxHeight: 132,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    minWidth: 0,
+                    borderRadius: 4,
+                    padding: 4,
+                    backgroundColor: '#1E293B',
+                  }}
+                >
+                  {filteredSizes.map((size) => (
                     <label
-                      key={value}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 0 }}
+                      key={size}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 0 }}
                     >
                       <input
                         type="checkbox"
-                        checked={selectedValues.has(value)}
-                        onChange={() => handleToggleValue(value)}
+                        checked={selectedSizes.has(size)}
+                        onChange={() => handleToggleSize(size)}
                         style={{
                           width: 14,
                           height: 14,
@@ -875,9 +1111,9 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                           whiteSpace: 'nowrap',
                           minWidth: 0,
                         }}
-                        title={String(value)}
+                        title={size}
                       >
-                        {value}
+                        {size || '(empty)'}
                       </span>
                     </label>
                   ))}

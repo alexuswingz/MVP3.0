@@ -214,16 +214,32 @@ export function AddProductsNonTable({
   const getLabelsAvailable = (row: NonTableProductRow) =>
     row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
 
-  // Account → brands for product column filter (match 1000bananas)
+  // Brands for product column filter: from account mapping when available, else from unique row.brand in data
   const ACCOUNT_BRAND_MAPPING: Record<string, string[]> = {
     'TPS Nutrients': ['TPS Nutrients', 'Bloom City', 'TPS Plant Foods'],
     'The Plant Shoppe, LLC': ['TPS Nutrients', 'TPS Plant Foods', 'Bloom City'],
     'Total Pest Supply': ['NatureStop', "Ms. Pixie's", "Burke's", 'Mint +'],
   };
   const availableBrands = useMemo(() => {
-    if (!account || !ACCOUNT_BRAND_MAPPING[account]) return [];
-    return [...ACCOUNT_BRAND_MAPPING[account]].sort();
-  }, [account]);
+    if (account && ACCOUNT_BRAND_MAPPING[account]) {
+      return [...ACCOUNT_BRAND_MAPPING[account]].sort();
+    }
+    const fromRows = new Set<string>();
+    rows.forEach((row) => {
+      const b = row.brand != null ? String(row.brand).trim() : '';
+      if (b) fromRows.add(b);
+    });
+    return [...fromRows].sort((a, b) => a.localeCompare(b));
+  }, [account, rows]);
+
+  const availableSizes = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((row) => {
+      const s = row.size != null ? String(row.size).trim() : '';
+      set.add(s);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [rows]);
 
   const applyCondition = (value: string | number, conditionType: string, conditionValue: string, numeric: boolean): boolean => {
     if (!conditionType) return true;
@@ -289,11 +305,17 @@ export function AddProductsNonTable({
       if (filter.selectedBrands && filter.selectedBrands.size > 0 && colKey === 'product') {
         result = result.filter((r) => filter.selectedBrands!.has(String(r.brand ?? '')));
       }
+      if (filter.selectedSizes && filter.selectedSizes.size > 0 && colKey === 'product') {
+        result = result.filter((r) => filter.selectedSizes!.has(String(r.size ?? '').trim()));
+      }
       if (filter.conditionType && filter.conditionValue !== undefined) {
-        const numeric = colKey === 'fbaAvailable' || colKey === 'unitsToMake' || colKey === 'doiDays';
         if (colKey === 'product') {
           result = result.filter((r) =>
             applyCondition(String(r.product ?? ''), filter.conditionType!, filter.conditionValue ?? '', false)
+          );
+        } else if (colKey === 'fbaAvailable') {
+          result = result.filter((r) =>
+            applyCondition(r.inventory ?? 0, filter.conditionType!, filter.conditionValue ?? '', true)
           );
         } else if (colKey === 'doiDays') {
           result = result.filter((r) =>
@@ -362,6 +384,7 @@ export function AddProductsNonTable({
     if (!filter) return false;
     if (filter.popularFilter && columnKey === 'fbaAvailable') return true;
     if (filter.selectedBrands && filter.selectedBrands.size > 0 && columnKey === 'product') return true;
+    if (filter.selectedSizes && filter.selectedSizes.size > 0 && columnKey === 'product') return true;
     if (filter.conditionType) return true;
     if (filter.sortField && filter.sortOrder) return true;
     if (!filter.selectedValues || filter.selectedValues.size === 0) return false;
@@ -1038,6 +1061,7 @@ export function AddProductsNonTable({
             onClose={() => setOpenFilterColumn(null)}
             account={account ?? undefined}
             availableBrands={availableBrands}
+            availableSizes={availableSizes}
           />
         )}
 
