@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/ui/rich-text-editor';
+import { downloadTableAsCsv } from '@/lib/export-csv';
 
 type TicketDetail = {
   ticketId: string;
@@ -987,7 +988,35 @@ export function ActionItems() {
               </svg>
               <span className="whitespace-nowrap">New Action Item</span>
             </button>
-            <button className="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Settings">
+            <button
+              type="button"
+              className="p-2 rounded-lg hover:bg-white/5 transition-colors"
+              title="Export table as CSV"
+              aria-label="Export table as CSV"
+              onClick={() => {
+                downloadTableAsCsv({
+                  pageName: 'action-items',
+                  columns: [
+                    { key: 'status', label: 'Status' },
+                    { key: 'productName', label: 'Products' },
+                    { key: 'productId', label: 'Product ID' },
+                    { key: 'category', label: 'Category' },
+                    { key: 'subject', label: 'Subject' },
+                    { key: 'assignee', label: 'Assignee' },
+                    { key: 'dueDate', label: 'Due Date' },
+                  ],
+                  rows: filteredTableItems.map((row) => ({
+                    status: row.status,
+                    productName: row.productName,
+                    productId: row.productId,
+                    category: row.category,
+                    subject: row.subject,
+                    assignee: row.assignee,
+                    dueDate: row.dueDate,
+                  })),
+                });
+              }}
+            >
               <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 15.5A3.5 3.5 0 018.5 12 3.5 3.5 0 0112 8.5a3.5 3.5 0 013.5 3.5 3.5 3.5 0 01-3.5 3.5m7.43-2.53c.04-.32.07-.65.07-1 0-.35-.03-.68-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0014 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.32-.07.65-.07 1 0 .35.03.68.07 1l-2.11 1.63c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.39 1.06.73 1.69.98l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.63z" />
               </svg>
