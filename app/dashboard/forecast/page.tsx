@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Search, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
@@ -30,6 +30,7 @@ function toNgoosSelectedRow(row: ShipmentTableRow) {
     brand: row.product.brand,
     sku: row.product.sku,
     image_url: row.product.imageUrl ?? null,
+    needsSeasonality: row.needsSeasonality === true,
   };
 }
 
@@ -62,6 +63,7 @@ export default function ForecastPage() {
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
   const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
+  const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
@@ -168,7 +170,7 @@ export default function ForecastPage() {
     }
   }, [runUnitsToMakeRecalc]);
 
-  const fetchForecastData = useCallback(async () => {
+  const fetchForecastData = useCallback(async (): Promise<ShipmentTableRow[] | null> => {
     setLoading(true);
     setError(null);
     try {
@@ -177,14 +179,16 @@ export default function ForecastPage() {
         sort_by: 'doi',
         sort_order: 'asc',
       });
-      
+
       const transformedRows = response.rows.map(transformApiRowToTableRow);
       setTableRows(transformedRows);
       setSummary(response.summary);
       hasRecalcForAppliedDoiRef.current = false;
+      return transformedRows;
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load forecast data');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -228,6 +232,16 @@ export default function ForecastPage() {
     const nextIdx = dir === 'next' ? Math.min(idx + 1, tableRows.length - 1) : Math.max(idx - 1, 0);
     setSelectedNgoosRow(tableRows[nextIdx]);
   }, [selectedNgoosRow, tableRows]);
+
+  // Rows with needsSeasonality overridden to false and seasonalityUploaded true for products that just uploaded seasonality (so units + DOI bar show again, and warning icon shows)
+  const displayRows = useMemo(() => {
+    if (uploadedSeasonalityProductIds.size === 0) return tableRows;
+    return tableRows.map((r) =>
+      uploadedSeasonalityProductIds.has(String(r.product.id))
+        ? { ...r, needsSeasonality: false, seasonalityUploaded: true }
+        : r
+    );
+  }, [tableRows, uploadedSeasonalityProductIds]);
 
   // Use real data from API summary, with fallback calculations
   const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);
@@ -444,7 +458,7 @@ export default function ForecastPage() {
           </div>
         ) : (
         <NewShipmentTable
-          rows={tableRows}
+          rows={displayRows}
           onProductClick={(p) => console.log('Product click', p.id)}
           onOpenNgoos={(row) => {
             setSelectedNgoosRow(row);
@@ -457,7 +471,7 @@ export default function ForecastPage() {
             setSeasonalityProductId(productId);
             setSeasonalityModalOpen(true);
           }}
-          totalProducts={tableRows.length}
+          totalProducts={displayRows.length}
           totalPalettes={totalPallets}
           totalBoxes={92}
           totalTimeHours={2}
@@ -472,12 +486,24 @@ export default function ForecastPage() {
             setNgoosModalOpen(false);
             setSelectedNgoosRow(null);
           }}
-          selectedRow={selectedNgoosRow ? toNgoosSelectedRow(selectedNgoosRow) : null}
+          selectedRow={
+            selectedNgoosRow
+              ? toNgoosSelectedRow(
+                  displayRows.find((r) => String(r.product.id) === String(selectedNgoosRow?.product.id)) ??
+                    selectedNgoosRow
+                )
+              : null
+          }
           isDarkMode={isDarkMode}
-          allProducts={tableRows.map((r) => ({ id: r.product.id }))}
+          allProducts={displayRows.map((r) => ({ id: r.product.id }))}
           onNavigate={handleNgoosNavigate}
           showAddButton={false}
           showActionItems
+          onSeasonalityUploaded={(productId) => {
+            if (productId) {
+              setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
+            }
+          }}
         />
         <UploadSeasonalityModal
           isOpen={seasonalityModalOpen}
@@ -487,6 +513,13 @@ export default function ForecastPage() {
           }}
           productId={seasonalityProductId}
           isDarkMode={isDarkMode}
+          onSeasonalityUploaded={(productId) => {
+            if (productId) {
+              setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
+            }
+            setSeasonalityModalOpen(false);
+            setSeasonalityProductId(null);
+          }}
         />
       </motion.div>
     </div>

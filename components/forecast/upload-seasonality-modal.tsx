@@ -19,6 +19,8 @@ interface UploadSeasonalityModalProps {
   productId: string | null;
   isDarkMode?: boolean;
   onUploadSuccess?: (fileName: string) => void;
+  /** Called when seasonality data is successfully uploaded; use to refresh units/bar (e.g. refetch table). */
+  onSeasonalityUploaded?: (productId: string | null) => void;
 }
 
 function SuccessToast({
@@ -126,6 +128,7 @@ export function UploadSeasonalityModal({
   onClose,
   productId,
   onUploadSuccess,
+  onSeasonalityUploaded,
 }: UploadSeasonalityModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -176,14 +179,33 @@ export function UploadSeasonalityModal({
       setToastFileName(file.name);
       setShowToast(true);
       onUploadSuccess?.(file.name);
+      onSeasonalityUploaded?.(productId);
       setFile(null);
       setShowPreview(false);
       onClose();
     }
   };
 
-  const handleDownloadTemplate = () => {
-    console.log('Download template');
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch('/api/seasonality/template');
+      if (!response.ok) {
+        console.error('Failed to download seasonality template');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Seasonality Data Template.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading seasonality template', error);
+    }
   };
 
   const handleClose = () => {

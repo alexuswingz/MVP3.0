@@ -100,6 +100,36 @@
   }
 }
 
+/* Status filter dropdown checkboxes - blue fill with white checkmark inside */
+.status-filter-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #6B7280;
+  border-radius: 3px;
+  cursor: pointer;
+  background-color: transparent;
+  position: relative;
+  flex-shrink: 0;
+}
+.status-filter-checkbox:checked {
+  background-color: #007BFF;
+  border-color: #007BFF;
+  box-shadow: 0 0 6px rgba(0, 123, 255, 0.5);
+}
+.status-filter-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 /* No scroll on main page: hide scrollbar and disable overflow */
 html, body {
   overflow: hidden;

@@ -23,6 +23,8 @@ interface ProductActions {
   clearFilters: () => void;
   addProduct: (product: Partial<Product>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  /** Optimistic local update of isActive (no API call). Used for toggle UI. */
+  setProductActive: (id: string, isActive: boolean) => void;
   deleteProduct: (id: string) => Promise<void>;
   invalidateCache: () => void;
 }
@@ -39,6 +41,7 @@ const mapProductResponse = (p: ProductResponse): Product => ({
   category: p.category || p.product_type || '',
   imageUrl: p.image_url || '',
   accountId: String(p.brand || ''),
+  isActive: p.is_active ?? true,
   createdAt: new Date(p.created_at),
   updatedAt: new Date(p.updated_at),
 });
@@ -122,6 +125,14 @@ export const useProductStore = create<ProductState & ProductActions>((set, get) 
     set({ lastFetchedAt: null, lastStatsFetchedAt: null, lastFetchParams: null });
   },
 
+  setProductActive: (id, isActive) => {
+    set(state => ({
+      products: state.products.map(p =>
+        p.id === id ? { ...p, isActive } : p
+      ),
+    }));
+  },
+
   setSelectedProduct: (product) => {
     set({ selectedProduct: product });
   },
@@ -161,19 +172,37 @@ export const useProductStore = create<ProductState & ProductActions>((set, get) 
 
   updateProduct: async (id, updates) => {
     try {
-      const response = await api.updateProduct(Number(id), {
-        name: updates.name,
-        asin: updates.asin,
-        sku: updates.sku,
-        size: updates.size,
-        category: updates.category,
-        image_url: updates.imageUrl,
-      } as any);
+      const body: Record<string, unknown> = {};
+      if (updates.name !== undefined) body.name = updates.name;
+      if (updates.asin !== undefined) body.asin = updates.asin;
+      if (updates.sku !== undefined) body.sku = updates.sku;
+      if (updates.size !== undefined) body.size = updates.size;
+      if (updates.category !== undefined) body.category = updates.category;
+      if (updates.imageUrl !== undefined) body.image_url = updates.imageUrl;
+      if (updates.isActive !== undefined) body.is_active = updates.isActive;
+      const response = await api.updateProduct(Number(id), body as any);
       
-      const updatedProduct = mapProductResponse(response);
-      set(state => ({
-        products: state.products.map(p => p.id === id ? updatedProduct : p),
-      }));
+      // PATCH response uses ProductCreateUpdateSerializer which omits id and brand_name.
+      // Always merge onto the existing product to preserve id and display fields.
+      set(state => {
+        const existing = state.products.find(p => p.id === id);
+        if (!existing) return state;
+        const updatedProduct = mapProductResponse(response);
+        const merged: Product = {
+          ...existing,
+          isActive: updatedProduct.isActive ?? existing.isActive,
+          name: updatedProduct.name || existing.name,
+          asin: updatedProduct.asin || existing.asin,
+          sku: updatedProduct.sku || existing.sku,
+          size: updatedProduct.size ?? existing.size,
+          category: updatedProduct.category || existing.category,
+          imageUrl: updatedProduct.imageUrl || existing.imageUrl,
+          brand: updatedProduct.brand || existing.brand,
+        };
+        return {
+          products: state.products.map(p => p.id === id ? merged : p),
+        };
+      });
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to update product', 

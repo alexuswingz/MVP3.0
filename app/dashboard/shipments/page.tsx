@@ -121,7 +121,17 @@ const NEW_SHIPMENT_STORAGE_KEY = 'mvp_new_shipment_data';
 export default function ShipmentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'shipments' | 'archive'>('shipments');
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'shipments' | 'archive'>(() =>
+    tabFromUrl === 'archive' ? 'archive' : 'shipments'
+  );
+
+  // Keep activeTab in sync with URL (e.g. back/forward or direct link with ?tab=archive)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'archive') setActiveTab('archive');
+    else if (tab === 'shipments') setActiveTab('shipments');
+  }, [searchParams]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
@@ -161,7 +171,9 @@ export default function ShipmentsPage() {
   useEffect(() => {
     if (searchParams.get('refetch') === '1') {
       fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
-      router.replace('/dashboard/shipments', { scroll: false });
+      const params = new URLSearchParams();
+      params.set('tab', activeTab);
+      router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
     }
   }, [searchParams, router, activeTab, fetchShipments]);
 
@@ -182,6 +194,13 @@ export default function ShipmentsPage() {
 
   const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
   const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
+
+  const handleTabChange = useCallback((tab: 'shipments' | 'archive') => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
 
   const handleRowClick = (row: PlanningTableRow) => {
     // Navigate to the next incomplete step
@@ -249,6 +268,8 @@ export default function ShipmentsPage() {
           </div>
           <div
             data-shipments-tabs
+            role="tablist"
+            aria-label="Shipments and Archive"
             style={{
               display: 'inline-flex',
               gap: 4,
@@ -263,7 +284,9 @@ export default function ShipmentsPage() {
           >
             <button
               type="button"
-              onClick={() => setActiveTab('shipments')}
+              onClick={() => handleTabChange('shipments')}
+              aria-selected={activeTab === 'shipments'}
+              role="tab"
               style={{
                 padding: '4px 12px',
                 fontSize: 14,
@@ -284,7 +307,9 @@ export default function ShipmentsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('archive')}
+              onClick={() => handleTabChange('archive')}
+              aria-selected={activeTab === 'archive'}
+              role="tab"
               style={{
                 padding: '4px 12px',
                 fontSize: 14,
