@@ -2033,7 +2033,7 @@ export function AddProductsNonTable({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 64,
+          gap: 14,
           zIndex: 1000,
           transition: 'left 300ms cubic-bezier(0.4, 0, 0.2, 1)',
           boxShadow: '0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
@@ -2063,11 +2063,11 @@ export function AddProductsNonTable({
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
+                  gap: 0,
                   alignItems: 'flex-start',
                   width: 110,
                   minWidth: 110,
-                  padding: '6px 8px',
+                  padding: '0 8px',
                   borderRadius: 8,
                   cursor: 'grab',
                   transition: 'all 150ms ease',
@@ -2186,11 +2186,11 @@ export function AddProductsNonTable({
           ref={shipmentStatsPopupRef}
           style={{
             position: 'fixed',
-            bottom: 96,
+            bottom: 81,
             left: 'calc(50% + 220px)',
             transform: 'translateX(-50%)',
             width: 204,
-            minHeight: 214,
+            minHeight: 'unset',
             maxHeight: '80vh',
             backgroundColor: '#1F2937',
             borderRadius: 8,
@@ -2229,7 +2229,6 @@ export function AddProductsNonTable({
                   padding: '6px 8px',
                 }}
               >
-                <span style={{ color: '#9CA3AF', display: 'flex' }} aria-hidden>≡</span>
                 <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
                   <input
                     type="checkbox"

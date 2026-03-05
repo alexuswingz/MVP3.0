@@ -124,8 +124,8 @@ function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]
     childAsin: apiRow.product.asin,
     in: inv.total,
     inventory: inv.total,
-    totalDoi: apiRow.daysOfInventory,
-    fbaAvailableDoi: apiRow.doiFba,
+    totalDoi: apiRow.daysOfInventory ?? undefined,
+    fbaAvailableDoi: apiRow.doiFba ?? undefined,
     velocityTrend: 'Up',
     boxInventory: Math.floor(inv.total / 24),
     unitsOrdered7: Math.round(apiRow.avgWeeklySales),
@@ -134,7 +134,7 @@ function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]
     fbaTotal: inv.fbaTotal,
     fbaAvailable: inv.fbaAvailable,
     awdTotal: inv.awdTotal,
-    unitsToMake: apiRow.unitsToMake,
+    unitsToMake: apiRow.unitsToMake ?? undefined,
     needsSeasonality: apiRow.needsSeasonality,
   };
 }
@@ -149,9 +149,9 @@ function transformApiRowToNonTableRow(apiRow: ForecastTableResponse['rows'][0]):
     asin: apiRow.product.asin,
     size: apiRow.product.size || '',
     inventory: inv.total,
-    unitsToMake: apiRow.unitsToMake,
-    daysOfInventory: apiRow.daysOfInventory,
-    fbaAvailableDoi: apiRow.doiFba,
+    unitsToMake: apiRow.unitsToMake ?? 0,
+    daysOfInventory: apiRow.daysOfInventory ?? 0,
+    fbaAvailableDoi: apiRow.doiFba ?? undefined,
     needsSeasonality: apiRow.needsSeasonality,
   };
 }
@@ -439,7 +439,7 @@ export default function NewShipmentAddProductsPage() {
       URL.revokeObjectURL(url);
     }
     setShowSettingsDropdown(false);
-    toast.success('Table exported as CSV');
+    toast.vineCreated('Table exported as CSV');
   }, [tableMode, tableRows, nonTableRows]);
 
   // Use summary data from API or calculate from rows
@@ -740,13 +740,13 @@ export default function NewShipmentAddProductsPage() {
                   backgroundColor: CARD_BG,
                   border: `1px solid ${BORDER}`,
                   borderRadius: 8,
-                  padding: '8px 0',
+                  padding: '12px 16px',
                   minWidth: 180,
                   zIndex: 50,
                   boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                   <span style={{ fontSize: 14, fontWeight: 500, color: tableMode ? '#3B82F6' : '#FFFFFF' }}>Table Mode</span>
                   <button
                     type="button"
@@ -777,24 +777,28 @@ export default function NewShipmentAddProductsPage() {
                     />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={handleExportCsv}
-                  style={{
-                    width: '100%',
-                    padding: '10px 16px',
-                    textAlign: 'left',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: '#E5E7EB',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Export as CSV
-                </button>
+                <div style={{ height: 1, backgroundColor: BORDER, margin: '10px 0' }} />
+                <div style={{ display: 'flex', alignItems: 'center', height: 20 }}>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    style={{
+                      width: '100%',
+                      padding: 0,
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#E5E7EB',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#3B82F6'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = '#E5E7EB'; }}
+                  >
+                    Export as CSV
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1540,7 +1544,7 @@ export default function NewShipmentAddProductsPage() {
           console.log(`Adding ${units} units of ${product.name || product.product}`);
         }}
         onSeasonalityUploaded={(productId) => {
-          setUploadedSeasonalityProductIds((prev) => new Set([...prev, productId]));
+          setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
         }}
       />
 
@@ -1554,7 +1558,7 @@ export default function NewShipmentAddProductsPage() {
         onUploadSuccess={() => {
           // Mark this product as having seasonality uploaded
           if (seasonalityProductId) {
-            setUploadedSeasonalityProductIds((prev) => new Set([...prev, seasonalityProductId]));
+            setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(seasonalityProductId)));
           }
           setShowSeasonalityModal(false);
           setSeasonalityProductId(null);

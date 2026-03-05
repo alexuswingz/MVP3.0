@@ -3,7 +3,8 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2, Truck, Settings } from 'lucide-react';
+import Image from 'next/image';
+import { Plus, Search, Loader2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import type { Shipment, ShipmentStatus, ShipmentType } from '@/types';
@@ -242,7 +243,7 @@ export default function ShipmentsPage() {
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);
-    toast.success('Shipments table exported as CSV');
+    toast.vineCreated('Shipments table exported as CSV');
   }, [planningRows]);
 
   const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
@@ -427,18 +428,17 @@ export default function ShipmentsPage() {
             )}
           </div>
           <div className="relative" ref={settingsDropdownRef}>
-            <Button
+            <button
               ref={settingsButtonRef}
-              variant="ghost"
-              size="icon"
-              className="text-gray-500 hover:text-gray-300"
+              type="button"
+              className="flex items-center justify-center hover:opacity-80 transition-opacity"
               aria-label="Settings"
               aria-expanded={settingsDropdownOpen}
               aria-haspopup="true"
               onClick={() => setSettingsDropdownOpen((o) => !o)}
             >
-              <Settings className="w-5 h-5" />
-            </Button>
+              <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
+            </button>
             {settingsDropdownOpen && (
               <div
                 role="menu"
@@ -472,7 +472,7 @@ export default function ShipmentsPage() {
             onClick={() => setShowNewShipmentModal(true)}
           >
             <Plus className="w-4 h-4" />
-            New .Shipment
+            New Shipment
           </Button>
         </div>
       </header>

@@ -178,7 +178,7 @@ const VineTracker = () => {
     a.download = `vine_export_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Vine products exported as CSV');
+    toast.vineCreated('Vine products exported as CSV');
   }, [vineProducts, searchValue]);
 
   /** True if there is an unsaved new-vine row with any data entered */

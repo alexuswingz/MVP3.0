@@ -1098,9 +1098,10 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                           placeholder="Search..."
                           style={{
                             width: '100%',
+                            height: 24,
                             padding: '6px 8px 6px 28px',
-                            border: `1px solid ${theme.inputBorder}`,
-                            borderRadius: 4,
+                            border: '1px solid #334155',
+                            borderRadius: 6,
                             fontSize: 12,
                             outline: 'none',
                             boxSizing: 'border-box',

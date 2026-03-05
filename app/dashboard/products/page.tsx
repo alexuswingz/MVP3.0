@@ -270,7 +270,7 @@ export default function ProductsPage() {
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);
-    toast.success('Products exported as CSV');
+    toast.vineCreated('Products exported as CSV');
   }, [filteredProducts, activeIds, selectedMarketplace]);
 
   const statusFilterResultCount = useMemo(() => {

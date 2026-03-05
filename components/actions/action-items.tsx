@@ -917,7 +917,7 @@ export function ActionItems() {
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);
-    toast.success('Action items exported as CSV');
+    toast.vineCreated('Action items exported as CSV');
   }, [filteredTableItems]);
 
   return (

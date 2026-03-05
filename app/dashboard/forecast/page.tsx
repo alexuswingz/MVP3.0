@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Search, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
 import DoiSettingsPopover, { getDefaultDoiSettings } from '@/components/forecast/doi-settings-popover';
@@ -294,7 +294,7 @@ export default function ForecastPage() {
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);
-    toast.success('Forecast table exported as CSV');
+    toast.vineCreated('Forecast table exported as CSV');
   }, [displayRows]);
 
   // Use real data from API summary, with fallback calculations
@@ -393,18 +393,17 @@ export default function ForecastPage() {
             Refresh
           </Button>
           <div className="relative" ref={settingsDropdownRef}>
-            <Button
+            <button
               ref={settingsButtonRef}
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground"
+              type="button"
+              className="flex items-center justify-center hover:opacity-80 transition-opacity"
               aria-label="Settings"
               aria-expanded={settingsDropdownOpen}
               aria-haspopup="true"
               onClick={() => setSettingsDropdownOpen((o) => !o)}
             >
-              <Settings className="w-4 h-4" />
-            </Button>
+              <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
+            </button>
             {settingsDropdownOpen && (
               <div
                 role="menu"

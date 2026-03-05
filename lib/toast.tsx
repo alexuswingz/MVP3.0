@@ -95,7 +95,7 @@ export function SimpleToaster() {
 
   const toaster = (
     <div
-      className="flex flex-col items-center gap-2 w-full max-w-[716px] px-4"
+      className="flex flex-col items-center gap-2 px-4"
       style={{
         position: 'fixed',
         top: 24,
@@ -110,7 +110,9 @@ export function SimpleToaster() {
           <div
             key={item.id}
             style={{
-              width: 716,
+              display: 'inline-flex',
+              width: 'fit-content',
+              maxWidth: 375,
               height: 36,
               paddingTop: 8,
               paddingRight: 12,
@@ -119,7 +121,6 @@ export function SimpleToaster() {
               borderRadius: 12,
               backgroundColor: '#1B3221',
               boxShadow: '0px 4px 8px 0px #00000026',
-              display: 'flex',
               alignItems: 'center',
               gap: 24,
               opacity: 1,
