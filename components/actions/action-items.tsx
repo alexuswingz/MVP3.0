@@ -5,6 +5,19 @@ import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/ui/rich-text-editor';
 import { toast } from '@/lib/toast';
+import {
+  getDefaultActionItemsStatusFilter,
+  type ActionItemsStatusFilterState,
+} from '@/components/actions/action-items-status-filter';
+import {
+  getDefaultActionItemsCategoryFilter,
+  type ActionItemsCategoryFilterState,
+} from '@/components/actions/action-items-category-filter';
+import {
+  DEFAULT_PRODUCTS_FILTER,
+  type ProductsFilterState,
+} from '@/components/actions/action-items-product-filter';
+import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
 
 type TicketDetail = {
   ticketId: string;
@@ -64,6 +77,8 @@ type TableRow = {
   status: string;
   productName: string;
   productId: string;
+  productBrand?: string;
+  productSize?: string;
   category: string;
   subject: string;
   assignee: string;
@@ -72,13 +87,13 @@ type TableRow = {
 };
 
 const DEFAULT_TABLE_ITEMS: TableRow[] = [
-  { id: 1, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 2, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 3, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 4, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 5, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 6, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
-  { id: 7, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 1, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 2, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 3, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 4, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 5, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 6, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 7, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
 ];
 
 /** Build a minimal TicketDetail from a table row (e.g. when saving description for a row that has no ticketDetails yet). */
@@ -89,8 +104,8 @@ function ticketDetailFromRow(row: TableRow): TicketDetail {
     ticketId: `I-${row.id}`,
     productName: row.productName,
     productId: row.productId,
-    brand: '',
-    unit: '',
+    brand: row.productBrand ?? '',
+    unit: row.productSize ?? '',
     subject: row.subject,
     description: '',
     instructions: '',
@@ -708,6 +723,29 @@ export function ActionItems() {
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
   const rowMenuRef = useRef<HTMLDivElement>(null);
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+  const [statusFilterAnchor, setStatusFilterAnchor] = useState<DOMRect | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ActionItemsStatusFilterState>(
+    () => getDefaultActionItemsStatusFilter()
+  );
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState<ActionItemsStatusFilterState>(
+    () => getDefaultActionItemsStatusFilter()
+  );
+  const statusHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [categoryFilterOpen, setCategoryFilterOpen] = useState(false);
+  const [categoryFilterAnchor, setCategoryFilterAnchor] = useState<DOMRect | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<ActionItemsCategoryFilterState>(
+    () => getDefaultActionItemsCategoryFilter()
+  );
+  const [appliedCategoryFilter, setAppliedCategoryFilter] = useState<ActionItemsCategoryFilterState>(
+    () => getDefaultActionItemsCategoryFilter()
+  );
+  const categoryHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [productsFilterOpen, setProductsFilterOpen] = useState(false);
+  const [productsFilterAnchor, setProductsFilterAnchor] = useState<DOMRect | null>(null);
+  const [productsFilter, setProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
+  const [appliedProductsFilter, setAppliedProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
+  const productsHeaderRef = useRef<HTMLTableCellElement>(null);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
@@ -860,17 +898,126 @@ export function ActionItems() {
   }, [showActionCreatedToast]);
 
   const filteredTableItems = useMemo(() => {
-    if (!search.trim()) return tableItems;
-    const q = search.trim().toLowerCase();
-    return tableItems.filter(
-      (row) =>
-        row.productName.toLowerCase().includes(q) ||
-        row.productId.toLowerCase().includes(q) ||
-        row.subject.toLowerCase().includes(q) ||
-        row.category.toLowerCase().includes(q) ||
-        row.assignee.toLowerCase().includes(q)
-    );
-  }, [tableItems, search]);
+    let list = tableItems;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (row) =>
+          row.productName.toLowerCase().includes(q) ||
+          row.productId.toLowerCase().includes(q) ||
+          row.subject.toLowerCase().includes(q) ||
+          row.category.toLowerCase().includes(q) ||
+          row.assignee.toLowerCase().includes(q)
+      );
+    }
+    const checkedStatuses = Object.entries(appliedStatusFilter.selectedStatuses)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checkedStatuses.length > 0) {
+      list = list.filter((row) => checkedStatuses.includes(row.status));
+    }
+    const valuesSelected = appliedProductsFilter.selectedValues;
+    const brandsSelected = appliedProductsFilter.selectedBrands;
+    const sizesSelected = appliedProductsFilter.selectedSizes;
+    if (
+      (valuesSelected && valuesSelected.length > 0) ||
+      (brandsSelected && brandsSelected.length > 0) ||
+      (sizesSelected && sizesSelected.length > 0)
+    ) {
+      const valuesSet = valuesSelected?.length ? new Set(valuesSelected) : null;
+      const brandsSet = brandsSelected?.length ? new Set(brandsSelected) : null;
+      const sizesSet = sizesSelected?.length ? new Set(sizesSelected) : null;
+      list = list.filter((row) => {
+        const name = row.productName || '';
+        const brand = row.productBrand || '';
+        const size = row.productSize || '';
+        const matchesValue = valuesSet ? valuesSet.has(name) : true;
+        const matchesBrand = brandsSet ? brandsSet.has(brand) : true;
+        const matchesSize = sizesSet ? sizesSet.has(size) : true;
+        return matchesValue && matchesBrand && matchesSize;
+      });
+    }
+    const checkedCategories = Object.entries(appliedCategoryFilter.selectedCategories)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checkedCategories.length > 0) {
+      list = list.filter((row) => {
+        const rowCat = (row.category ?? '').trim();
+        return checkedCategories.some((c) => rowCat.toLowerCase() === c.toLowerCase());
+      });
+    }
+    const statusOrder = ['To Do', 'In progress', 'In review', 'Completed'];
+    const categoryOrder = ['Ads', 'Inventory', 'PDP', 'Price'];
+    if (appliedStatusFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aIdx = statusOrder.indexOf(a.status);
+        const bIdx = statusOrder.indexOf(b.status);
+        const aVal = aIdx >= 0 ? aIdx : 999;
+        const bVal = bIdx >= 0 ? bIdx : 999;
+        return appliedStatusFilter.sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    } else if (appliedCategoryFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aIdx = categoryOrder.findIndex((c) => (a.category ?? '').toLowerCase() === c.toLowerCase());
+        const bIdx = categoryOrder.findIndex((c) => (b.category ?? '').toLowerCase() === c.toLowerCase());
+        const aVal = aIdx >= 0 ? aIdx : 999;
+        const bVal = bIdx >= 0 ? bIdx : 999;
+        return appliedCategoryFilter.sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      });
+    } else if (appliedProductsFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const cmp = (a.productName ?? '').localeCompare(b.productName ?? '');
+        return appliedProductsFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    }
+    return list;
+  }, [tableItems, search, appliedStatusFilter, appliedCategoryFilter, appliedProductsFilter]);
+
+  const handleStatusFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (statusFilterOpen) {
+      setStatusFilterOpen(false);
+      setStatusFilterAnchor(null);
+    } else {
+      const rect = statusHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setStatusFilterAnchor(rect);
+        setStatusFilterOpen(true);
+      }
+    }
+  }, [statusFilterOpen]);
+
+  const handleCategoryFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (categoryFilterOpen) {
+      setCategoryFilterOpen(false);
+      setCategoryFilterAnchor(null);
+    } else {
+      const rect = categoryHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setCategoryFilterAnchor(rect);
+        setCategoryFilterOpen(true);
+      }
+    }
+  }, [categoryFilterOpen]);
+
+  const handleProductsFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (productsFilterOpen) {
+      setProductsFilterOpen(false);
+      setProductsFilterAnchor(null);
+    } else {
+      const rect = productsHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setProductsFilterAnchor(rect);
+        setProductsFilterOpen(true);
+      }
+    }
+  }, [productsFilterOpen]);
+
 
   useEffect(() => {
     if (!settingsDropdownOpen) return;
@@ -886,6 +1033,97 @@ export function ActionItems() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsDropdownOpen]);
+
+  const statusFilterResultCount = useMemo(() => {
+    const checked = Object.entries(statusFilter.selectedStatuses)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checked.length === 0) return 0;
+    return tableItems.filter((row) => checked.includes(row.status)).length;
+  }, [tableItems, statusFilter.selectedStatuses]);
+
+  const hasActiveStatusFilter = useMemo(() => {
+    const { sortOrder, selectedStatuses } = appliedStatusFilter;
+    const allChecked = ['To Do', 'In progress', 'In review', 'Completed'].every(
+      (s) => selectedStatuses[s]
+    );
+    return sortOrder != null || !allChecked;
+  }, [appliedStatusFilter]);
+
+  const categoryFilterResultCount = useMemo(() => {
+    const checked = Object.entries(categoryFilter.selectedCategories)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checked.length === 0) return 0;
+    return tableItems.filter((row) =>
+      checked.some((c) => (row.category ?? '').toLowerCase() === c.toLowerCase())
+    ).length;
+  }, [tableItems, categoryFilter.selectedCategories]);
+
+  const hasActiveCategoryFilter = useMemo(() => {
+    const { sortOrder, selectedCategories } = appliedCategoryFilter;
+    const allChecked = ['Ads', 'Inventory', 'PDP', 'Price'].every((c) => selectedCategories[c]);
+    return sortOrder != null || !allChecked;
+  }, [appliedCategoryFilter]);
+
+  const categoryFilterHasChanges = useMemo(
+    () => JSON.stringify(categoryFilter) !== JSON.stringify(appliedCategoryFilter),
+    [categoryFilter, appliedCategoryFilter]
+  );
+
+  const statusFilterHasChanges = useMemo(
+    () => JSON.stringify(statusFilter) !== JSON.stringify(appliedStatusFilter),
+    [statusFilter, appliedStatusFilter]
+  );
+
+  const actionItemProductNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tableItems
+            .map((r) => r.productName)
+            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+        )
+      ),
+    [tableItems]
+  );
+
+  const actionItemProductBrands = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tableItems
+            .map((r) => r.productBrand)
+            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+        )
+      ),
+    [tableItems]
+  );
+
+  const actionItemProductSizes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tableItems
+            .map((r) => r.productSize)
+            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+        )
+      ),
+    [tableItems]
+  );
+
+  const hasActiveProductsFilter = useMemo(() => {
+    const { sortOrder, selectedValues, selectedBrands, selectedSizes } = appliedProductsFilter;
+    const hasValues = Array.isArray(selectedValues) && selectedValues.length > 0;
+    const hasBrands = Array.isArray(selectedBrands) && selectedBrands.length > 0;
+    const hasSizes = Array.isArray(selectedSizes) && selectedSizes.length > 0;
+    return sortOrder != null || hasValues || hasBrands || hasSizes;
+  }, [appliedProductsFilter]);
+
+  const productsFilterHasChanges = useMemo(
+    () => JSON.stringify(productsFilter) !== JSON.stringify(appliedProductsFilter),
+    [productsFilter, appliedProductsFilter]
+  );
 
   const handleExportCsv = useCallback(() => {
     const escapeCsv = (val: string) => {
@@ -1108,9 +1346,105 @@ export function ActionItems() {
             <table className="w-full min-w-[900px] border-separate" style={{ borderSpacing: '0 6px' }}>
               <thead>
                 <tr className="text-left text-xs font-medium uppercase tracking-wider text-gray-400" style={{ background: '#0B111E' }}>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>STATUS</th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>PRODUCTS</th>
-                  <th className="py-1.5 font-normal border-0 text-left" style={{ background: '#0B111E', paddingLeft: 16, paddingRight: 24, minWidth: 120 }}>CATEGORY</th>
+                  <th
+                    ref={statusHeaderRef}
+                    data-status-filter-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleStatusFilterClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleStatusFilterClick();
+                      }
+                    }}
+                    className="py-1.5 px-4 font-normal border-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{
+                      background: '#0B111E',
+                      color: statusFilterOpen || hasActiveStatusFilter ? '#3B82F6' : undefined,
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      STATUS
+                      {hasActiveStatusFilter && (
+                        <Image
+                          src="/assets/Vector (1).png"
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="inline-block"
+                          style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                        />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    ref={productsHeaderRef}
+                    data-products-filter-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleProductsFilterClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleProductsFilterClick();
+                      }
+                    }}
+                    className="py-1.5 px-4 font-normal border-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{
+                      background: '#0B111E',
+                      color: productsFilterOpen || hasActiveProductsFilter ? '#3B82F6' : undefined,
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      PRODUCTS
+                      {hasActiveProductsFilter && (
+                        <Image
+                          src="/assets/Vector (1).png"
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="inline-block"
+                          style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                        />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    ref={categoryHeaderRef}
+                    data-category-filter-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleCategoryFilterClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleCategoryFilterClick();
+                      }
+                    }}
+                    className="py-1.5 font-normal border-0 text-left cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{
+                      background: '#0B111E',
+                      paddingLeft: 16,
+                      paddingRight: 24,
+                      minWidth: 120,
+                      color: categoryFilterOpen || hasActiveCategoryFilter ? '#3B82F6' : undefined,
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      CATEGORY
+                      {hasActiveCategoryFilter && (
+                        <Image
+                          src="/assets/Vector (1).png"
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="inline-block"
+                          style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                        />
+                      )}
+                    </span>
+                  </th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>SUBJECT</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>ASSIGNEE</th>
                   <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>DUE DATE</th>
@@ -1125,15 +1459,23 @@ export function ActionItems() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTableItems.map((row) => (
+                {filteredTableItems.map((row) => {
+                  const ROW_BG = '#1A2235';
+                  return (
                   <tr
                     key={row.id}
-                    className="hover:opacity-95 transition-opacity overflow-hidden"
+                    className="cursor-pointer transition-all duration-200 overflow-hidden"
                     style={{
-                      background: '#1A2235',
+                      background: ROW_BG,
                       boxShadow: '0 1px 0 0 rgba(255,255,255,0.04)',
                       height: 66,
                       border: '1px solid #404040',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#1A2636';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = ROW_BG;
                     }}
                   >
                     <td className="px-4 align-middle rounded-l-xl" style={{ paddingLeft: 20, paddingTop: 4, paddingBottom: 4 }}>
@@ -1182,8 +1524,7 @@ export function ActionItems() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-white truncate">{row.productName}</p>
-                          <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                            {row.productId}
+                          <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span
                               role="button"
                               tabIndex={0}
@@ -1199,7 +1540,42 @@ export function ActionItems() {
                                 }
                               }}
                               className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex"
-                              title="Copy"
+                              title="Copy ASIN"
+                            >
+                              {row.productId}
+                            </span>
+                            {(row.productBrand || row.productSize) && (
+                              <>
+                                {row.productBrand && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{row.productBrand}</span>
+                                  </>
+                                )}
+                                {row.productSize && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{row.productSize}</span>
+                                  </>
+                                )}
+                              </>
+                            )}
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard?.writeText(row.productId).catch(() => {});
+                              }}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  navigator.clipboard?.writeText(row.productId).catch(() => {});
+                                }
+                              }}
+                              className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex ml-0.5"
+                              title="Copy ASIN"
                             >
                               <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -1409,7 +1785,7 @@ export function ActionItems() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>
@@ -1937,6 +2313,8 @@ export function ActionItems() {
                       status: 'To Do',
                       productName,
                       productId: newItem.productId.trim() || '—',
+                      productBrand: newItem.productBrand.trim() || undefined,
+                      productSize: newItem.productUnit.trim() || undefined,
                       category: catLabel,
                       subject: newItem.subject.trim() || '—',
                       assignee: assigneeStr,
@@ -1999,6 +2377,40 @@ export function ActionItems() {
         </div>
       )}
 
+      <ActionItemsFilterDropdowns
+        statusFilterAnchor={statusFilterAnchor}
+        statusFilterOpen={statusFilterOpen}
+        setStatusFilterOpen={setStatusFilterOpen}
+        setStatusFilterAnchor={setStatusFilterAnchor}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        appliedStatusFilter={appliedStatusFilter}
+        setAppliedStatusFilter={setAppliedStatusFilter}
+        statusFilterResultCount={statusFilterResultCount}
+        statusFilterHasChanges={statusFilterHasChanges}
+        categoryFilterAnchor={categoryFilterAnchor}
+        categoryFilterOpen={categoryFilterOpen}
+        setCategoryFilterOpen={setCategoryFilterOpen}
+        setCategoryFilterAnchor={setCategoryFilterAnchor}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+        appliedCategoryFilter={appliedCategoryFilter}
+        setAppliedCategoryFilter={setAppliedCategoryFilter}
+        categoryFilterResultCount={categoryFilterResultCount}
+        categoryFilterHasChanges={categoryFilterHasChanges}
+        productsFilterAnchor={productsFilterAnchor}
+        productsFilterOpen={productsFilterOpen}
+        setProductsFilterOpen={setProductsFilterOpen}
+        setProductsFilterAnchor={setProductsFilterAnchor}
+        productsFilter={productsFilter}
+        setProductsFilter={setProductsFilter}
+        appliedProductsFilter={appliedProductsFilter}
+        setAppliedProductsFilter={setAppliedProductsFilter}
+        productsFilterHasChanges={productsFilterHasChanges}
+        availableProductNames={actionItemProductNames}
+        availableProductBrands={actionItemProductBrands}
+        availableProductSizes={actionItemProductSizes}
+      />
     </div>
   );
 }

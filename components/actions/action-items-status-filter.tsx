@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { ChevronDown, Search } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const FILTER_WIDTH = 204;
 const BORDER_RADIUS = 8;
 const BORDER_WIDTH = 1;
 const TEXT_SIZE = 12;
+
+const ACTION_ITEMS_STATUSES = ['To Do', 'In progress', 'In review', 'Completed'] as const;
 
 const DROPDOWN_STYLE: React.CSSProperties = {
   width: FILTER_WIDTH,
@@ -29,28 +31,31 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   fontSize: TEXT_SIZE,
 };
 
-export type MarketplaceSortOrder = 'asc' | 'desc' | null;
-
-export interface MarketplaceFilterState {
-  sortOrder: MarketplaceSortOrder;
-  walmartChecked: boolean;
-  amazonChecked: boolean;
-  marketplaceSearch: string;
+export type ActionItemsStatusSortOrder = 'asc' | 'desc' | null;
+export interface ActionItemsStatusFilterState {
+  sortOrder: ActionItemsStatusSortOrder;
+  statusSearch: string;
+  selectedStatuses: Record<string, boolean>;
 }
 
-export const DEFAULT_MARKETPLACE_FILTER: MarketplaceFilterState = {
-  sortOrder: null,
-  walmartChecked: true,
-  amazonChecked: true,
-  marketplaceSearch: '',
-};
+export function getDefaultActionItemsStatusFilter(): ActionItemsStatusFilterState {
+  const selectedStatuses: Record<string, boolean> = {};
+  for (const s of ACTION_ITEMS_STATUSES) {
+    selectedStatuses[s] = true;
+  }
+  return {
+    sortOrder: null,
+    statusSearch: '',
+    selectedStatuses,
+  };
+}
 
-interface MarketplaceFilterDropdownProps {
+interface ActionItemsStatusFilterProps {
   anchorRect: DOMRect | null;
   isOpen: boolean;
   onClose: () => void;
-  filter: MarketplaceFilterState;
-  onFilterChange: (filter: MarketplaceFilterState) => void;
+  filter: ActionItemsStatusFilterState;
+  onFilterChange: (filter: ActionItemsStatusFilterState) => void;
   onApply: () => void;
   onReset: () => void;
   resultCount: number;
@@ -58,9 +63,7 @@ interface MarketplaceFilterDropdownProps {
   triggerDataAttribute?: string;
 }
 
-const MARKETPLACE_LABELS = ['Walmart', 'Amazon'] as const;
-
-export function MarketplaceFilterDropdown({
+export function ActionItemsStatusFilter({
   anchorRect,
   isOpen,
   onClose,
@@ -70,10 +73,10 @@ export function MarketplaceFilterDropdown({
   onReset,
   resultCount,
   hasChanges = false,
-  triggerDataAttribute = 'data-marketplace-filter-trigger',
-}: MarketplaceFilterDropdownProps) {
+  triggerDataAttribute = 'data-action-items-status-filter-trigger',
+}: ActionItemsStatusFilterProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [valuesExpanded, setValuesExpanded] = React.useState(true);
+  const [valuesExpanded, setValuesExpanded] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,18 +97,32 @@ export function MarketplaceFilterDropdown({
   const left = anchorRect.left;
 
   const handleSelectAll = () => {
-    onFilterChange({ ...filter, walmartChecked: true, amazonChecked: true });
+    const next: Record<string, boolean> = {};
+    for (const s of ACTION_ITEMS_STATUSES) {
+      next[s] = true;
+    }
+    onFilterChange({ ...filter, selectedStatuses: next });
   };
 
   const handleClearAll = () => {
-    onFilterChange({ ...filter, walmartChecked: false, amazonChecked: false });
+    const next: Record<string, boolean> = {};
+    for (const s of ACTION_ITEMS_STATUSES) {
+      next[s] = false;
+    }
+    onFilterChange({ ...filter, selectedStatuses: next });
   };
+
+  const filteredStatusLabels = ACTION_ITEMS_STATUSES.filter((s) => {
+    const searchLower = filter.statusSearch.toLowerCase();
+    const labelLower = s.toLowerCase();
+    return !searchLower || labelLower.includes(searchLower);
+  });
 
   const content = (
     <div
       ref={dropdownRef}
       role="dialog"
-      aria-label="Marketplace filter"
+      aria-label="Action items status filter"
       style={{
         ...DROPDOWN_STYLE,
         position: 'fixed',
@@ -189,7 +206,7 @@ export function MarketplaceFilterDropdown({
         }}
       />
 
-      {/* Marketplace filter by values */}
+      {/* Filter by values */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button
           type="button"
@@ -224,73 +241,10 @@ export function MarketplaceFilterDropdown({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
-                alignSelf: 'flex-start',
-                marginLeft: -12,
-                marginTop: -8,
-              }}
-            >
-              <div
-                style={{
-                  width: 188,
-                  height: 24,
-                  position: 'relative',
-                  opacity: 1,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderStyle: 'solid',
-                  borderColor: '#374151',
-                  paddingTop: 6,
-                  paddingRight: 8,
-                  paddingBottom: 6,
-                  paddingLeft: 8,
-                  backgroundColor: '#1F2937',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <Search
-                  style={{
-                    position: 'absolute',
-                    left: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 14,
-                    height: 14,
-                    color: '#9CA3AF',
-                    pointerEvents: 'none',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder=""
-                  value={filter.marketplaceSearch}
-                  onChange={(e) =>
-                    onFilterChange({ ...filter, marketplaceSearch: e.target.value })
-                  }
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    padding: 0,
-                    paddingLeft: 20,
-                    border: 'none',
-                    borderRadius: 0,
-                    backgroundColor: 'transparent',
-                    color: '#FFFFFF',
-                    fontSize: TEXT_SIZE,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
                 gap: '4px',
                 flexWrap: 'wrap',
                 marginLeft: -12,
-                marginTop: 4,
+                marginTop: -8,
               }}
             >
               <button
@@ -335,6 +289,68 @@ export function MarketplaceFilterDropdown({
             <div
               style={{
                 display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                alignSelf: 'flex-start',
+                marginLeft: -12,
+              }}
+            >
+              <div
+                style={{
+                  width: 188,
+                  height: 24,
+                  position: 'relative',
+                  opacity: 1,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderStyle: 'solid',
+                  borderColor: '#374151',
+                  paddingTop: 6,
+                  paddingRight: 8,
+                  paddingBottom: 6,
+                  paddingLeft: 8,
+                  backgroundColor: '#1F2937',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <Search
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 14,
+                    height: 14,
+                    color: '#9CA3AF',
+                    pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder=""
+                  value={filter.statusSearch}
+                  onChange={(e) =>
+                    onFilterChange({ ...filter, statusSearch: e.target.value })
+                  }
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    padding: 0,
+                    paddingLeft: 20,
+                    border: 'none',
+                    borderRadius: 0,
+                    backgroundColor: 'transparent',
+                    color: '#FFFFFF',
+                    fontSize: TEXT_SIZE,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
                 marginTop: -2,
@@ -346,16 +362,11 @@ export function MarketplaceFilterDropdown({
                 width: 188,
               }}
             >
-              {MARKETPLACE_LABELS.filter((label) => {
-                const searchLower = filter.marketplaceSearch.toLowerCase();
-                const labelLower = label.toLowerCase();
-                return !searchLower || labelLower.includes(searchLower);
-              }).map((label) => {
-                const checked =
-                  label === 'Walmart' ? filter.walmartChecked : filter.amazonChecked;
+              {filteredStatusLabels.map((statusLabel) => {
+                const checked = filter.selectedStatuses[statusLabel] ?? true;
                 return (
                   <label
-                    key={label}
+                    key={statusLabel}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -369,11 +380,13 @@ export function MarketplaceFilterDropdown({
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => {
-                        if (label === 'Walmart') {
-                          onFilterChange({ ...filter, walmartChecked: e.target.checked });
-                        } else {
-                          onFilterChange({ ...filter, amazonChecked: e.target.checked });
-                        }
+                        onFilterChange({
+                          ...filter,
+                          selectedStatuses: {
+                            ...filter.selectedStatuses,
+                            [statusLabel]: e.target.checked,
+                          },
+                        });
                       }}
                       style={{
                         width: 16,
@@ -382,7 +395,7 @@ export function MarketplaceFilterDropdown({
                       }}
                       className="status-filter-checkbox"
                     />
-                    {label}
+                    {statusLabel}
                   </label>
                 );
               })}

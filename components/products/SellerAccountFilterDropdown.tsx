@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { ChevronDown, Search } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
 const FILTER_WIDTH = 204;
@@ -29,38 +29,42 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   fontSize: TEXT_SIZE,
 };
 
-export type MarketplaceSortOrder = 'asc' | 'desc' | null;
-
-export interface MarketplaceFilterState {
-  sortOrder: MarketplaceSortOrder;
-  walmartChecked: boolean;
-  amazonChecked: boolean;
-  marketplaceSearch: string;
+export type SellerAccountSortOrder = 'asc' | 'desc' | null;
+export interface SellerAccountFilterState {
+  sortOrder: SellerAccountSortOrder;
+  accountSearch: string;
+  selectedAccounts: Record<string, boolean>;
 }
 
-export const DEFAULT_MARKETPLACE_FILTER: MarketplaceFilterState = {
-  sortOrder: null,
-  walmartChecked: true,
-  amazonChecked: true,
-  marketplaceSearch: '',
-};
+export function getDefaultSellerAccountFilter(
+  availableAccounts: string[]
+): SellerAccountFilterState {
+  const selectedAccounts: Record<string, boolean> = {};
+  for (const acc of availableAccounts) {
+    selectedAccounts[acc] = true;
+  }
+  return {
+    sortOrder: null,
+    accountSearch: '',
+    selectedAccounts,
+  };
+}
 
-interface MarketplaceFilterDropdownProps {
+interface SellerAccountFilterDropdownProps {
   anchorRect: DOMRect | null;
   isOpen: boolean;
   onClose: () => void;
-  filter: MarketplaceFilterState;
-  onFilterChange: (filter: MarketplaceFilterState) => void;
+  filter: SellerAccountFilterState;
+  onFilterChange: (filter: SellerAccountFilterState) => void;
   onApply: () => void;
   onReset: () => void;
+  availableAccounts: string[];
   resultCount: number;
   hasChanges?: boolean;
   triggerDataAttribute?: string;
 }
 
-const MARKETPLACE_LABELS = ['Walmart', 'Amazon'] as const;
-
-export function MarketplaceFilterDropdown({
+export function SellerAccountFilterDropdown({
   anchorRect,
   isOpen,
   onClose,
@@ -68,12 +72,13 @@ export function MarketplaceFilterDropdown({
   onFilterChange,
   onApply,
   onReset,
+  availableAccounts,
   resultCount,
   hasChanges = false,
-  triggerDataAttribute = 'data-marketplace-filter-trigger',
-}: MarketplaceFilterDropdownProps) {
+  triggerDataAttribute = 'data-seller-account-filter-trigger',
+}: SellerAccountFilterDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [valuesExpanded, setValuesExpanded] = React.useState(true);
+  const [valuesExpanded, setValuesExpanded] = useState(true);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,18 +99,32 @@ export function MarketplaceFilterDropdown({
   const left = anchorRect.left;
 
   const handleSelectAll = () => {
-    onFilterChange({ ...filter, walmartChecked: true, amazonChecked: true });
+    const next: Record<string, boolean> = {};
+    for (const acc of availableAccounts) {
+      next[acc] = true;
+    }
+    onFilterChange({ ...filter, selectedAccounts: next });
   };
 
   const handleClearAll = () => {
-    onFilterChange({ ...filter, walmartChecked: false, amazonChecked: false });
+    const next: Record<string, boolean> = {};
+    for (const acc of availableAccounts) {
+      next[acc] = false;
+    }
+    onFilterChange({ ...filter, selectedAccounts: next });
   };
+
+  const filteredAccountLabels = availableAccounts.filter((acc) => {
+    const searchLower = filter.accountSearch.toLowerCase();
+    const accLower = acc.toLowerCase();
+    return !searchLower || accLower.includes(searchLower);
+  });
 
   const content = (
     <div
       ref={dropdownRef}
       role="dialog"
-      aria-label="Marketplace filter"
+      aria-label="Seller account filter"
       style={{
         ...DROPDOWN_STYLE,
         position: 'fixed',
@@ -189,7 +208,7 @@ export function MarketplaceFilterDropdown({
         }}
       />
 
-      {/* Marketplace filter by values */}
+      {/* Filter by values */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <button
           type="button"
@@ -224,73 +243,10 @@ export function MarketplaceFilterDropdown({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
-                alignSelf: 'flex-start',
-                marginLeft: -12,
-                marginTop: -8,
-              }}
-            >
-              <div
-                style={{
-                  width: 188,
-                  height: 24,
-                  position: 'relative',
-                  opacity: 1,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderStyle: 'solid',
-                  borderColor: '#374151',
-                  paddingTop: 6,
-                  paddingRight: 8,
-                  paddingBottom: 6,
-                  paddingLeft: 8,
-                  backgroundColor: '#1F2937',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <Search
-                  style={{
-                    position: 'absolute',
-                    left: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 14,
-                    height: 14,
-                    color: '#9CA3AF',
-                    pointerEvents: 'none',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder=""
-                  value={filter.marketplaceSearch}
-                  onChange={(e) =>
-                    onFilterChange({ ...filter, marketplaceSearch: e.target.value })
-                  }
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    padding: 0,
-                    paddingLeft: 20,
-                    border: 'none',
-                    borderRadius: 0,
-                    backgroundColor: 'transparent',
-                    color: '#FFFFFF',
-                    fontSize: TEXT_SIZE,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
                 gap: '4px',
                 flexWrap: 'wrap',
                 marginLeft: -12,
-                marginTop: 4,
+                marginTop: -8,
               }}
             >
               <button
@@ -335,6 +291,68 @@ export function MarketplaceFilterDropdown({
             <div
               style={{
                 display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                alignSelf: 'flex-start',
+                marginLeft: -12,
+              }}
+            >
+              <div
+                style={{
+                  width: 188,
+                  height: 24,
+                  position: 'relative',
+                  opacity: 1,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderStyle: 'solid',
+                  borderColor: '#374151',
+                  paddingTop: 6,
+                  paddingRight: 8,
+                  paddingBottom: 6,
+                  paddingLeft: 8,
+                  backgroundColor: '#1F2937',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <Search
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 14,
+                    height: 14,
+                    color: '#9CA3AF',
+                    pointerEvents: 'none',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder=""
+                  value={filter.accountSearch}
+                  onChange={(e) =>
+                    onFilterChange({ ...filter, accountSearch: e.target.value })
+                  }
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    padding: 0,
+                    paddingLeft: 20,
+                    border: 'none',
+                    borderRadius: 0,
+                    backgroundColor: 'transparent',
+                    color: '#FFFFFF',
+                    fontSize: TEXT_SIZE,
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
                 marginTop: -2,
@@ -346,16 +364,11 @@ export function MarketplaceFilterDropdown({
                 width: 188,
               }}
             >
-              {MARKETPLACE_LABELS.filter((label) => {
-                const searchLower = filter.marketplaceSearch.toLowerCase();
-                const labelLower = label.toLowerCase();
-                return !searchLower || labelLower.includes(searchLower);
-              }).map((label) => {
-                const checked =
-                  label === 'Walmart' ? filter.walmartChecked : filter.amazonChecked;
+              {filteredAccountLabels.map((accountLabel) => {
+                const checked = filter.selectedAccounts[accountLabel] ?? true;
                 return (
                   <label
-                    key={label}
+                    key={accountLabel}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -369,11 +382,13 @@ export function MarketplaceFilterDropdown({
                       type="checkbox"
                       checked={checked}
                       onChange={(e) => {
-                        if (label === 'Walmart') {
-                          onFilterChange({ ...filter, walmartChecked: e.target.checked });
-                        } else {
-                          onFilterChange({ ...filter, amazonChecked: e.target.checked });
-                        }
+                        onFilterChange({
+                          ...filter,
+                          selectedAccounts: {
+                            ...filter.selectedAccounts,
+                            [accountLabel]: e.target.checked,
+                          },
+                        });
                       }}
                       style={{
                         width: 16,
@@ -382,7 +397,7 @@ export function MarketplaceFilterDropdown({
                       }}
                       className="status-filter-checkbox"
                     />
-                    {label}
+                    {accountLabel}
                   </label>
                 );
               })}

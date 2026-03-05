@@ -27,6 +27,11 @@ import {
   DEFAULT_MARKETPLACE_FILTER,
   type MarketplaceFilterState,
 } from '@/components/products/MarketplaceFilterDropdown';
+import {
+  SellerAccountFilterDropdown,
+  getDefaultSellerAccountFilter,
+  type SellerAccountFilterState,
+} from '@/components/products/SellerAccountFilterDropdown';
 
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
@@ -59,6 +64,7 @@ const cardStyles = (isDarkMode: boolean) => ({
 const MARKETPLACES = ['Amazon', 'Walmart'] as const;
 type Marketplace = (typeof MARKETPLACES)[number];
 const SELLER_ACCOUNT = 'TPS Nutrients';
+const AVAILABLE_SELLER_ACCOUNTS = [SELLER_ACCOUNT];
 
 export default function ProductsPage() {
   const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace>('Amazon');
@@ -80,6 +86,16 @@ export default function ProductsPage() {
   const [marketplaceFilter, setMarketplaceFilter] = useState<MarketplaceFilterState>(DEFAULT_MARKETPLACE_FILTER);
   const [appliedMarketplaceFilter, setAppliedMarketplaceFilter] = useState<MarketplaceFilterState>(DEFAULT_MARKETPLACE_FILTER);
   const marketplaceTableHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [sellerAccountFilterOpen, setSellerAccountFilterOpen] = useState(false);
+  const [sellerAccountFilterAnchor, setSellerAccountFilterAnchor] = useState<DOMRect | null>(null);
+  const [sellerAccountFilter, setSellerAccountFilter] = useState<SellerAccountFilterState>(() =>
+    getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS)
+  );
+  const [appliedSellerAccountFilter, setAppliedSellerAccountFilter] =
+    useState<SellerAccountFilterState>(() =>
+      getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS)
+    );
+  const sellerAccountHeaderRef = useRef<HTMLTableCellElement>(null);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
@@ -145,6 +161,21 @@ export default function ProductsPage() {
     }
   }, [marketplaceFilterOpen]);
 
+  const handleSellerAccountFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (sellerAccountFilterOpen) {
+      setSellerAccountFilterOpen(false);
+      setSellerAccountFilterAnchor(null);
+    } else {
+      const rect = sellerAccountHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setSellerAccountFilterAnchor(rect);
+        setSellerAccountFilterOpen(true);
+      }
+    }
+  }, [sellerAccountFilterOpen]);
+
   useEffect(() => {
     if (!settingsDropdownOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -182,6 +213,17 @@ export default function ProductsPage() {
         return passes || fadingMap[p.id];
       });
     }
+    // Apply seller account filter (products use SELLER_ACCOUNT constant)
+    const checkedSellerAccounts = Object.entries(appliedSellerAccountFilter.selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checkedSellerAccounts.length > 0) {
+      list = list.filter((p) => {
+        const productAccount = SELLER_ACCOUNT;
+        return checkedSellerAccounts.includes(productAccount);
+      });
+    }
+
     // Apply products filter (name / brand / size)
     const valuesSelected = appliedProductsFilter.selectedValues;
     const brandsSelected = appliedProductsFilter.selectedBrands;
@@ -209,7 +251,7 @@ export default function ProductsPage() {
       });
     }
 
-    // Sort: marketplace (by name) > products (name) > status
+    // Sort: marketplace (by name) > products (name) > status > seller account
     if (appliedMarketplaceFilter.sortOrder) {
       list = [...list].sort((a, b) => {
         const aName = a.name?.toLowerCase() ?? '';
@@ -234,9 +276,16 @@ export default function ProductsPage() {
           ? aActive - bActive
           : bActive - aActive;
       });
+    } else if (appliedSellerAccountFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aAccount = SELLER_ACCOUNT;
+        const bAccount = SELLER_ACCOUNT;
+        const cmp = aAccount.localeCompare(bAccount);
+        return appliedSellerAccountFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
     }
     return list;
-  }, [products, searchQuery, appliedStatusFilter, appliedProductsFilter, appliedMarketplaceFilter, fadingMap]);
+  }, [products, searchQuery, appliedStatusFilter, appliedProductsFilter, appliedMarketplaceFilter, appliedSellerAccountFilter, fadingMap]);
 
   const handleExportCsv = useCallback(() => {
     const headers = ['Status', 'Product Name', 'ASIN', 'SKU', 'Brand', 'Size', 'Marketplace', 'Seller Account'];
@@ -307,6 +356,25 @@ export default function ProductsPage() {
   );
 
   const marketplaceFilterResultCount = products.length;
+
+  const sellerAccountFilterResultCount = useMemo(() => {
+    const checked = Object.entries(sellerAccountFilter.selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checked.length === 0) return 0;
+    return products.filter((p) => checked.includes(SELLER_ACCOUNT)).length;
+  }, [products, sellerAccountFilter.selectedAccounts]);
+
+  const hasActiveSellerAccountFilter = useMemo(() => {
+    const { sortOrder, selectedAccounts } = appliedSellerAccountFilter;
+    const allChecked = AVAILABLE_SELLER_ACCOUNTS.every((acc) => selectedAccounts[acc]);
+    return sortOrder != null || !allChecked;
+  }, [appliedSellerAccountFilter]);
+
+  const sellerAccountFilterHasChanges = useMemo(
+    () => JSON.stringify(sellerAccountFilter) !== JSON.stringify(appliedSellerAccountFilter),
+    [sellerAccountFilter, appliedSellerAccountFilter]
+  );
 
   const hasActiveProductsFilter = useMemo(() => {
     const { sortOrder, condition, selectedValues, selectedBrands, selectedSizes } =
@@ -508,7 +576,7 @@ export default function ProductsPage() {
               aria-expanded={settingsDropdownOpen}
               aria-haspopup="true"
             >
-              <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
+              <Image src="/assets/settings-icon.png" alt="Settings" width={24} height={24} />
             </button>
             {settingsDropdownOpen && (
               <div
@@ -704,16 +772,39 @@ export default function ProductsPage() {
                   </span>
                 </th>
                 <th
-                  className="text-center text-xs font-bold uppercase tracking-wider"
+                  ref={sellerAccountHeaderRef}
+                  data-seller-account-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleSellerAccountFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSellerAccountFilterClick();
+                    }
+                  }}
+                  className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '18%',
                     backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: sellerAccountFilterOpen || hasActiveSellerAccountFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
                 >
-                  SELLER ACCOUNT
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    SELLER ACCOUNT
+                    {hasActiveSellerAccountFilter && (
+                      <Image
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="inline-block"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                      />
+                    )}
+                  </span>
                 </th>
                 <th
                   style={{
@@ -1082,6 +1173,30 @@ export default function ProductsPage() {
         }}
         resultCount={marketplaceFilterResultCount}
         hasChanges={marketplaceFilterHasChanges}
+      />
+
+      <SellerAccountFilterDropdown
+        anchorRect={sellerAccountFilterAnchor}
+        isOpen={sellerAccountFilterOpen}
+        onClose={() => {
+          setSellerAccountFilterOpen(false);
+          setSellerAccountFilterAnchor(null);
+        }}
+        filter={sellerAccountFilter}
+        onFilterChange={setSellerAccountFilter}
+        onApply={() => {
+          setAppliedSellerAccountFilter(sellerAccountFilter);
+          setSellerAccountFilterOpen(false);
+          setSellerAccountFilterAnchor(null);
+        }}
+        onReset={() => {
+          const def = getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS);
+          setSellerAccountFilter(def);
+          setAppliedSellerAccountFilter(def);
+        }}
+        availableAccounts={AVAILABLE_SELLER_ACCOUNTS}
+        resultCount={sellerAccountFilterResultCount}
+        hasChanges={sellerAccountFilterHasChanges}
       />
     </div>
   );
