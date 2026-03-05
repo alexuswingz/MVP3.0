@@ -277,7 +277,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         {columnKey === 'fbaAvailable' && (
           <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
-              onClick={() => setPopularFilterExpanded(!popularFilterExpanded)}
+              onClick={() => { setFilterConditionExpanded(false); setFilterValuesExpanded(false); setBrandFilterExpanded(false); setSizeFilterExpanded(false); setPopularFilterExpanded(!popularFilterExpanded); }}
               style={{
                 padding: '8px 12px',
                 display: 'flex',
@@ -605,7 +605,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         {/* Filter by condition */}
         <div style={{ borderBottom: `1px solid ${theme.border}` }}>
           <div
-            onClick={() => setFilterConditionExpanded(!filterConditionExpanded)}
+            onClick={() => { setPopularFilterExpanded(false); setFilterValuesExpanded(false); setBrandFilterExpanded(false); setSizeFilterExpanded(false); setFilterConditionExpanded(!filterConditionExpanded); }}
             style={{
               padding: '8px 12px',
               display: 'flex',
@@ -766,7 +766,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         {(columnKey === 'product' || columnKey === 'unitsToMake' || columnKey === 'doiDays') && (
           <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
-              onClick={() => setFilterValuesExpanded(!filterValuesExpanded)}
+              onClick={() => { setPopularFilterExpanded(false); setFilterConditionExpanded(false); setBrandFilterExpanded(false); setSizeFilterExpanded(false); setFilterValuesExpanded(!filterValuesExpanded); }}
               style={{
                 padding: '8px 12px',
                 display: 'flex',
@@ -805,6 +805,14 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
             </div>
             {filterValuesExpanded && (
               <div style={{ padding: '0 12px 8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <button type="button" onClick={() => setSelectedValues(new Set(filteredValues))} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Select all</button>
+                    <span style={{ color: '#334155', margin: '0 6px', fontSize: 12 }}>|</span>
+                    <button type="button" onClick={() => setSelectedValues(new Set())} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Clear all</button>
+                  </div>
+                  <span style={{ fontSize: 12, color: theme.subtleText }}>{filteredValues.length.toLocaleString()} results</span>
+                </div>
                 {stringValues.length > 5 && (
                   <input
                     type="text"
@@ -813,10 +821,11 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                     placeholder="Search..."
                     style={{
                       width: '100%',
-                      padding: '5px 8px',
+                      height: 24,
+                      padding: '6px 8px',
                       marginBottom: 8,
-                      border: `1px solid ${theme.inputBorder}`,
-                      borderRadius: 4,
+                      border: '1px solid #334155',
+                      borderRadius: 6,
                       fontSize: 11,
                       outline: 'none',
                       boxSizing: 'border-box',
@@ -883,7 +892,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         {columnKey === 'product' && availableBrands.length > 0 && (
           <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
-              onClick={() => setBrandFilterExpanded(!brandFilterExpanded)}
+              onClick={() => { setPopularFilterExpanded(false); setFilterConditionExpanded(false); setFilterValuesExpanded(false); setSizeFilterExpanded(false); setBrandFilterExpanded(!brandFilterExpanded); }}
               style={{
                 padding: '8px 12px',
                 display: 'flex',
@@ -929,6 +938,14 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
             </div>
             {brandFilterExpanded && (
               <div style={{ padding: '0 12px 8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button type="button" onClick={() => setSelectedBrands(new Set(filteredBrands))} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Select all</button>
+                    <span style={{ color: '#334155', margin: '0 6px', fontSize: 12 }}>|</span>
+                    <button type="button" onClick={() => setSelectedBrands(new Set())} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Clear all</button>
+                  </div>
+                  <span style={{ fontSize: 12, color: theme.subtleText }}>{filteredBrands.length.toLocaleString()} results</span>
+                </div>
                 <input
                   type="text"
                   value={brandSearchTerm}
@@ -936,10 +953,11 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                   placeholder="Search brands..."
                   style={{
                     width: '100%',
-                    padding: '5px 8px',
+                    height: 24,
+                    padding: '6px 8px',
                     marginBottom: 8,
-                    border: `1px solid ${theme.inputBorder}`,
-                    borderRadius: 4,
+                    border: '1px solid #334155',
+                    borderRadius: 6,
                     fontSize: 11,
                     outline: 'none',
                     boxSizing: 'border-box',
@@ -1005,7 +1023,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
         {columnKey === 'product' && availableSizes.length > 0 && (
           <div style={{ borderBottom: `1px solid ${theme.border}` }}>
             <div
-              onClick={() => setSizeFilterExpanded(!sizeFilterExpanded)}
+              onClick={() => { setPopularFilterExpanded(false); setFilterConditionExpanded(false); setFilterValuesExpanded(false); setBrandFilterExpanded(false); setSizeFilterExpanded(!sizeFilterExpanded); }}
               style={{
                 padding: '8px 12px',
                 display: 'flex',
@@ -1051,6 +1069,14 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
             </div>
             {sizeFilterExpanded && (
               <div style={{ padding: '0 12px 8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button type="button" onClick={() => setSelectedSizes(new Set(filteredSizes))} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Select all</button>
+                    <span style={{ color: '#334155', margin: '0 6px', fontSize: 12 }}>|</span>
+                    <button type="button" onClick={() => setSelectedSizes(new Set())} style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3B82F6', cursor: 'pointer', fontFamily: 'inherit' }}>Clear all</button>
+                  </div>
+                  <span style={{ fontSize: 12, color: theme.subtleText }}>{filteredSizes.length.toLocaleString()} results</span>
+                </div>
                 <input
                   type="text"
                   value={sizeSearchTerm}
@@ -1058,10 +1084,11 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
                   placeholder="Search sizes..."
                   style={{
                     width: '100%',
-                    padding: '5px 8px',
+                    height: 24,
+                    padding: '6px 8px',
                     marginBottom: 8,
-                    border: `1px solid ${theme.inputBorder}`,
-                    borderRadius: 4,
+                    border: '1px solid #334155',
+                    borderRadius: 6,
                     fontSize: 11,
                     outline: 'none',
                     boxSizing: 'border-box',

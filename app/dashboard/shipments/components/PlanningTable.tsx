@@ -283,8 +283,6 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
   const [filterAnchorRect, setFilterAnchorRect] = useState<DOMRect | null>(null);
   const [filterValuesExpanded, setFilterValuesExpanded] = useState(true);
   const [filterConditionExpanded, setFilterConditionExpanded] = useState(false);
-  const [filterBrandExpanded, setFilterBrandExpanded] = useState(false);
-  const [filterSizeExpanded, setFilterSizeExpanded] = useState(false);
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
   const [selectedFilterValues, setSelectedFilterValues] = useState<Set<string>>(new Set());
   const [filterConditionType, setFilterConditionType] = useState('');
@@ -356,8 +354,6 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
     setFilterSearchTerm('');
     setFilterValuesExpanded(true);
     setFilterConditionExpanded(false);
-    setFilterBrandExpanded(false);
-    setFilterSizeExpanded(false);
   }, [openFilterColumn, rows, appliedColumnFilters, appliedConditionByColumn]);
 
   const isFilterActive = useCallback(
@@ -924,7 +920,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     {/* Filter by condition - collapsible (hidden for Status column) */}
                     <div style={{ borderBottom: `1px solid ${theme.border}` }}>
                       <div
-                        onClick={() => setFilterConditionExpanded(!filterConditionExpanded)}
+                        onClick={() => { setFilterValuesExpanded(false); setFilterConditionExpanded(!filterConditionExpanded); }}
                         style={{
                           padding: '8px 12px',
                           display: 'flex',
@@ -1051,7 +1047,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                 {/* Filter by values - with Select all, Clear all, results count, search, checkboxes */}
                 <div>
                   <div
-                    onClick={() => setFilterValuesExpanded(!filterValuesExpanded)}
+                    onClick={() => { setFilterConditionExpanded(false); setFilterValuesExpanded(!filterValuesExpanded); }}
                     style={{
                       padding: '8px 12px',
                       display: 'flex',
@@ -1151,49 +1147,6 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                   )}
                 </div>
 
-                {openFilterColumn !== 'status' && (
-                  <>
-                    {/* Filter by brand - collapsible (hidden for Status column) */}
-                    <div style={{ borderBottom: `1px solid ${theme.border}` }}>
-                      <div
-                        onClick={() => setFilterBrandExpanded(!filterBrandExpanded)}
-                        style={{
-                          padding: '8px 12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                        }}
-                      >
-                        <span style={{ fontSize: 12, color: theme.subtleText }}>Filter by brand:</span>
-                        <svg width={10} height={10} viewBox="0 0 12 12" fill="none" style={{ transform: filterBrandExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                          <path d="M3 4.5L6 7.5L9 4.5" stroke={theme.subtleText} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    {/* Filter by size - collapsible (hidden for Status column) */}
-                    <div style={{ borderBottom: `1px solid ${theme.border}` }}>
-                      <div
-                        onClick={() => setFilterSizeExpanded(!filterSizeExpanded)}
-                        style={{
-                          padding: '8px 12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          userSelect: 'none',
-                        }}
-                      >
-                        <span style={{ fontSize: 12, color: theme.subtleText }}>Filter by size:</span>
-                        <svg width={10} height={10} viewBox="0 0 12 12" fill="none" style={{ transform: filterSizeExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                          <path d="M3 4.5L6 7.5L9 4.5" stroke={theme.subtleText} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                    </div>
-                  </>
-                )}
 
                 {/* Footer: Reset / Apply — Reset on Status filter uses class for 57×23, 4px radius, #252F42, #334155 */}
                 <div style={{ padding: '8px 12px', borderTop: `1px solid ${theme.sectionBorder}`, display: 'flex', gap: openFilterColumn === 'status' ? 10 : 8, justifyContent: 'flex-end' }}>
