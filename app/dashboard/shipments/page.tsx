@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, Search, Loader2, Truck } from 'lucide-react';
+import { Plus, Search, Loader2, Truck, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 import type { Shipment, ShipmentStatus, ShipmentType } from '@/types';
 import {
   PlanningTable,
@@ -192,6 +193,58 @@ export default function ShipmentsPage() {
     [shipments]
   );
 
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        settingsButtonRef.current?.contains(target) ||
+        settingsDropdownRef.current?.contains(target)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const headers = ['Status', 'Shipment', 'Type', 'Marketplace', 'Account', 'Add Products', 'Book Shipment'];
+    const rows = planningRows.map((r) =>
+      [
+        escapeCsv(r.status ?? ''),
+        escapeCsv(r.shipment ?? ''),
+        escapeCsv(r.type ?? ''),
+        escapeCsv(r.marketplace ?? ''),
+        escapeCsv(r.account ?? ''),
+        escapeCsv(r.addProducts ?? ''),
+        escapeCsv(r.bookShipment ?? ''),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `shipments_export_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSettingsDropdownOpen(false);
+    toast.success('Shipments table exported as CSV');
+  }, [planningRows]);
+
   const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
   const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
 
@@ -371,6 +424,39 @@ export default function ShipmentsPage() {
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
+            )}
+          </div>
+          <div className="relative" ref={settingsDropdownRef}>
+            <Button
+              ref={settingsButtonRef}
+              variant="ghost"
+              size="icon"
+              className="text-gray-500 hover:text-gray-300"
+              aria-label="Settings"
+              aria-expanded={settingsDropdownOpen}
+              aria-haspopup="true"
+              onClick={() => setSettingsDropdownOpen((o) => !o)}
+            >
+              <Settings className="w-5 h-5" />
+            </Button>
+            {settingsDropdownOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+                style={{
+                  backgroundColor: CARD_BG,
+                  borderColor: CARD_BORDER,
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportCsv}
+                  className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity text-gray-200"
+                >
+                  Export as CSV
+                </button>
+              </div>
             )}
           </div>
           <Button

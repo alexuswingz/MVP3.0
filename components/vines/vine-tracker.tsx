@@ -174,7 +174,8 @@ const VineTracker = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'vine-products.csv';
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `vine_export_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Vine products exported as CSV');

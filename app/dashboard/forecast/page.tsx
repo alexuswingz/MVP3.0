@@ -14,6 +14,7 @@ import { api, type ForecastTableResponse } from '@/lib/api';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
 import type { DoiSettings } from '@/lib/doi-settings';
 import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
+import { toast } from '@/lib/toast';
 
 function toNgoosSelectedRow(row: ShipmentTableRow) {
   return {
@@ -96,6 +97,9 @@ export default function ForecastPage() {
   const [doiSettingsValues, setDoiSettingsValues] = useState<DoiSettings | null>(null);
   const manuallyEditedProductIds = useRef<Set<string>>(new Set());
   const hasRecalcForAppliedDoiRef = useRef(false);
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
   const runUnitsToMakeRecalc = useCallback((targetDOI: number) => {
     setTableRows((prev) => {
@@ -243,6 +247,56 @@ export default function ForecastPage() {
     );
   }, [tableRows, uploadedSeasonalityProductIds]);
 
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        settingsButtonRef.current?.contains(e.target as Node) ||
+        settingsDropdownRef.current?.contains(e.target as Node)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const invTotal = (r: ShipmentTableRow) =>
+      typeof r.inventory === 'number' ? r.inventory : (r.inventory?.total ?? '');
+    const headers = ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
+    const rows = displayRows.map((r) =>
+      [
+        escapeCsv(r.product.name ?? ''),
+        escapeCsv(r.product.brand ?? ''),
+        escapeCsv(r.product.size ?? ''),
+        escapeCsv(r.product.asin ?? ''),
+        escapeCsv(invTotal(r)),
+        escapeCsv(r.unitsToMake ?? ''),
+        escapeCsv(r.daysOfInventory ?? ''),
+        escapeCsv(r.doiFba ?? ''),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `forecast_export_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSettingsDropdownOpen(false);
+    toast.success('Forecast table exported as CSV');
+  }, [displayRows]);
+
   // Use real data from API summary, with fallback calculations
   const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);
   const totalDaysOfInventory = summary.totalDaysOfInventory || summary.avgDaysOfInventory || (
@@ -338,9 +392,43 @@ export default function ForecastPage() {
             )}
             Refresh
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Settings">
-            <Settings className="w-4 h-4" />
-          </Button>
+          <div className="relative" ref={settingsDropdownRef}>
+            <Button
+              ref={settingsButtonRef}
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Settings"
+              aria-expanded={settingsDropdownOpen}
+              aria-haspopup="true"
+              onClick={() => setSettingsDropdownOpen((o) => !o)}
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+            {settingsDropdownOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+                style={{
+                  backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                  borderColor: isDarkMode ? '#334155' : '#E5E7EB',
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportCsv}
+                  className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+                  style={{
+                    color: isDarkMode ? '#F9FAFB' : '#111827',
+                    backgroundColor: 'transparent',
+                  }}
+                >
+                  Export as CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 

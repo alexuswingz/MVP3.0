@@ -16,6 +16,7 @@ import ExportTemplateModal from './components/ExportTemplateModal';
 import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { api, type ForecastTableResponse, type ShipmentDetail } from '@/lib/api';
 import { calculateUnitsToMake } from '@/lib/calculations';
+import { toast } from '@/lib/toast';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
 const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
@@ -383,7 +384,64 @@ export default function NewShipmentAddProductsPage() {
     }
     return rows;
   }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
-  
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const headers = ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
+    const dateStr = new Date().toISOString().slice(0, 10);
+    if (tableMode) {
+      const rows = tableRows.map((r) =>
+        [
+          escapeCsv(r.product ?? ''),
+          escapeCsv(r.brand ?? ''),
+          escapeCsv(r.asin ?? r.childAsin ?? ''),
+          escapeCsv(r.variation1 ?? ''),
+          escapeCsv(r.inventory ?? r.in ?? ''),
+          escapeCsv(r.unitsToMake ?? ''),
+          escapeCsv(r.totalDoi ?? ''),
+          escapeCsv(r.fbaAvailableDoi ?? ''),
+        ].join(',')
+      );
+      const csv = [headers.join(','), ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shipment_products_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const rows = nonTableRows.map((r) =>
+        [
+          escapeCsv(r.product ?? ''),
+          escapeCsv(r.brand ?? ''),
+          escapeCsv(r.asin ?? ''),
+          escapeCsv(r.size ?? ''),
+          escapeCsv(r.inventory ?? ''),
+          escapeCsv(r.unitsToMake ?? ''),
+          escapeCsv(r.daysOfInventory ?? ''),
+          escapeCsv(r.fbaAvailableDoi ?? ''),
+        ].join(',')
+      );
+      const csv = [headers.join(','), ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shipment_products_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setShowSettingsDropdown(false);
+    toast.success('Table exported as CSV');
+  }, [tableMode, tableRows, nonTableRows]);
+
   // Use summary data from API or calculate from rows
   const totalProducts = apiData?.summary?.totalProducts ?? filteredApiRows.length;
   const totalPalettes = apiData?.summary?.totalPallets ?? (totalProducts * 0.5);
@@ -682,13 +740,13 @@ export default function NewShipmentAddProductsPage() {
                   backgroundColor: CARD_BG,
                   border: `1px solid ${BORDER}`,
                   borderRadius: 8,
-                  padding: '12px 16px',
+                  padding: '8px 0',
                   minWidth: 180,
                   zIndex: 50,
                   boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 16px' }}>
                   <span style={{ fontSize: 14, fontWeight: 500, color: tableMode ? '#3B82F6' : '#FFFFFF' }}>Table Mode</span>
                   <button
                     type="button"
@@ -719,6 +777,24 @@ export default function NewShipmentAddProductsPage() {
                     />
                   </button>
                 </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportCsv}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#E5E7EB',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Export as CSV
+                </button>
               </div>
             )}
           </div>

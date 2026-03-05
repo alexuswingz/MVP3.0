@@ -265,7 +265,8 @@ export default function ProductsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'my-products.csv';
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `products_export_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);

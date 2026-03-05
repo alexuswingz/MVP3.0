@@ -912,7 +912,8 @@ export function ActionItems() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'action-items.csv';
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `action_items_export_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setSettingsDropdownOpen(false);
