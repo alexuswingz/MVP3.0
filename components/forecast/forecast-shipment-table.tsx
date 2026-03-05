@@ -588,7 +588,7 @@ export function NewShipmentTable({
                 </td>
               </tr>
               <tr
-                className="forecast-table-row cursor-pointer"
+                className="forecast-table-row forecast-row-hover cursor-pointer"
                 style={{
                   backgroundColor: ROW_BG,
                   height: 'auto',

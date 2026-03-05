@@ -1859,6 +1859,27 @@ export default function NGOOSmodal({
   const [forecastData, setForecastData] = useState<ReturnType<typeof transformForecastData> | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Stable needsSeasonality: once true for a product, stays true until product changes or modal closes.
+  // This prevents the gear dropdown from disappearing right after the user uploads seasonality.
+  const [stableNeedsSeasonality, setStableNeedsSeasonality] = useState(false);
+  const prevProductIdForSeasonalityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const productId = selectedRow?.id != null ? String(selectedRow.id) : null;
+    if (!isOpen) {
+      setStableNeedsSeasonality(false);
+      prevProductIdForSeasonalityRef.current = null;
+      return;
+    }
+    if (productId !== prevProductIdForSeasonalityRef.current) {
+      // Product changed — capture the fresh value
+      prevProductIdForSeasonalityRef.current = productId;
+      setStableNeedsSeasonality(selectedRow?.needsSeasonality === true);
+    } else if (selectedRow?.needsSeasonality === true) {
+      // Allow latching to true (e.g. API response updated), but never flip back to false
+      setStableNeedsSeasonality(true);
+    }
+  }, [isOpen, selectedRow?.id, selectedRow?.needsSeasonality]);
+
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
     text: isDarkMode ? 'text-dark-text-primary' : 'text-gray-900',
@@ -2195,7 +2216,7 @@ export default function NGOOSmodal({
               forecasts={forecastData?.forecasts ?? []}
               salesHistory={forecastData?.salesHistory ?? []}
               isLoading={isLoading}
-              needsSeasonality={selectedRow?.needsSeasonality === true}
+              needsSeasonality={stableNeedsSeasonality}
               productId={selectedRow?.id != null ? String(selectedRow.id) : null}
               onSeasonalityUploaded={(id) => {
                 if (id) {

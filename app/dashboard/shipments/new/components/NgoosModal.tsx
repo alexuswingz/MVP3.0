@@ -114,6 +114,25 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [showCustomSettingsTooltip, setShowCustomSettingsTooltip] = useState(false);
   const [showGearDropdown, setShowGearDropdown] = useState(false);
   const [showSeasonalityModal, setShowSeasonalityModal] = useState(false);
+
+  // Stable needsSeasonality: once true for a product, stays true until product changes or modal closes.
+  // Prevents the gear dropdown from disappearing right after the user uploads seasonality.
+  const [stableNeedsSeasonality, setStableNeedsSeasonality] = useState(false);
+  const prevProductIdForSeasonalityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const productId = selectedProduct?.id != null ? String(selectedProduct.id) : null;
+    if (!isOpen) {
+      setStableNeedsSeasonality(false);
+      prevProductIdForSeasonalityRef.current = null;
+      return;
+    }
+    if (productId !== prevProductIdForSeasonalityRef.current) {
+      prevProductIdForSeasonalityRef.current = productId;
+      setStableNeedsSeasonality(selectedProduct?.needsSeasonality === true);
+    } else if (selectedProduct?.needsSeasonality === true) {
+      setStableNeedsSeasonality(true);
+    }
+  }, [isOpen, selectedProduct?.id, selectedProduct?.needsSeasonality]);
   const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
@@ -1655,7 +1674,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (selectedProduct?.needsSeasonality) {
+                          if (stableNeedsSeasonality) {
                             setShowGearDropdown((prev) => !prev);
                           } else {
                             setShowForecastSettingsModal(true);
@@ -1678,7 +1697,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         <img src="/assets/Icon%20Button.png" alt="Forecast Settings" width={20} height={20} style={{ display: 'block' }} />
                       </button>
                       {/* Gear dropdown menu - only shown when product needs seasonality */}
-                      {selectedProduct?.needsSeasonality && (
+                      {stableNeedsSeasonality && (
                         <ForecastSettingsDropdown
                           isOpen={showGearDropdown}
                           onClose={() => setShowGearDropdown(false)}
