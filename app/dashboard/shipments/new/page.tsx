@@ -16,6 +16,7 @@ import ExportTemplateModal from './components/ExportTemplateModal';
 import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { api, type ForecastTableResponse, type ShipmentDetail } from '@/lib/api';
 import { calculateUnitsToMake } from '@/lib/calculations';
+import { downloadTableAsCsv } from '@/lib/export-csv';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
 const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
@@ -209,12 +210,10 @@ export default function NewShipmentAddProductsPage() {
   /** Track products that have had seasonality uploaded (no longer need seasonality) */
   const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
   const [showShipmentDetailsModal, setShowShipmentDetailsModal] = useState(false);
-  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [visibleColumnKeys, setVisibleColumnKeys] = useState<ColumnKey[]>(DEFAULT_VISIBLE_COLUMN_KEYS);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const headerDropdownRef = useRef<HTMLDivElement>(null);
-  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const doiButtonRef = useRef<HTMLButtonElement>(null);
   const requiredDoiTooltipRef = useRef<HTMLDivElement>(null);
 
@@ -290,7 +289,6 @@ export default function NewShipmentAddProductsPage() {
     const handleClickOutside = (e: MouseEvent) => {
       if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
       if (headerDropdownRef.current && !headerDropdownRef.current.contains(e.target as Node)) setShowHeaderDropdown(false);
-      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(e.target as Node)) setShowSettingsDropdown(false);
       if (requiredDoiTooltipRef.current && !requiredDoiTooltipRef.current.contains(e.target as Node)) setShowRequiredDoiTooltip(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -653,26 +651,70 @@ export default function NewShipmentAddProductsPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div ref={settingsDropdownRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            onClick={() => {
+              downloadTableAsCsv({
+                pageName: 'shipments',
+                columns: [
+                  { key: 'brand', label: 'Brand' },
+                  { key: 'product', label: 'Product' },
+                  { key: 'asin', label: 'ASIN' },
+                  { key: 'variation1', label: 'Variation 1' },
+                  { key: 'variation2', label: 'Variation 2' },
+                  { key: 'inventory', label: 'Inventory' },
+                  { key: 'totalDoi', label: 'Total DOI' },
+                  { key: 'fbaAvailableDoi', label: 'FBA Available DOI' },
+                  { key: 'unitsToMake', label: 'Units to Make' },
+                ],
+                rows: tableRows.map((r) => ({
+                  brand: r.brand ?? '',
+                  product: r.product ?? '',
+                  asin: r.asin ?? '',
+                  variation1: r.variation1 ?? '',
+                  variation2: r.variation2 ?? '',
+                  inventory: r.inventory ?? '',
+                  totalDoi: r.totalDoi ?? '',
+                  fbaAvailableDoi: r.fbaAvailableDoi ?? '',
+                  unitsToMake: r.unitsToMake ?? '',
+                })),
+              });
+            }}
+            style={{
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#9CA3AF',
+            }}
+            aria-label="Export table as CSV"
+            title="Export table as CSV"
+          >
+            <img src="/assets/Icon%20Button.png" alt="" width={24} height={24} style={{ display: 'block' }} />
+          </button>
+          <div ref={headerDropdownRef} style={{ position: 'relative' }}>
             <button
               type="button"
-              onClick={() => setShowSettingsDropdown((v) => !v)}
+              onClick={() => setShowHeaderDropdown((v) => !v)}
               style={{
-                width: 24,
-                height: 24,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'transparent',
+                background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
+                padding: 4,
                 color: '#9CA3AF',
               }}
-              aria-label="Settings"
             >
-              <img src="/assets/Icon%20Button.png" alt="" width={24} height={24} style={{ display: 'block' }} />
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="5" r="1" fill="currentColor" />
+                <circle cx="12" cy="12" r="1" fill="currentColor" />
+                <circle cx="12" cy="19" r="1" fill="currentColor" />
+              </svg>
             </button>
-            {showSettingsDropdown && (
+            {showHeaderDropdown && (
               <div
                 style={{
                   position: 'absolute',
@@ -682,14 +724,22 @@ export default function NewShipmentAddProductsPage() {
                   backgroundColor: CARD_BG,
                   border: `1px solid ${BORDER}`,
                   borderRadius: 8,
-                  padding: '12px 16px',
                   minWidth: 180,
-                  zIndex: 50,
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                  zIndex: 1000,
+                  overflow: 'hidden',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                  <span style={{ fontSize: 14, fontWeight: 500, color: tableMode ? '#3B82F6' : '#FFFFFF' }}>Table Mode</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    padding: '10px 16px',
+                    borderBottom: `1px solid ${BORDER}`,
+                  }}
+                >
+                  <span style={{ fontSize: 14, fontWeight: 500, color: tableMode ? '#3B82F6' : '#E5E7EB' }}>Table Mode</span>
                   <button
                     type="button"
                     onClick={() => setTableMode((v) => !v)}
@@ -719,42 +769,6 @@ export default function NewShipmentAddProductsPage() {
                     />
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
-          <div ref={headerDropdownRef} style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => setShowHeaderDropdown((v) => !v)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 4,
-                color: '#9CA3AF',
-              }}
-            >
-              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="5" r="1" fill="currentColor" />
-                <circle cx="12" cy="12" r="1" fill="currentColor" />
-                <circle cx="12" cy="19" r="1" fill="currentColor" />
-              </svg>
-            </button>
-            {showHeaderDropdown && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: 8,
-                  backgroundColor: CARD_BG,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 8,
-                  minWidth: 160,
-                  zIndex: 1000,
-                  overflow: 'hidden',
-                }}
-              >
                 <button
                   type="button"
                   style={{

@@ -18,6 +18,7 @@ import {
   DEFAULT_FILTER,
   type StatusFilterState,
 } from '@/components/products/StatusFilterDropdown';
+import { downloadTableAsCsv } from '@/lib/export-csv';
 
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
@@ -274,10 +275,32 @@ export default function ProductsPage() {
           </div>
           <button
             type="button"
+            onClick={() => {
+              downloadTableAsCsv({
+                pageName: 'products',
+                columns: [
+                  { key: 'status', label: 'Status' },
+                  { key: 'name', label: 'Product Name' },
+                  { key: 'asin', label: 'ASIN' },
+                  { key: 'sku', label: 'SKU' },
+                  { key: 'marketplace', label: 'Marketplace' },
+                  { key: 'sellerAccount', label: 'Seller Account' },
+                ],
+                rows: filteredProducts.map((p) => ({
+                  status: p.isActive !== false ? 'Active' : 'Inactive',
+                  name: p.name ?? '',
+                  asin: p.asin ?? '',
+                  sku: p.sku ?? '',
+                  marketplace: selectedMarketplace,
+                  sellerAccount: SELLER_ACCOUNT,
+                })),
+              });
+            }}
             className="flex items-center justify-center hover:opacity-80 transition-opacity"
-            aria-label="Settings"
+            aria-label="Export table as CSV"
+            title="Export table as CSV"
           >
-            <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
+            <Image src="/assets/Icon Button.png" alt="Export CSV" width={24} height={24} />
           </button>
         </div>
       </motion.div>

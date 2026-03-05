@@ -14,6 +14,7 @@ import { api, type ForecastTableResponse } from '@/lib/api';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
 import type { DoiSettings } from '@/lib/doi-settings';
 import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
+import { downloadTableAsCsv } from '@/lib/export-csv';
 
 function toNgoosSelectedRow(row: ShipmentTableRow) {
   return {
@@ -338,7 +339,42 @@ export default function ForecastPage() {
             )}
             Refresh
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Settings">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Export table as CSV"
+            title="Export table as CSV"
+            onClick={() => {
+              const invTotal = (r: typeof displayRows[0]) =>
+                typeof r.inventory === 'number' ? r.inventory : (r.inventory?.total ?? 0);
+              downloadTableAsCsv({
+                pageName: 'forecast',
+                columns: [
+                  { key: 'productName', label: 'Product Name' },
+                  { key: 'asin', label: 'ASIN' },
+                  { key: 'sku', label: 'SKU' },
+                  { key: 'brand', label: 'Brand' },
+                  { key: 'inventory', label: 'Inventory' },
+                  { key: 'unitsToMake', label: 'Units to Make' },
+                  { key: 'daysOfInventory', label: 'Days of Inventory' },
+                  { key: 'doiFba', label: 'DOI FBA' },
+                  { key: 'avgWeeklySales', label: 'Avg Weekly Sales' },
+                ],
+                rows: displayRows.map((r) => ({
+                  productName: r.product.name ?? '',
+                  asin: r.product.asin ?? '',
+                  sku: r.product.sku ?? '',
+                  brand: r.product.brand ?? '',
+                  inventory: invTotal(r),
+                  unitsToMake: r.unitsToMake ?? '',
+                  daysOfInventory: r.daysOfInventory ?? '',
+                  doiFba: r.doiFba ?? '',
+                  avgWeeklySales: r.avgWeeklySales ?? '',
+                })),
+              });
+            }}
+          >
             <Settings className="w-4 h-4" />
           </Button>
         </div>
