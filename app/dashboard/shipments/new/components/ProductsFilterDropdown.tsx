@@ -887,27 +887,43 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
           </div>
         )}
 
-        {/* Footer: Reset / Apply */}
+        {/* Footer: Reset / Apply — Reset: Hug 57×23, radius 4px, fill #252F42, border #334155 */}
+        <style>{`[data-products-filter-reset] {
+          min-width: 57px !important;
+          min-height: 23px !important;
+          padding: 4px 12px !important;
+          font-size: 12px !important;
+          border-radius: 4px !important;
+          border: 1px solid #334155 !important;
+          background-color: #252F42 !important;
+          color: #E5E7EB !important;
+          cursor: pointer !important;
+          box-sizing: border-box !important;
+        }`}</style>
         <div
           style={{
             padding: '8px 12px',
             borderTop: `1px solid ${theme.sectionBorder}`,
             display: 'flex',
-            gap: 8,
+            gap: 10,
             justifyContent: 'flex-end',
           }}
         >
           <button
             type="button"
+            data-products-filter-reset
             onClick={handleReset}
             style={{
-              padding: '6px 12px',
+              minWidth: 57,
+              minHeight: 23,
+              padding: '4px 12px',
               fontSize: 12,
-              borderRadius: 6,
-              border: `1px solid ${theme.inputBorder}`,
-              backgroundColor: theme.inputBg,
-              color: theme.inputText,
+              borderRadius: 4,
+              border: '1px solid #334155',
+              backgroundColor: '#252F42',
+              color: '#E5E7EB',
               cursor: 'pointer',
+              boxSizing: 'border-box',
             }}
           >
             Reset

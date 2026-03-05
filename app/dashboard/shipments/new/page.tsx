@@ -455,11 +455,25 @@ export default function NewShipmentAddProductsPage() {
     [draftShipmentId, createDraftShipment, router]
   );
 
+  const updateWorkflowTabInUrl = useCallback((tab: 'add-products' | 'book-shipment') => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    router.replace(`/dashboard/shipments/new?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const handleAddProductsTabClick = useCallback(() => {
+    setActiveWorkflowTab('add-products');
+    updateWorkflowTabInUrl('add-products');
+  }, [updateWorkflowTabInUrl]);
+
   const handleBookShipmentTabClick = useCallback(async () => {
     if (addedProductIds.size === 0) return;
     if (draftShipmentId == null) {
       const ok = await createDraftShipment(true);
-      if (ok) setActiveWorkflowTab('book-shipment');
+      if (ok) {
+        setActiveWorkflowTab('book-shipment');
+        updateWorkflowTabInUrl('book-shipment');
+      }
     } else {
       // Update existing shipment status to 'ready' (Add Products completed, Book Shipment in progress)
       try {
@@ -468,8 +482,9 @@ export default function NewShipmentAddProductsPage() {
         console.error('Failed to update shipment status:', err);
       }
       setActiveWorkflowTab('book-shipment');
+      updateWorkflowTabInUrl('book-shipment');
     }
-  }, [addedProductIds.size, draftShipmentId, createDraftShipment]);
+  }, [addedProductIds.size, draftShipmentId, createDraftShipment, updateWorkflowTabInUrl]);
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
@@ -763,6 +778,8 @@ export default function NewShipmentAddProductsPage() {
 
       {/* Workflow tabs — Add Products / Book Shipment (circle indicator + animated fill bar) */}
       <div
+        role="tablist"
+        aria-label="Add Products and Book Shipment"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -777,7 +794,9 @@ export default function NewShipmentAddProductsPage() {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            onClick={() => setActiveWorkflowTab('add-products')}
+            onClick={handleAddProductsTabClick}
+            aria-selected={activeWorkflowTab === 'add-products'}
+            role="tab"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -825,9 +844,11 @@ export default function NewShipmentAddProductsPage() {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            onClick={() => addedProductIds.size > 0 && handleBookShipmentTabClick()}
+            onClick={() => addedProductIds.size > 0 && void handleBookShipmentTabClick()}
             title={addedProductIds.size === 0 ? 'Add at least one product first' : undefined}
             disabled={addedProductIds.size === 0}
+            aria-selected={activeWorkflowTab === 'book-shipment'}
+            role="tab"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1609,6 +1630,7 @@ export default function NewShipmentAddProductsPage() {
             await handleBookShipmentTabClick();
           } else {
             setActiveWorkflowTab('book-shipment');
+            updateWorkflowTabInUrl('book-shipment');
           }
         }}
         preSelectedType={
