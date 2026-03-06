@@ -18,6 +18,8 @@ import {
   type ProductsFilterState,
 } from '@/components/actions/action-items-product-filter';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth-store';
 
 type TicketDetail = {
   ticketId: string;
@@ -97,7 +99,10 @@ const DEFAULT_TABLE_ITEMS: TableRow[] = [
 ];
 
 /** Build a minimal TicketDetail from a table row (e.g. when saving description for a row that has no ticketDetails yet). */
-function ticketDetailFromRow(row: TableRow): TicketDetail {
+function ticketDetailFromRow(
+  row: TableRow,
+  createdByInfo?: { createdBy: string; createdByInitials: string }
+): TicketDetail {
   const now = new Date();
   const dateStr = `${MONTH_NAMES[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
   return {
@@ -115,8 +120,8 @@ function ticketDetailFromRow(row: TableRow): TicketDetail {
     assignee: row.assignee,
     assigneeInitials: row.assigneeInitials,
     dueDate: row.dueDate,
-    createdBy: 'Christian R.',
-    createdByInitials: 'CR',
+    createdBy: createdByInfo?.createdBy ?? '—',
+    createdByInitials: createdByInfo?.createdByInitials ?? '—',
     dateCreated: dateStr,
   };
 }
@@ -707,6 +712,14 @@ function DetailModal({
 }
 
 export function ActionItems() {
+  const { user } = useAuthStore();
+  const createdByDisplay = user?.name ?? '—';
+  const createdByInitialsDisplay = getInitials(user?.name ?? '');
+
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
   const [filter, setFilter] = useState<'my' | 'all'>('my');
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
@@ -779,6 +792,25 @@ export function ActionItems() {
   const justSavedDescriptionRef = useRef<{ id: number; html: string } | null>(null);
 
   useEffect(() => {
+    setProductsLoading(true);
+    setProductsError(null);
+    api
+      .getProducts({ ordering: '-created_at' })
+      .then((res) => {
+        setProductsList(
+          res.results.map((p) => ({
+            asin: p.asin,
+            name: p.name,
+            brand: p.brand_name ?? '',
+            unit: p.size ?? '',
+          }))
+        );
+      })
+      .catch((e) => setProductsError(e instanceof Error ? e.message : 'Failed to load products'))
+      .finally(() => setProductsLoading(false));
+  }, []);
+
+  useEffect(() => {
     if (!isProductDropdownOpen && !isAssigneeDropdownOpen && rowMenuOpenId === null) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -842,7 +874,7 @@ export function ActionItems() {
       setTicketDetails((prev) => {
         const existing = prev[id];
         const row = tableItems.find((r) => r.id === id);
-        const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+        const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
         if (process.env.NODE_ENV === 'development' && !base) {
           console.warn('[ActionItems] handleDescriptionSave: no detail or row for id=', id, 'keys=', Object.keys(prev));
         }
@@ -1821,7 +1853,7 @@ export function ActionItems() {
             setTicketDetails((prev) => {
               const existing = prev[selectedDetailId];
               const row = tableItems.find((r) => r.id === selectedDetailId);
-              const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
               if (!base) return prev;
               return { ...prev, [selectedDetailId]: { ...base, status } };
             });
@@ -1833,7 +1865,7 @@ export function ActionItems() {
               setTicketDetails((prev) => {
                 const existing = prev[selectedDetailId];
                 const row = tableItems.find((r) => r.id === selectedDetailId);
-                const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+                const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
                 if (!base) return prev;
                 const next = { ...prev, [selectedDetailId]: { ...base, attachments } };
                 nextTicketDetails = next;
@@ -1934,19 +1966,33 @@ export function ActionItems() {
                     >
                       <div className="max-h-64 overflow-y-auto">
                         {(() => {
-                          const filtered = MOCK_PRODUCTS.filter((product) => {
+                          if (productsLoading) {
+                            return (
+                              <div className="px-4 py-3 text-sm text-gray-500" style={{ background: '#0F172A' }}>
+                                Loading products…
+                              </div>
+                            );
+                          }
+                          if (productsError) {
+                            return (
+                              <div className="px-4 py-3 text-sm text-amber-500" style={{ background: '#0F172A' }}>
+                                {productsError}
+                              </div>
+                            );
+                          }
+                          const filtered = productsList.filter((product) => {
                             if (!productSearch.trim()) return true;
                             const q = productSearch.toLowerCase();
                             return (
                               product.name.toLowerCase().includes(q) ||
                               product.asin.toLowerCase().includes(q) ||
-                              product.brand.toLowerCase().includes(q)
+                              (product.brand && product.brand.toLowerCase().includes(q))
                             );
                           });
                           if (filtered.length === 0) {
                             return (
                               <div className="px-4 py-3 text-sm text-gray-500" style={{ background: '#0F172A' }}>
-                                No products found.
+                                {productsList.length === 0 ? 'No products in your catalog.' : 'No products found.'}
                               </div>
                             );
                           }
@@ -2341,8 +2387,8 @@ export function ActionItems() {
                       assignee: assigneeStr,
                       assigneeInitials: assigneeInitialsStr,
                       dueDate: dueDateTableStr,
-                      createdBy: 'Christian R.',
-                      createdByInitials: 'CR',
+                      createdBy: createdByDisplay,
+                      createdByInitials: createdByInitialsDisplay,
                       dateCreated: dateCreatedStr,
                     },
                   }));
