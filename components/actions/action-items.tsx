@@ -576,30 +576,37 @@ function DetailModal({
                 multiple
                 accept="*/*"
                 style={{ display: 'none' }}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const files = e.target.files;
                   if (!files?.length) return;
                   const now = new Date();
                   const uploadedAt = `${MONTH_NAMES[now.getMonth()].slice(0, 3)}. ${now.getDate()}, ${now.getFullYear()}`;
                   const newAtts: { name: string; url: string; type?: string; uploadedAt: string }[] = [];
-                  let done = 0;
-                  const total = files.length;
-                  const processNext = () => {
-                    if (done >= total) {
-                      onAttachmentsChange([...attachments, ...newAtts]);
-                      e.target.value = '';
-                      return;
+                  for (let i = 0; i < files.length; i++) {
+                    const f = files[i]!;
+                    const formData = new FormData();
+                    formData.append('file', f);
+                    try {
+                      const res = await fetch('/api/action-items/attachments', { method: 'POST', body: formData });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        toast.error(data?.error ?? `Failed to upload ${f.name}`);
+                        continue;
+                      }
+                      newAtts.push({
+                        name: data.name ?? f.name,
+                        url: data.url ?? '',
+                        type: f.type,
+                        uploadedAt,
+                      });
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : `Failed to upload ${f.name}`);
                     }
-                    const f = files[done];
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      newAtts.push({ name: f.name, url: reader.result as string, type: f.type, uploadedAt });
-                      done++;
-                      processNext();
-                    };
-                    reader.readAsDataURL(f);
-                  };
-                  processNext();
+                  }
+                  if (newAtts.length > 0) {
+                    onAttachmentsChange([...attachments, ...newAtts]);
+                  }
+                  e.target.value = '';
                 }}
               />
             </div>
