@@ -544,6 +544,8 @@ interface NgoosContentProps {
   salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;
   isLoading?: boolean;
   needsSeasonality?: boolean;
+  /** When true, clicking Seasonality Curve opens the chart preview directly (data already uploaded). */
+  seasonalityUploaded?: boolean;
   onUploadSeasonality?: () => void;
   /** Product id for seasonality upload callback. */
   productId?: string | null;
@@ -619,6 +621,7 @@ function NgoosContent({
   salesHistory = [],
   isLoading = false,
   needsSeasonality = false,
+  seasonalityUploaded = false,
   onUploadSeasonality,
   productId = null,
   onSeasonalityUploaded,
@@ -1001,6 +1004,7 @@ function NgoosContent({
                 showSettingsDropdown={needsSeasonality === true}
                 productId={productId}
                 onSeasonalityUploaded={onSeasonalityUploaded}
+                seasonalityUploaded={seasonalityUploaded}
               />
             </div>
           )}
@@ -1873,12 +1877,14 @@ export default function NGOOSmodal({
     if (productId !== prevProductIdForSeasonalityRef.current) {
       // Product changed — capture the fresh value
       prevProductIdForSeasonalityRef.current = productId;
-      setStableNeedsSeasonality(selectedRow?.needsSeasonality === true);
-    } else if (selectedRow?.needsSeasonality === true) {
+      setStableNeedsSeasonality(
+        selectedRow?.needsSeasonality === true || selectedRow?.seasonalityUploaded === true
+      );
+    } else if (selectedRow?.needsSeasonality === true || selectedRow?.seasonalityUploaded === true) {
       // Allow latching to true (e.g. API response updated), but never flip back to false
       setStableNeedsSeasonality(true);
     }
-  }, [isOpen, selectedRow?.id, selectedRow?.needsSeasonality]);
+  }, [isOpen, selectedRow?.id, selectedRow?.needsSeasonality, selectedRow?.seasonalityUploaded]);
 
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
@@ -2217,6 +2223,7 @@ export default function NGOOSmodal({
               salesHistory={forecastData?.salesHistory ?? []}
               isLoading={isLoading}
               needsSeasonality={stableNeedsSeasonality}
+              seasonalityUploaded={selectedRow?.seasonalityUploaded === true}
               productId={selectedRow?.id != null ? String(selectedRow.id) : null}
               onSeasonalityUploaded={(id) => {
                 if (id) {

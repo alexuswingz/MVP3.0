@@ -146,6 +146,8 @@ interface ForecastUnitProps {
   productId?: string | null;
   /** Called when seasonality is successfully uploaded; use to refresh units/bar. */
   onSeasonalityUploaded?: (productId: string | null) => void;
+  /** When true, clicking Seasonality Curve opens the chart preview directly (data already uploaded). */
+  seasonalityUploaded?: boolean;
 }
 
 export default function ForecastUnit({
@@ -159,6 +161,7 @@ export default function ForecastUnit({
   showSettingsDropdown = false,
   productId = null,
   onSeasonalityUploaded,
+  seasonalityUploaded = false,
 }: ForecastUnitProps) {
   const [hoveredSegment, setHoveredSegment] = useState<'fba' | 'total' | 'forecast' | null>(null);
   const [zoomToolActive, setZoomToolActive] = useState(false);
@@ -1350,6 +1353,7 @@ export default function ForecastUnit({
         productId={productId}
         isDarkMode={isDarkMode}
         onSeasonalityUploaded={onSeasonalityUploaded}
+        initialShowPreview={seasonalityUploaded}
       />
     </div>
   );

@@ -128,11 +128,13 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
     }
     if (productId !== prevProductIdForSeasonalityRef.current) {
       prevProductIdForSeasonalityRef.current = productId;
-      setStableNeedsSeasonality(selectedProduct?.needsSeasonality === true);
-    } else if (selectedProduct?.needsSeasonality === true) {
+      setStableNeedsSeasonality(
+        selectedProduct?.needsSeasonality === true || selectedProduct?.seasonalityUploaded === true
+      );
+    } else if (selectedProduct?.needsSeasonality === true || selectedProduct?.seasonalityUploaded === true) {
       setStableNeedsSeasonality(true);
     }
-  }, [isOpen, selectedProduct?.id, selectedProduct?.needsSeasonality]);
+  }, [isOpen, selectedProduct?.id, selectedProduct?.needsSeasonality, selectedProduct?.seasonalityUploaded]);
   const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
@@ -3155,6 +3157,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
         onClose={() => setShowSeasonalityModal(false)}
         productId={selectedProduct?.id ? String(selectedProduct.id) : null}
         isDarkMode
+        initialShowPreview={selectedProduct?.seasonalityUploaded === true}
         onUploadSuccess={() => {
           if (selectedProduct?.id && onSeasonalityUploaded) {
             onSeasonalityUploaded(String(selectedProduct.id));

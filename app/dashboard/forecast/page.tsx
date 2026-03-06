@@ -32,6 +32,7 @@ function toNgoosSelectedRow(row: ShipmentTableRow) {
     sku: row.product.sku,
     image_url: row.product.imageUrl ?? null,
     needsSeasonality: row.needsSeasonality === true,
+    seasonalityUploaded: row.seasonalityUploaded === true,
   };
 }
 
