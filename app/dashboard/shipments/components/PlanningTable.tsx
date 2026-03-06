@@ -782,6 +782,20 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
             );
             const hasSelection = selectedFilterValues.size > 0 && selectedFilterValues.size < stringValues.length;
 
+            // Apply button is enabled only when draft state differs from applied state
+            const appliedSet =
+              appliedColumnFilters[openFilterColumn] != null && appliedColumnFilters[openFilterColumn]!.size > 0
+                ? appliedColumnFilters[openFilterColumn]!
+                : new Set(stringValues);
+            const setsEqual = (a: Set<string>, b: Set<string>) =>
+              a.size === b.size && [...a].every((x) => b.has(x));
+            const hasValueChange = !setsEqual(selectedFilterValues, appliedSet);
+            const appliedCond = appliedConditionByColumn[openFilterColumn];
+            const hasConditionChange =
+              filterConditionType !== (appliedCond?.type ?? '') ||
+              filterConditionValue !== (appliedCond?.value ?? '');
+            const hasChanges = hasValueChange || hasConditionChange;
+
             const handleToggleValue = (value: string) => {
               setSelectedFilterValues((prev) => {
                 const next = new Set(prev);
@@ -1172,7 +1186,21 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                   >
                     Reset
                   </button>
-                  <button type="button" onClick={handleApply} style={{ padding: '6px 12px', fontSize: 12, borderRadius: 6, border: 'none', backgroundColor: theme.chipBgActive, color: '#FFFFFF', cursor: 'pointer' }}>
+                  <button
+                    type="button"
+                    onClick={hasChanges ? handleApply : undefined}
+                    disabled={!hasChanges}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: 'none',
+                      backgroundColor: hasChanges ? theme.chipBgActive : '#1F2937',
+                      color: hasChanges ? '#FFFFFF' : '#6B7280',
+                      cursor: hasChanges ? 'pointer' : 'default',
+                      opacity: hasChanges ? 1 : 0.8,
+                    }}
+                  >
                     Apply
                   </button>
                 </div>

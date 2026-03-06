@@ -6,6 +6,7 @@ import React, {
   forwardRef,
   useRef,
   useImperativeHandle,
+  useMemo,
 } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -81,7 +82,7 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
     const [isPositioned, setIsPositioned] = useState(false);
     const [sortOrder, setSortOrder] = useState('');
     const [filterConditionExpanded, setFilterConditionExpanded] = useState(false);
-    const [filterValuesExpanded, setFilterValuesExpanded] = useState(false);
+    const [filterValuesExpanded, setFilterValuesExpanded] = useState(true);
     const [brandFilterExpanded, setBrandFilterExpanded] = useState(false);
     const [sizeFilterExpanded, setSizeFilterExpanded] = useState(false);
     const [popularFilterExpanded, setPopularFilterExpanded] = useState(true);
@@ -173,6 +174,75 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
     const filteredBrands = availableBrands.filter((b) =>
       b.toLowerCase().includes(brandSearchTerm.toLowerCase())
     );
+
+    const hasChanges = useMemo(() => {
+      const norm = (s: Set<string> | undefined | null | string[]): string =>
+        !s
+          ? ''
+          : (s instanceof Set ? Array.from(s) : Array.isArray(s) ? s : [])
+              .map(String)
+              .sort()
+              .join(',');
+      const valuesEqual =
+        norm(selectedValues) ===
+        (existingValues
+          ? existingValues instanceof Set
+            ? Array.from(existingValues).map(String).sort().join(',')
+            : Array.isArray(existingValues)
+              ? (existingValues as string[]).map(String).sort().join(',')
+              : ''
+          : norm(new Set(stringValues)));
+      const brandsEqual =
+        norm(selectedBrands) ===
+        (existingBrands
+          ? existingBrands instanceof Set
+            ? Array.from(existingBrands).map(String).sort().join(',')
+            : Array.isArray(existingBrands)
+              ? (existingBrands as string[]).map(String).sort().join(',')
+              : ''
+          : norm(new Set(availableBrands)));
+      const sizesEqual =
+        norm(selectedSizes) ===
+        (existingSizes
+          ? existingSizes instanceof Set
+            ? Array.from(existingSizes).map(String).sort().join(',')
+            : Array.isArray(existingSizes)
+              ? (existingSizes as string[]).map(String).sort().join(',')
+              : ''
+          : norm(new Set(availableSizes)));
+      const sortEqual = (sortOrder || '') === (cur?.sortOrder ?? '');
+      const conditionEqual =
+        (conditionType || '') === (cur?.conditionType ?? '') &&
+        (conditionValue || '') === (cur?.conditionValue ?? '');
+      const popularEqual = (popularFilter ?? null) === (cur?.popularFilter ?? null);
+      return (
+        !valuesEqual ||
+        (columnKey === 'product' && availableBrands.length > 0 && !brandsEqual) ||
+        (columnKey === 'product' && availableSizes.length > 0 && !sizesEqual) ||
+        !sortEqual ||
+        !conditionEqual ||
+        !popularEqual
+      );
+    }, [
+      selectedValues,
+      selectedBrands,
+      selectedSizes,
+      sortOrder,
+      conditionType,
+      conditionValue,
+      popularFilter,
+      existingValues,
+      existingBrands,
+      existingSizes,
+      cur?.sortOrder,
+      cur?.conditionType,
+      cur?.conditionValue,
+      cur?.popularFilter,
+      stringValues,
+      availableBrands,
+      availableSizes,
+      columnKey,
+    ]);
 
     const handleReset = () => {
       setSortOrder('');
@@ -1193,15 +1263,19 @@ const ProductsFilterDropdown = forwardRef<HTMLDivElement, ProductsFilterDropdown
           </button>
           <button
             type="button"
-            onClick={handleApply}
+            onClick={hasChanges ? handleApply : undefined}
+            disabled={!hasChanges}
             style={{
-              padding: '6px 12px',
+              minWidth: 57,
+              minHeight: 23,
+              padding: '4px 12px',
               fontSize: 12,
               borderRadius: 6,
               border: 'none',
-              backgroundColor: theme.chipBgActive,
-              color: '#FFFFFF',
-              cursor: 'pointer',
+              backgroundColor: hasChanges ? theme.chipBgActive : '#1F2937',
+              color: hasChanges ? '#FFFFFF' : '#6B7280',
+              cursor: hasChanges ? 'pointer' : 'default',
+              opacity: hasChanges ? 1 : 0.8,
             }}
           >
             Apply
