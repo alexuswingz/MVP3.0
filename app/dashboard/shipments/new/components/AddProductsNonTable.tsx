@@ -45,6 +45,8 @@ interface AddProductsNonTableProps {
   /** DOI from DOI settings; when a row is added, bar and number use this instead of row.daysOfInventory */
   requiredDoi?: number;
   onProductClick?: (row: NonTableProductRow) => void;
+  /** Called when the pencil (edit settings) icon is clicked on a row */
+  onEditProduct?: (row: NonTableProductRow) => void;
   onClear?: () => void;
   onExport?: () => void;
   /** Initial set of added product row IDs (e.g. when returning from Book Shipment tab so selections persist) */
@@ -122,6 +124,7 @@ export function AddProductsNonTable({
   rows,
   requiredDoi = 150,
   onProductClick,
+  onEditProduct,
   onClear,
   onExport,
   initialAddedIds,
@@ -1961,7 +1964,7 @@ export function AddProductsNonTable({
                       className="pencil-icon-hover"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // TODO: Add edit settings functionality
+                        onEditProduct?.(row);
                       }}
                       style={{
                         width: '16px',

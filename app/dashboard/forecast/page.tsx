@@ -64,6 +64,7 @@ export default function ForecastPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
+  const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
   const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
   const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -550,6 +551,12 @@ export default function ForecastPage() {
           onProductClick={(p) => console.log('Product click', p.id)}
           onOpenNgoos={(row) => {
             setSelectedNgoosRow(row);
+            setNgoosOpenWithSettings(false);
+            setNgoosModalOpen(true);
+          }}
+          onEdit={(row) => {
+            setSelectedNgoosRow(row);
+            setNgoosOpenWithSettings(true);
             setNgoosModalOpen(true);
           }}
           onQtyChange={handleQtyChange}
@@ -573,7 +580,9 @@ export default function ForecastPage() {
           onClose={() => {
             setNgoosModalOpen(false);
             setSelectedNgoosRow(null);
+            setNgoosOpenWithSettings(false);
           }}
+          openSettingsOnMount={ngoosOpenWithSettings}
           selectedRow={
             selectedNgoosRow
               ? toNgoosSelectedRow(

@@ -202,6 +202,7 @@ export default function NewShipmentAddProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showNgoosModal, setShowNgoosModal] = useState(false);
+  const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
@@ -1459,6 +1460,12 @@ export default function NewShipmentAddProductsPage() {
                 requiredDoi={requiredDoiNum}
                 onProductClick={(row) => {
                   setSelectedProduct(row);
+                  setNgoosOpenWithSettings(false);
+                  setShowNgoosModal(true);
+                }}
+                onEditProduct={(row) => {
+                  setSelectedProduct(row);
+                  setNgoosOpenWithSettings(true);
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
@@ -1537,8 +1544,10 @@ export default function NewShipmentAddProductsPage() {
         onClose={() => {
           setShowNgoosModal(false);
           setSelectedProduct(null);
+          setNgoosOpenWithSettings(false);
         }}
         selectedProduct={selectedProduct}
+        openSettingsOnMount={ngoosOpenWithSettings}
         currentQty={0}
         onAddUnits={(product, units) => {
           console.log(`Adding ${units} units of ${product.name || product.product}`);

@@ -148,6 +148,8 @@ interface ForecastUnitProps {
   onSeasonalityUploaded?: (productId: string | null) => void;
   /** When true, clicking Seasonality Curve opens the chart preview directly (data already uploaded). */
   seasonalityUploaded?: boolean;
+  /** When true, automatically open the Forecast Settings modal on mount. */
+  openSettingsOnMount?: boolean;
 }
 
 export default function ForecastUnit({
@@ -162,6 +164,7 @@ export default function ForecastUnit({
   productId = null,
   onSeasonalityUploaded,
   seasonalityUploaded = false,
+  openSettingsOnMount = false,
 }: ForecastUnitProps) {
   const [hoveredSegment, setHoveredSegment] = useState<'fba' | 'total' | 'forecast' | null>(null);
   const [zoomToolActive, setZoomToolActive] = useState(false);
@@ -178,7 +181,7 @@ export default function ForecastUnit({
   // Range selection (click-drag when zoom is NOT active)
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const rangeSelectingRef = useRef(false);
-  const [forecastSettingsModalOpen, setForecastSettingsModalOpen] = useState(false);
+  const [forecastSettingsModalOpen, setForecastSettingsModalOpen] = useState(openSettingsOnMount);
   const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
   const [forecastSettingsMenuOpen, setForecastSettingsMenuOpen] = useState(false);
   const forecastSettingsMenuRef = useRef<HTMLDivElement>(null);

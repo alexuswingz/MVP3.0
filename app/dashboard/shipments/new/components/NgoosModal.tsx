@@ -93,9 +93,11 @@ interface NgoosModalProps {
   currentQty?: number;
   onAddUnits?: (product: any, units: number) => void;
   onSeasonalityUploaded?: (productId: string) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the modal mounts. */
+  openSettingsOnMount?: boolean;
 }
 
-export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits, onSeasonalityUploaded }: NgoosModalProps) {
+export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits, onSeasonalityUploaded, openSettingsOnMount = false }: NgoosModalProps) {
   const [activeTab, setActiveTab] = useState<'inventory' | 'sales' | 'ads'>('inventory');
   const [displayUnits, setDisplayUnits] = useState(selectedProduct?.unitsToMake || 0);
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -114,6 +116,16 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [showCustomSettingsTooltip, setShowCustomSettingsTooltip] = useState(false);
   const [showGearDropdown, setShowGearDropdown] = useState(false);
   const [showSeasonalityModal, setShowSeasonalityModal] = useState(false);
+
+  // Open forecast settings modal automatically when triggered by the pencil icon
+  React.useEffect(() => {
+    if (isOpen && openSettingsOnMount) {
+      setShowForecastSettingsModal(true);
+    }
+    if (!isOpen) {
+      setShowForecastSettingsModal(false);
+    }
+  }, [isOpen, openSettingsOnMount]);
 
   // Stable needsSeasonality: once true for a product, stays true until product changes or modal closes.
   // Prevents the gear dropdown from disappearing right after the user uploads seasonality.
