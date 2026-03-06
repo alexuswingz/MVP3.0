@@ -48,6 +48,9 @@ Thumbs.db
 nul
 .opencode/
 
+# Uploaded attachments (action items, etc.)
+/public/uploads/
+
 # Python
 __pycache__/
 *.py[cod]
