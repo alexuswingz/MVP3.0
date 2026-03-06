@@ -1001,7 +1001,43 @@ export default function ProductsPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
-                                  navigator.clipboard.writeText(product.asin).catch(() => {});
+                                  const text = product.asin;
+                                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                                    navigator.clipboard.writeText(text).then(() => {
+                                      toast.vineCreated(`ASIN copied: ${text}`);
+                                    }).catch(() => {
+                                      // Fallback for clipboard permission denied
+                                      try {
+                                        const ta = document.createElement('textarea');
+                                        ta.value = text;
+                                        ta.style.position = 'fixed';
+                                        ta.style.opacity = '0';
+                                        document.body.appendChild(ta);
+                                        ta.focus();
+                                        ta.select();
+                                        document.execCommand('copy');
+                                        document.body.removeChild(ta);
+                                        toast.vineCreated(`ASIN copied: ${text}`);
+                                      } catch {
+                                        toast.error('Failed to copy ASIN');
+                                      }
+                                    });
+                                  } else {
+                                    try {
+                                      const ta = document.createElement('textarea');
+                                      ta.value = text;
+                                      ta.style.position = 'fixed';
+                                      ta.style.opacity = '0';
+                                      document.body.appendChild(ta);
+                                      ta.focus();
+                                      ta.select();
+                                      document.execCommand('copy');
+                                      document.body.removeChild(ta);
+                                      toast.vineCreated(`ASIN copied: ${text}`);
+                                    } catch {
+                                      toast.error('Failed to copy ASIN');
+                                    }
+                                  }
                                 }}
                                 style={{
                                   background: 'none',
