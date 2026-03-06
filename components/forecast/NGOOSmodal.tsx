@@ -551,6 +551,8 @@ interface NgoosContentProps {
   productId?: string | null;
   /** Called when seasonality is successfully uploaded; parent should refetch so units/bar come back. */
   onSeasonalityUploaded?: (productId: string | null) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the content mounts. */
+  openSettingsOnMount?: boolean;
 }
 
 function ActionItemCard({ title, tagBgColor = '#10b981', tagText = 'INV', onCardClick, isCompleted }: { title: string; tagBgColor?: string; tagText?: string; onCardClick?: () => void; isCompleted?: boolean }) {
@@ -625,6 +627,7 @@ function NgoosContent({
   onUploadSeasonality,
   productId = null,
   onSeasonalityUploaded,
+  openSettingsOnMount = false,
 }: NgoosContentProps) {
   const [activeTab, setActiveTab] = useState('forecast');
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -1005,6 +1008,7 @@ function NgoosContent({
                 productId={productId}
                 onSeasonalityUploaded={onSeasonalityUploaded}
                 seasonalityUploaded={seasonalityUploaded}
+                openSettingsOnMount={openSettingsOnMount}
               />
             </div>
           )}
@@ -1841,6 +1845,8 @@ interface NGOOSmodalProps {
   showActionItems?: boolean;
   /** Called when seasonality is uploaded for the current product; use to refresh table so units-to-make container and DOI bar show again. */
   onSeasonalityUploaded?: (productId: string) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the modal content mounts. */
+  openSettingsOnMount?: boolean;
 }
 
 export default function NGOOSmodal({
@@ -1853,6 +1859,7 @@ export default function NGOOSmodal({
   onNavigate = null,
   showActionItems = false,
   onSeasonalityUploaded,
+  openSettingsOnMount = false,
 }: NGOOSmodalProps) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAddUnits, setPendingAddUnits] = useState<number | null>(null);
@@ -2231,6 +2238,7 @@ export default function NGOOSmodal({
                   fetchForecastData(id);
                 }
               }}
+              openSettingsOnMount={openSettingsOnMount}
             />
           )}
         </div>
