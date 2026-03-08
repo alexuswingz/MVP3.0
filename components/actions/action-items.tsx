@@ -1345,7 +1345,7 @@ export function ActionItems() {
             >
               <Image src="/rocket.png" alt="" width={20} height={20} className="object-contain" />
             </div>
-            <span className="text-xl font-bold text-white truncate">Action Items</span>
+            <span className="text-2xl font-bold text-white truncate">Action Items</span>
             <div
               className="flex flex-shrink-0 flex-row items-center box-border"
               style={{
