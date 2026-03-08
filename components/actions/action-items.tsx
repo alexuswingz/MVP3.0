@@ -17,6 +17,21 @@ import {
   DEFAULT_PRODUCTS_FILTER,
   type ProductsFilterState,
 } from '@/components/actions/action-items-product-filter';
+import {
+  ActionItemsSubjectSortDropdown,
+  getDefaultActionItemsSubjectSort,
+  type ActionItemsSubjectSortState,
+} from '@/components/actions/action-items-subject-sort';
+import {
+  ActionItemsAssigneeFilterDropdown,
+  getDefaultActionItemsAssigneeFilter,
+  type ActionItemsAssigneeFilterState,
+} from '@/components/actions/action-items-assignee-filter';
+import {
+  ActionItemsDueDateSortDropdown,
+  getDefaultActionItemsDueDateSort,
+  type ActionItemsDueDateSortState,
+} from '@/components/actions/action-items-due-date-sort';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
 
 type TicketDetail = {
@@ -746,6 +761,25 @@ export function ActionItems() {
   const [productsFilter, setProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
   const [appliedProductsFilter, setAppliedProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
   const productsHeaderRef = useRef<HTMLTableCellElement>(null);
+  const subjectHeaderRef = useRef<HTMLTableCellElement>(null);
+  const assigneeHeaderRef = useRef<HTMLTableCellElement>(null);
+  const dueDateHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [subjectSortOpen, setSubjectSortOpen] = useState(false);
+  const [subjectSortAnchor, setSubjectSortAnchor] = useState<DOMRect | null>(null);
+  const [subjectSort, setSubjectSort] = useState<ActionItemsSubjectSortState>(getDefaultActionItemsSubjectSort);
+  const [appliedSubjectSort, setAppliedSubjectSort] = useState<ActionItemsSubjectSortState>(getDefaultActionItemsSubjectSort);
+  const [assigneeFilterOpen, setAssigneeFilterOpen] = useState(false);
+  const [assigneeFilterAnchor, setAssigneeFilterAnchor] = useState<DOMRect | null>(null);
+  const [assigneeFilter, setAssigneeFilter] = useState<ActionItemsAssigneeFilterState>(() =>
+    getDefaultActionItemsAssigneeFilter([])
+  );
+  const [appliedAssigneeFilter, setAppliedAssigneeFilter] = useState<ActionItemsAssigneeFilterState>(() =>
+    getDefaultActionItemsAssigneeFilter([])
+  );
+  const [dueDateSortOpen, setDueDateSortOpen] = useState(false);
+  const [dueDateSortAnchor, setDueDateSortAnchor] = useState<DOMRect | null>(null);
+  const [dueDateSort, setDueDateSort] = useState<ActionItemsDueDateSortState>(getDefaultActionItemsDueDateSort);
+  const [appliedDueDateSort, setAppliedDueDateSort] = useState<ActionItemsDueDateSortState>(getDefaultActionItemsDueDateSort);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
@@ -946,6 +980,12 @@ export function ActionItems() {
         return checkedCategories.some((c) => rowCat.toLowerCase() === c.toLowerCase());
       });
     }
+    const checkedAssignees = Object.entries(appliedAssigneeFilter.selectedAssignees)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checkedAssignees.length > 0) {
+      list = list.filter((row) => checkedAssignees.includes(row.assignee ?? ''));
+    }
     const statusOrder = ['To Do', 'In progress', 'In review', 'Completed'];
     const categoryOrder = ['Ads', 'Inventory', 'PDP', 'Price'];
     if (appliedStatusFilter.sortOrder) {
@@ -969,9 +1009,27 @@ export function ActionItems() {
         const cmp = (a.productName ?? '').localeCompare(b.productName ?? '');
         return appliedProductsFilter.sortOrder === 'asc' ? cmp : -cmp;
       });
+    } else if (appliedSubjectSort.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const cmp = (a.subject ?? '').localeCompare(b.subject ?? '');
+        return appliedSubjectSort.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (appliedAssigneeFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const cmp = (a.assignee ?? '').localeCompare(b.assignee ?? '');
+        return appliedAssigneeFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (appliedDueDateSort.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aDate = parseDueDate(a.dueDate ?? '');
+        const bDate = parseDueDate(b.dueDate ?? '');
+        const aTs = aDate ? aDate.getTime() : 0;
+        const bTs = bDate ? bDate.getTime() : 0;
+        return appliedDueDateSort.sortOrder === 'asc' ? aTs - bTs : bTs - aTs;
+      });
     }
     return list;
-  }, [tableItems, search, appliedStatusFilter, appliedCategoryFilter, appliedProductsFilter]);
+  }, [tableItems, search, appliedStatusFilter, appliedCategoryFilter, appliedProductsFilter, appliedSubjectSort, appliedAssigneeFilter, appliedDueDateSort]);
 
   const handleStatusFilterClick = useCallback((e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -1111,6 +1169,95 @@ export function ActionItems() {
       ),
     [tableItems]
   );
+
+  const availableAssignees = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          tableItems
+            .map((r) => r.assignee ?? '')
+            .filter((n) => n.trim().length >= 0)
+        )
+      ).sort((a, b) => (a || 'Unassigned').localeCompare(b || 'Unassigned')),
+    [tableItems]
+  );
+
+  const hasActiveSubjectSort = appliedSubjectSort.sortOrder != null;
+  const hasActiveAssigneeFilter = useMemo(() => {
+    const { sortOrder, selectedAssignees } = appliedAssigneeFilter;
+    const checked = Object.entries(selectedAssignees).filter(([, v]) => v).map(([k]) => k);
+    const allChecked = availableAssignees.length === 0 || availableAssignees.every((a) => selectedAssignees[a] ?? true);
+    return sortOrder != null || !allChecked;
+  }, [appliedAssigneeFilter, availableAssignees]);
+  const hasActiveDueDateSort = appliedDueDateSort.sortOrder != null;
+
+  const subjectSortHasChanges = JSON.stringify(subjectSort) !== JSON.stringify(appliedSubjectSort);
+  const assigneeFilterHasChanges = JSON.stringify(assigneeFilter) !== JSON.stringify(appliedAssigneeFilter);
+  const dueDateSortHasChanges = JSON.stringify(dueDateSort) !== JSON.stringify(appliedDueDateSort);
+
+  const assigneeFilterResultCount = useMemo(() => {
+    const checked = Object.entries(assigneeFilter.selectedAssignees)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checked.length === 0) return 0;
+    return tableItems.filter((row) => checked.includes(row.assignee ?? '')).length;
+  }, [tableItems, assigneeFilter.selectedAssignees]);
+
+  const handleSubjectSortClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (subjectSortOpen) {
+      setSubjectSortOpen(false);
+      setSubjectSortAnchor(null);
+    } else {
+      const rect = subjectHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setSubjectSortAnchor(rect);
+        setSubjectSortOpen(true);
+      }
+    }
+  }, [subjectSortOpen]);
+
+  const handleAssigneeFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (assigneeFilterOpen) {
+      setAssigneeFilterOpen(false);
+      setAssigneeFilterAnchor(null);
+    } else {
+      const rect = assigneeHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setAssigneeFilterAnchor(rect);
+        setAssigneeFilterOpen(true);
+        setAssigneeFilter((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          for (const a of availableAssignees) {
+            if (!(a in next.selectedAssignees)) {
+              next.selectedAssignees = { ...next.selectedAssignees, [a]: true };
+              changed = true;
+            }
+          }
+          return changed ? next : prev;
+        });
+      }
+    }
+  }, [assigneeFilterOpen, availableAssignees]);
+
+  const handleDueDateSortClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (dueDateSortOpen) {
+      setDueDateSortOpen(false);
+      setDueDateSortAnchor(null);
+    } else {
+      const rect = dueDateHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setDueDateSortAnchor(rect);
+        setDueDateSortOpen(true);
+      }
+    }
+  }, [dueDateSortOpen]);
 
   const hasActiveProductsFilter = useMemo(() => {
     const { sortOrder, selectedValues, selectedBrands, selectedSizes } = appliedProductsFilter;
@@ -1445,9 +1592,72 @@ export function ActionItems() {
                       )}
                     </span>
                   </th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>SUBJECT</th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>ASSIGNEE</th>
-                  <th className="py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}>DUE DATE</th>
+                  <th
+                    ref={subjectHeaderRef}
+                    data-subject-sort-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleSubjectSortClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSubjectSortClick();
+                      }
+                    }}
+                    className="py-1.5 px-4 font-normal border-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ background: '#0B111E', color: subjectSortOpen || hasActiveSubjectSort ? '#3B82F6' : undefined }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      SUBJECT
+                      {hasActiveSubjectSort && (
+                        <Image src="/assets/Vector (1).png" alt="" width={14} height={14} className="inline-block" style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }} />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    ref={assigneeHeaderRef}
+                    data-assignee-filter-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleAssigneeFilterClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleAssigneeFilterClick();
+                      }
+                    }}
+                    className="py-1.5 px-4 font-normal border-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ background: '#0B111E', color: assigneeFilterOpen || hasActiveAssigneeFilter ? '#3B82F6' : undefined }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      ASSIGNEE
+                      {hasActiveAssigneeFilter && (
+                        <Image src="/assets/Vector (1).png" alt="" width={14} height={14} className="inline-block" style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }} />
+                      )}
+                    </span>
+                  </th>
+                  <th
+                    ref={dueDateHeaderRef}
+                    data-due-date-sort-trigger
+                    role="button"
+                    tabIndex={0}
+                    onClick={handleDueDateSortClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleDueDateSortClick();
+                      }
+                    }}
+                    className="py-1.5 px-4 font-normal border-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ background: '#0B111E', color: dueDateSortOpen || hasActiveDueDateSort ? '#3B82F6' : undefined }}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      DUE DATE
+                      {hasActiveDueDateSort && (
+                        <Image src="/assets/Vector (1).png" alt="" width={14} height={14} className="inline-block" style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }} />
+                      )}
+                    </span>
+                  </th>
                   <th className="w-12 py-1.5 px-4 font-normal border-0" style={{ background: '#0B111E' }}></th>
                 </tr>
                 <tr style={{ background: '#0B111E' }}>
@@ -2410,6 +2620,35 @@ export function ActionItems() {
         availableProductNames={actionItemProductNames}
         availableProductBrands={actionItemProductBrands}
         availableProductSizes={actionItemProductSizes}
+        subjectSortAnchor={subjectSortAnchor}
+        subjectSortOpen={subjectSortOpen}
+        setSubjectSortOpen={setSubjectSortOpen}
+        setSubjectSortAnchor={setSubjectSortAnchor}
+        subjectSort={subjectSort}
+        setSubjectSort={setSubjectSort}
+        appliedSubjectSort={appliedSubjectSort}
+        setAppliedSubjectSort={setAppliedSubjectSort}
+        subjectSortHasChanges={subjectSortHasChanges}
+        assigneeFilterAnchor={assigneeFilterAnchor}
+        assigneeFilterOpen={assigneeFilterOpen}
+        setAssigneeFilterOpen={setAssigneeFilterOpen}
+        setAssigneeFilterAnchor={setAssigneeFilterAnchor}
+        assigneeFilter={assigneeFilter}
+        setAssigneeFilter={setAssigneeFilter}
+        appliedAssigneeFilter={appliedAssigneeFilter}
+        setAppliedAssigneeFilter={setAppliedAssigneeFilter}
+        assigneeFilterResultCount={assigneeFilterResultCount}
+        assigneeFilterHasChanges={assigneeFilterHasChanges}
+        availableAssignees={availableAssignees}
+        dueDateSortAnchor={dueDateSortAnchor}
+        dueDateSortOpen={dueDateSortOpen}
+        setDueDateSortOpen={setDueDateSortOpen}
+        setDueDateSortAnchor={setDueDateSortAnchor}
+        dueDateSort={dueDateSort}
+        setDueDateSort={setDueDateSort}
+        appliedDueDateSort={appliedDueDateSort}
+        setAppliedDueDateSort={setAppliedDueDateSort}
+        dueDateSortHasChanges={dueDateSortHasChanges}
       />
     </div>
   );
