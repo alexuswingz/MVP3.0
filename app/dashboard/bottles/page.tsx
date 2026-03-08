@@ -19,8 +19,9 @@ const MOCK_BOTTLES: BottleRow[] = [
   { id: '4', name: '3oz Spray', warehouseInventory: 15600, supplierInventory: 9200 },
   { id: '5', name: '6oz Spray', warehouseInventory: 9800, supplierInventory: 6400 },
   { id: '6', name: '16oz Square Cylinder Clear', warehouseInventory: 4200, supplierInventory: 2800 },
-  { id: '7', name: '32oz Round Amber', warehouseInventory: 2100, supplierInventory: 1500 },
-  { id: '8', name: '1oz Dropper', warehouseInventory: 18500, supplierInventory: 12000 },
+  { id: '7', name: '16oz Square Cylinder Spray White', warehouseInventory: 3500, supplierInventory: 2200 },
+  { id: '8', name: '16oz Round Cylinder Clear', warehouseInventory: 3800, supplierInventory: 2500 },
+  { id: '9', name: '16oz Round Cylinder Spray White', warehouseInventory: 2900, supplierInventory: 1900 },
 ];
 
 const MOCK_STATS: BottlesSummaryStats = {

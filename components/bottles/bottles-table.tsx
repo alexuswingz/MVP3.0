@@ -52,24 +52,23 @@ export function BottlesTable({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
-      className="flex-1 min-h-0 flex flex-col overflow-hidden"
+      className="flex-shrink-0 flex flex-col w-full"
     >
       <div
-        className="rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col border"
+        className="rounded-xl overflow-hidden flex flex-col border w-full"
         style={{
           borderColor: isDarkMode ? '#1A2235' : '#E5E7EB',
           backgroundColor: isDarkMode ? '#1A2235' : '#FFFFFF',
           fontFamily: 'Inter, sans-serif',
-          minHeight: 0,
         }}
       >
         <div
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-          style={{ minHeight: 0 }}
+          className="overflow-x-auto overflow-y-auto"
+          style={{ maxHeight: 'min(600px, 70vh)' }}
         >
           <table
             className="w-full border-collapse"
-            style={{ tableLayout: 'fixed', display: 'table', borderSpacing: 0 }}
+            style={{ tableLayout: 'auto', display: 'table', borderSpacing: 0 }}
           >
             <thead
               style={{
@@ -83,8 +82,9 @@ export function BottlesTable({
                 <th
                   className="text-left text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 1rem',
-                    width: '45%',
+                    padding: '1rem 0.5rem 1rem 1.25rem',
+                    width: '1%',
+                    whiteSpace: 'nowrap',
                     color: '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
@@ -92,10 +92,11 @@ export function BottlesTable({
                   BOTTLE NAME
                 </th>
                 <th
-                  className="text-right text-xs font-bold uppercase tracking-wider"
+                  className="text-center text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 1rem',
-                    width: '25%',
+                    padding: '1rem 0.5rem 1rem 2.75rem',
+                    width: '1%',
+                    whiteSpace: 'nowrap',
                     color: '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
@@ -103,10 +104,11 @@ export function BottlesTable({
                   WAREHOUSE INVENTORY
                 </th>
                 <th
-                  className="text-right text-xs font-bold uppercase tracking-wider"
+                  className="text-center text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 1rem',
-                    width: '25%',
+                    padding: '1rem 2.75rem 1rem 0.5rem',
+                    width: '1%',
+                    whiteSpace: 'nowrap',
                     color: '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
@@ -116,12 +118,34 @@ export function BottlesTable({
                 <th
                   style={{
                     width: 48,
-                    padding: '1rem 0.5rem',
+                    minWidth: 48,
+                    padding: '1rem 1.25rem 1rem 0.5rem',
                     height: 'auto',
                     backgroundColor: 'inherit',
                     boxSizing: 'border-box',
+                    textAlign: 'right',
                   }}
                 />
+              </tr>
+              <tr style={{ height: 1, backgroundColor: isDarkMode ? '#1A2235' : '#FFFFFF' }}>
+                <td
+                  colSpan={4}
+                  style={{
+                    padding: 0,
+                    border: 'none',
+                    backgroundColor: 'inherit',
+                    verticalAlign: 'top',
+                  }}
+                >
+                  <div
+                    style={{
+                      marginLeft: '1.25rem',
+                      marginRight: '1.25rem',
+                      height: 1,
+                      backgroundColor: BORDER_COLOR,
+                    }}
+                  />
+                </td>
               </tr>
             </thead>
             <tbody
@@ -165,18 +189,12 @@ export function BottlesTable({
                   <React.Fragment key={bottle.id}>
                     {index > 0 && (
                       <tr
-                        style={{
-                          height: 1,
-                          backgroundColor: ROW_BG,
-                        }}
+                        className="transition-opacity duration-200"
+                        style={{ height: 1, backgroundColor: ROW_BG }}
                       >
                         <td
                           colSpan={4}
-                          style={{
-                            padding: 0,
-                            backgroundColor: ROW_BG,
-                            border: 'none',
-                          }}
+                          style={{ padding: 0, backgroundColor: ROW_BG, border: 'none' }}
                         >
                           <div
                             style={{
@@ -208,7 +226,7 @@ export function BottlesTable({
                     >
                       <td
                         style={{
-                          padding: '0.75rem 1.25rem',
+                          padding: '0.75rem 0.5rem 0.75rem 1.25rem',
                           verticalAlign: 'middle',
                           backgroundColor: 'inherit',
                           borderTop: 'none',
@@ -239,9 +257,9 @@ export function BottlesTable({
                       </td>
                       <td
                         style={{
-                          padding: '0.75rem 1.25rem',
+                          padding: '0.75rem 0.5rem 0.75rem 2.75rem',
                           verticalAlign: 'middle',
-                          textAlign: 'right',
+                          textAlign: 'center',
                           backgroundColor: 'inherit',
                           borderTop: 'none',
                           fontSize: '0.875rem',
@@ -253,9 +271,9 @@ export function BottlesTable({
                       </td>
                       <td
                         style={{
-                          padding: '0.75rem 1.25rem',
+                          padding: '0.75rem 2.75rem 0.75rem 0.5rem',
                           verticalAlign: 'middle',
-                          textAlign: 'right',
+                          textAlign: 'center',
                           backgroundColor: 'inherit',
                           borderTop: 'none',
                           fontSize: '0.875rem',
@@ -267,9 +285,9 @@ export function BottlesTable({
                       </td>
                       <td
                         style={{
-                          padding: '0.5rem',
+                          padding: '0.75rem 1.25rem 0.75rem 0.5rem',
                           verticalAlign: 'middle',
-                          textAlign: 'center',
+                          textAlign: 'right',
                           backgroundColor: 'inherit',
                           borderTop: 'none',
                           width: 48,
@@ -278,7 +296,7 @@ export function BottlesTable({
                       >
                         <button
                           type="button"
-                          className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-600/50 transition-colors"
+                          className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-600/50 transition-colors inline-flex"
                           aria-label="Row menu"
                           aria-expanded={actionMenuOpenId === bottle.id}
                           style={{
