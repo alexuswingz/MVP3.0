@@ -18,7 +18,7 @@ import {
   type ProductsFilterState,
 } from '@/components/actions/action-items-product-filter';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
-import { api } from '@/lib/api';
+import { api, type ActionItemResponse } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 type TicketDetail = {
@@ -157,6 +157,57 @@ function saveActionItemsToStorage(tableItems: TableRow[], ticketDetails: Record<
   }
 }
 
+/** Format API date (YYYY-MM-DD) or ISO string to table display. */
+function formatApiDateToTable(dateStr: string | null): string {
+  if (!dateStr || !dateStr.trim()) return '—';
+  const d = new Date(dateStr.trim());
+  return Number.isNaN(d.getTime()) ? '—' : formatDueDateTable(d);
+}
+
+function actionItemToTableRow(item: ActionItemResponse): TableRow {
+  return {
+    id: item.id,
+    status: item.status,
+    productName: item.product_name,
+    productId: item.product_asin,
+    productBrand: item.product_brand || undefined,
+    productSize: item.product_size || undefined,
+    category: item.category,
+    subject: item.subject,
+    assignee: item.assignee,
+    assigneeInitials: item.assignee_initials,
+    dueDate: formatApiDateToTable(item.due_date),
+  };
+}
+
+function actionItemToTicketDetail(item: ActionItemResponse): TicketDetail {
+  const createdDate = item.created_at ? new Date(item.created_at) : new Date();
+  const dateCreatedStr = Number.isNaN(createdDate.getTime())
+    ? `${MONTH_NAMES[new Date().getMonth()]} ${new Date().getDate()}, ${new Date().getFullYear()}`
+    : `${MONTH_NAMES[createdDate.getMonth()]} ${createdDate.getDate()}, ${createdDate.getFullYear()}`;
+  return {
+    ticketId: `I-${item.id}`,
+    productName: item.product_name,
+    productId: item.product_asin,
+    brand: item.product_brand ?? '',
+    unit: item.product_size ?? '',
+    subject: item.subject,
+    description: item.description ?? '',
+    instructions: '',
+    bullets: [],
+    status: item.status,
+    category: item.category,
+    assignee: item.assignee,
+    assigneeInitials: item.assignee_initials,
+    dueDate: formatApiDateToTable(item.due_date),
+    createdBy: item.created_by,
+    createdByInitials: item.created_by_initials,
+    dateCreated: dateCreatedStr,
+    descriptionHtml: item.description_html || undefined,
+    attachments: item.attachments?.length ? item.attachments : undefined,
+  };
+}
+
 function getInitials(name: string): string {
   if (!name || !name.trim()) return '—';
   const parts = name.trim().split(/\s+/);
@@ -179,6 +230,12 @@ function formatDueDateNumeric(date: Date): string {
 function formatDueDateTable(date: Date): string {
   const month = MONTH_NAMES[date.getMonth()].slice(0, 3);
   return `${month}. ${date.getDate()}, ${date.getFullYear()}`;
+}
+
+/** Shorten product name for display (full name in title). */
+function shortenProductName(name: string, maxLen = 36): string {
+  if (!name || name.length <= maxLen) return name;
+  return name.slice(0, maxLen).trim() + '…';
 }
 
 function parseDueDate(str: string): Date | null {
@@ -462,7 +519,7 @@ function DetailModal({
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.productName}</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.productName}>{shortenProductName(item.productName)}</p>
                 <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {item.productId}
                   <span
@@ -731,14 +788,10 @@ export function ActionItems() {
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
   const [showActionCreatedToast, setShowActionCreatedToast] = useState(false);
-  const [tableItems, setTableItems] = useState<TableRow[]>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.tableItems?.length ? loaded.tableItems : DEFAULT_TABLE_ITEMS;
-  });
-  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.ticketDetails ?? {};
-  });
+  const [tableItems, setTableItems] = useState<TableRow[]>([]);
+  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>({});
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
@@ -817,6 +870,31 @@ export function ActionItems() {
       .finally(() => setProductsLoading(false));
   }, []);
 
+  const fetchActionItems = useCallback(async () => {
+    setItemsLoading(true);
+    setItemsError(null);
+    try {
+      const list = await api.getActionItems({ ordering: '-created_at' });
+      const rows = list.map(actionItemToTableRow);
+      const details: Record<number, TicketDetail> = {};
+      list.forEach((item) => {
+        details[item.id] = actionItemToTicketDetail(item);
+      });
+      setTableItems(rows);
+      setTicketDetails(details);
+    } catch (e) {
+      setItemsError(e instanceof Error ? e.message : 'Failed to load action items');
+      setTableItems([]);
+      setTicketDetails({});
+    } finally {
+      setItemsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActionItems();
+  }, [fetchActionItems]);
+
   useEffect(() => {
     if (!isProductDropdownOpen && !isAssigneeDropdownOpen && rowMenuOpenId === null) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -834,10 +912,6 @@ export function ActionItems() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProductDropdownOpen, isAssigneeDropdownOpen, rowMenuOpenId]);
-
-  useEffect(() => {
-    saveActionItemsToStorage(tableItems, ticketDetails);
-  }, [tableItems, ticketDetails]);
 
   useEffect(() => {
     if (!showDueDateCalendar) return;
@@ -866,11 +940,8 @@ export function ActionItems() {
     setDescriptionFocused(false);
   };
 
-  const handleDescriptionSave = (html: string) => {
+  const handleDescriptionSave = async (html: string) => {
     const htmlToSave = (html?.trim() || descriptionHtml?.trim()) || '';
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ActionItems] handleDescriptionSave: selectedDetailId=', selectedDetailId, 'receivedLength=', html?.length, 'htmlToSaveLength=', htmlToSave.length, 'preview=', htmlToSave.slice(0, 80));
-    }
     if (selectedDetailId == null) {
       setDescriptionFocused(false);
       return;
@@ -882,20 +953,16 @@ export function ActionItems() {
         const existing = prev[id];
         const row = tableItems.find((r) => r.id === id);
         const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
-        if (process.env.NODE_ENV === 'development' && !base) {
-          console.warn('[ActionItems] handleDescriptionSave: no detail or row for id=', id, 'keys=', Object.keys(prev));
-        }
         if (!base) return prev;
-        return {
-          ...prev,
-          [id]: { ...base, descriptionHtml: htmlToSave },
-        };
+        return { ...prev, [id]: { ...base, descriptionHtml: htmlToSave } };
       });
       setDescriptionHtml(htmlToSave);
       setDescriptionFocused(false);
     });
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ActionItems] handleDescriptionSave: committed id=', id, 'htmlToSaveLength=', htmlToSave.length);
+    try {
+      await api.updateActionItem(id, { description_html: htmlToSave });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save description');
     }
   };
 
@@ -1498,7 +1565,32 @@ export function ActionItems() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTableItems.map((row) => {
+                {itemsLoading ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                      Loading action items…
+                    </td>
+                  </tr>
+                ) : itemsError ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center">
+                      <p className="text-amber-500 mb-2">{itemsError}</p>
+                      <button
+                        type="button"
+                        onClick={() => fetchActionItems()}
+                        className="text-sm text-blue-400 hover:underline"
+                      >
+                        Retry
+                      </button>
+                    </td>
+                  </tr>
+                ) : filteredTableItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      No action items yet. Click &quot;Add&quot; to create one.
+                    </td>
+                  </tr>
+                ) : filteredTableItems.map((row) => {
                   const ROW_BG = '#1A2235';
                   return (
                   <tr
@@ -1562,7 +1654,7 @@ export function ActionItems() {
                           </svg>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{row.productName}</p>
+                          <p className="text-sm font-medium text-white truncate" title={row.productName}>{shortenProductName(row.productName)}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span
                               role="button"
@@ -1801,15 +1893,20 @@ export function ActionItems() {
                             <button
                               type="button"
                               role="menuitem"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                setTableItems((prev) => prev.filter((r) => r.id !== row.id));
-                                setTicketDetails((prev) => {
-                                  const next = { ...prev };
-                                  delete next[row.id];
-                                  return next;
-                                });
-                                if (selectedDetailId === row.id) setSelectedDetailId(null);
+                                try {
+                                  await api.deleteActionItem(row.id);
+                                  setTableItems((prev) => prev.filter((r) => r.id !== row.id));
+                                  setTicketDetails((prev) => {
+                                    const next = { ...prev };
+                                    delete next[row.id];
+                                    return next;
+                                  });
+                                  if (selectedDetailId === row.id) setSelectedDetailId(null);
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : 'Failed to delete');
+                                }
                                 setRowMenuOpenId(null);
                               }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-white/10 transition-colors"
@@ -1844,17 +1941,14 @@ export function ActionItems() {
       {selectedDetailId != null && selectedDetailItem && (
         <DetailModal
           item={selectedDetailItem}
-          onClose={() => {
-            saveActionItemsToStorage(tableItems, ticketDetails);
-            setSelectedDetailId(null);
-          }}
+          onClose={() => setSelectedDetailId(null)}
           descriptionHtml={descriptionHtml}
           setDescriptionHtml={setDescriptionHtml}
           descriptionFocused={descriptionFocused}
           setDescriptionFocused={setDescriptionFocused}
           onDescriptionCancel={handleDescriptionCancel}
           onDescriptionSave={handleDescriptionSave}
-          onStatusChange={(status) => {
+          onStatusChange={async (status) => {
             if (selectedDetailId == null) return;
             setTableItems((prev) => prev.map((r) => (r.id === selectedDetailId ? { ...r, status } : r)));
             setTicketDetails((prev) => {
@@ -1864,22 +1958,28 @@ export function ActionItems() {
               if (!base) return prev;
               return { ...prev, [selectedDetailId]: { ...base, status } };
             });
+            try {
+              await api.updateActionItem(selectedDetailId, { status });
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'Failed to update status');
+            }
           }}
-          onAttachmentsChange={(attachments) => {
+          onAttachmentsChange={async (attachments) => {
             if (selectedDetailId == null) return;
-            let nextTicketDetails: Record<number, TicketDetail> | null = null;
             flushSync(() => {
               setTicketDetails((prev) => {
                 const existing = prev[selectedDetailId];
                 const row = tableItems.find((r) => r.id === selectedDetailId);
                 const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
                 if (!base) return prev;
-                const next = { ...prev, [selectedDetailId]: { ...base, attachments } };
-                nextTicketDetails = next;
-                return next;
+                return { ...prev, [selectedDetailId]: { ...base, attachments } };
               });
             });
-            if (nextTicketDetails) saveActionItemsToStorage(tableItems, nextTicketDetails);
+            try {
+              await api.updateActionItem(selectedDetailId, { attachments });
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : 'Failed to update attachments');
+            }
           }}
         />
       )}
@@ -2344,81 +2444,57 @@ export function ActionItems() {
               <button
                 type="button"
                 disabled={!(newItem.product.trim() || productSearch.trim()) || !newItem.subject.trim() || !newItem.category}
-                onClick={() => {
+                onClick={async () => {
                   const hasProduct = !!(newItem.product.trim() || productSearch.trim());
                   const hasSubject = !!newItem.subject.trim();
                   const hasCategory = !!newItem.category;
                   if (!hasProduct || !hasSubject || !hasCategory) return;
 
-                  const nextId = Math.max(0, ...tableItems.map((r) => r.id)) + 1;
                   const catLabel = CATEGORIES.find((c) => c.id === newItem.category)?.label ?? newItem.category;
-                  const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '—';
-                  const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '—';
+                  const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '';
+                  const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '';
                   const dueDateParsed = parseDueDate(newItem.dueDate.trim());
-                  const dueDateTableStr = dueDateParsed ? formatDueDateTable(dueDateParsed) : '—';
                   const productName = newItem.product.trim() || productSearch.trim();
-                  const now = new Date();
-                  const dateCreatedStr = formatDueDateTable(now);
 
-                  setTableItems((prev) => [
-                    {
-                      id: nextId,
-                      status: 'To Do',
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      productBrand: newItem.productBrand.trim() || undefined,
-                      productSize: newItem.productUnit.trim() || undefined,
+                  try {
+                    await api.createActionItem({
+                      product_asin: newItem.productId.trim() || '',
+                      product_name: productName,
+                      product_brand: newItem.productBrand.trim() || '',
+                      product_size: newItem.productUnit.trim() || '',
                       category: catLabel,
-                      subject: newItem.subject.trim() || '—',
+                      subject: newItem.subject.trim(),
+                      status: 'To Do',
                       assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                    },
-                    ...prev,
-                  ]);
-
-                  setTicketDetails((prev) => ({
-                    ...prev,
-                    [nextId]: {
-                      ticketId: `I-${nextId}`,
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      brand: newItem.productBrand.trim() || '—',
-                      unit: newItem.productUnit.trim() || '—',
-                      subject: newItem.subject.trim() || '—',
+                      assignee_initials: assigneeInitialsStr,
+                      due_date: dueDateParsed ? dueDateParsed.toISOString().slice(0, 10) : null,
                       description: newItem.description.trim() || '',
-                      instructions: '',
-                      bullets: [],
-                      status: 'To Do',
-                      category: catLabel,
-                      assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                      createdBy: createdByDisplay,
-                      createdByInitials: createdByInitialsDisplay,
-                      dateCreated: dateCreatedStr,
-                    },
-                  }));
-
-                  setShowNewActionModal(false);
-                  setShowActionCreatedToast(true);
-                  setNewItem({
-                    product: '',
-                    productId: '',
-                    productBrand: '',
-                    productUnit: '',
-                    category: 'inventory',
-                    subject: '',
-                    description: '',
-                    assignee: '',
-                    dueDate: '',
-                  });
-                  setProductSearch('');
-                  setIsProductDropdownOpen(false);
-                  setAssigneeSearch('');
-                  setIsAssigneeDropdownOpen(false);
-                  setSelectedAssignees([]);
-                  setShowDueDateCalendar(false);
+                      created_by: createdByDisplay,
+                      created_by_initials: createdByInitialsDisplay,
+                    });
+                    await fetchActionItems();
+                    setShowNewActionModal(false);
+                    setShowActionCreatedToast(true);
+                    setNewItem({
+                      product: '',
+                      productId: '',
+                      productBrand: '',
+                      productUnit: '',
+                      category: 'inventory',
+                      subject: '',
+                      description: '',
+                      assignee: '',
+                      dueDate: '',
+                    });
+                    setProductSearch('');
+                    setIsProductDropdownOpen(false);
+                    setAssigneeSearch('');
+                    setIsAssigneeDropdownOpen(false);
+                    setSelectedAssignees([]);
+                    setShowDueDateCalendar(false);
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Failed to create action item');
+                  }
                 }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 hover:opacity-90"
                 style={{ background: '#3b82f6' }}

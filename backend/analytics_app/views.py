@@ -1,11 +1,11 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.filters import OrderingFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import VineClaim
-from .serializers import VineClaimSerializer
+from .models import VineClaim, ActionItem
+from .serializers import VineClaimSerializer, ActionItemSerializer
 
 
 class VineClaimViewSet(viewsets.ModelViewSet):
@@ -43,3 +43,17 @@ class VineClaimViewSet(viewsets.ModelViewSet):
         qs = VineClaim.objects.filter(product__user=request.user, product_id=product_id)
         updated = qs.update(review_received=review_received)
         return Response({'updated': updated, 'review_received': review_received})
+
+
+class ActionItemViewSet(viewsets.ModelViewSet):
+    """CRUD for action items. Scoped to current user."""
+    serializer_class = ActionItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_fields = ['status', 'category']
+    ordering_fields = ['created_at', 'due_date', 'subject']
+    ordering = ['-created_at']
+    search_fields = ['subject', 'product_name', 'product_asin']
+
+    def get_queryset(self):
+        return ActionItem.objects.filter(user=self.request.user)

@@ -478,6 +478,49 @@ class ExtendedApiClient extends ApiClient {
     });
   }
 
+  // Action items CRUD (persistence)
+  async getActionItems(params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+    ordering?: string;
+  }): Promise<ActionItemResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+    const query = searchParams.toString();
+    const response = await this.request<ActionItemResponse[] | { results: ActionItemResponse[] }>(
+      `/action-items/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async getActionItem(id: number): Promise<ActionItemResponse> {
+    return this.request<ActionItemResponse>(`/action-items/${id}/`);
+  }
+
+  async createActionItem(data: ActionItemCreateInput): Promise<ActionItemResponse> {
+    return this.request<ActionItemResponse>('/action-items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateActionItem(id: number, data: ActionItemUpdateInput): Promise<ActionItemResponse> {
+    return this.request<ActionItemResponse>(`/action-items/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteActionItem(id: number): Promise<void> {
+    return this.request(`/action-items/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
   // Amazon Account API methods
   async getAmazonAuthUrl(
     marketplaceId: string = 'ATVPDKIKX0DER',
@@ -759,6 +802,62 @@ interface VineClaimUpdateInput {
   notes?: string;
 }
 
+// Action item types (API snake_case)
+interface ActionItemResponse {
+  id: number;
+  product_asin: string;
+  product_name: string;
+  product_brand: string;
+  product_size: string;
+  category: string;
+  subject: string;
+  status: string;
+  assignee: string;
+  assignee_initials: string;
+  due_date: string | null;
+  description: string;
+  description_html: string;
+  attachments: { name: string; url: string; type?: string; uploadedAt: string }[];
+  created_by: string;
+  created_by_initials: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ActionItemCreateInput {
+  product_asin?: string;
+  product_name: string;
+  product_brand?: string;
+  product_size?: string;
+  category: string;
+  subject: string;
+  status?: string;
+  assignee?: string;
+  assignee_initials?: string;
+  due_date?: string | null;
+  description?: string;
+  description_html?: string;
+  attachments?: { name: string; url: string; type?: string; uploadedAt: string }[];
+  created_by?: string;
+  created_by_initials?: string;
+}
+
+interface ActionItemUpdateInput {
+  product_asin?: string;
+  product_name?: string;
+  product_brand?: string;
+  product_size?: string;
+  category?: string;
+  subject?: string;
+  status?: string;
+  assignee?: string;
+  assignee_initials?: string;
+  due_date?: string | null;
+  description?: string;
+  description_html?: string;
+  attachments?: { name: string; url: string; type?: string; uploadedAt: string }[];
+}
+
 // Shipment types
 type ShipmentStatus = 'planning' | 'ready' | 'shipped' | 'in_transit' | 'receiving' | 'received' | 'cancelled';
 type ShipmentType = 'fba' | 'awd' | 'mfg' | 'hazmat';
@@ -923,6 +1022,9 @@ export type {
   VineClaimResponse,
   VineClaimCreateInput,
   VineClaimUpdateInput,
+  ActionItemResponse,
+  ActionItemCreateInput,
+  ActionItemUpdateInput,
   ShipmentStatus,
   ShipmentType,
   ShipmentItem,

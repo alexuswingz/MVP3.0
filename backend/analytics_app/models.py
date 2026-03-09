@@ -180,3 +180,43 @@ class ProductSeasonality(models.Model):
     
     def __str__(self):
         return f"{self.product.asin} - Week {self.week_of_year}: {self.seasonality_index:.2f}"
+
+
+class ActionItem(models.Model):
+    """Task/ticket items per user (Inventory, Price, Ads, PDP, etc.)."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='action_items'
+    )
+    # Product reference (denormalized for display; product may be deleted)
+    product_asin = models.CharField(max_length=20, blank=True, db_index=True)
+    product_name = models.CharField(max_length=500)
+    product_brand = models.CharField(max_length=200, blank=True)
+    product_size = models.CharField(max_length=100, blank=True)
+    # Ticket fields
+    category = models.CharField(max_length=100)
+    subject = models.CharField(max_length=500)
+    status = models.CharField(max_length=50, default='To Do')
+    assignee = models.CharField(max_length=200, blank=True)
+    assignee_initials = models.CharField(max_length=20, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    description_html = models.TextField(blank=True)
+    attachments = models.JSONField(default=list, blank=True)  # [{name, url, type?, uploadedAt}]
+    created_by = models.CharField(max_length=200, blank=True)
+    created_by_initials = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'action_items'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'category']),
+            models.Index(fields=['user', '-due_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.subject} ({self.category})"

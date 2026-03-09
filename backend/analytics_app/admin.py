@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DailySales, WeeklySales, Order, VineClaim, SeasonalityCurve, ProductSeasonality
+from .models import DailySales, WeeklySales, Order, VineClaim, SeasonalityCurve, ProductSeasonality, ActionItem
 
 
 @admin.register(DailySales)
@@ -107,3 +107,13 @@ class ProductSeasonalityAdmin(admin.ModelAdmin):
     @admin.display(description='ASIN')
     def get_product_asin(self, obj):
         return obj.product.asin if obj.product else '-'
+
+
+@admin.register(ActionItem)
+class ActionItemAdmin(admin.ModelAdmin):
+    list_display = ['id', 'subject', 'category', 'status', 'assignee', 'due_date', 'user', 'created_at']
+    list_filter = ['category', 'status']
+    search_fields = ['subject', 'product_name', 'product_asin']
+    list_select_related = ['user']
+    raw_id_fields = ['user']
+    ordering = ['-created_at']

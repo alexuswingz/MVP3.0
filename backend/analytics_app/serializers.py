@@ -1,6 +1,6 @@
 from django.db.models import Sum
 from rest_framework import serializers
-from .models import VineClaim
+from .models import VineClaim, ActionItem
 from forecast_app.models import Product
 
 
@@ -103,3 +103,35 @@ class VineClaimSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class ActionItemSerializer(serializers.ModelSerializer):
+    """CRUD for action items. All fields map to frontend TableRow/TicketDetail."""
+
+    class Meta:
+        model = ActionItem
+        fields = [
+            'id',
+            'product_asin',
+            'product_name',
+            'product_brand',
+            'product_size',
+            'category',
+            'subject',
+            'status',
+            'assignee',
+            'assignee_initials',
+            'due_date',
+            'description',
+            'description_html',
+            'attachments',
+            'created_by',
+            'created_by_initials',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
