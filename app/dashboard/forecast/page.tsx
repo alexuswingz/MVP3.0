@@ -11,6 +11,7 @@ import NGOOSmodal from '@/components/forecast/NGOOSmodal';
 import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { useUIStore } from '@/stores/ui-store';
 import { api, type ForecastTableResponse } from '@/lib/api';
+import { getForecastCache, setForecastCache } from '@/lib/forecast-cache';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
 import type { DoiSettings } from '@/lib/doi-settings';
 import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
@@ -61,17 +62,15 @@ function transformApiRowToTableRow(apiRow: ForecastTableResponse['rows'][0]): Sh
 }
 
 export default function ForecastPage() {
+  const forecastCache = getForecastCache();
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
   const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
-  const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
+  const [tableRows, setTableRows] = useState<ShipmentTableRow[]>(() => forecastCache?.rows ?? []);
   const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
-  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
-  const [summary, setSummary] = useState({
+  const [loading, setLoading] = useState(!forecastCache);
+  const [summary, setSummary] = useState(() => forecastCache?.summary ?? {
     totalProducts: 0,
     totalUnitsToMake: 0,
     avgDaysOfInventory: 0,
@@ -80,6 +79,9 @@ export default function ForecastPage() {
     doiThreshold: 130,
     totalPallets: 0,
   });
+  const [error, setError] = useState<string | null>(null);
+  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
+  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
@@ -176,33 +178,43 @@ export default function ForecastPage() {
     }
   }, [runUnitsToMakeRecalc]);
 
-  const fetchForecastData = useCallback(async (): Promise<ShipmentTableRow[] | null> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.getForecastTable({
-        search: searchQuery || undefined,
-        sort_by: 'doi',
-        sort_order: 'asc',
-      });
+  const fetchForecastData = useCallback(
+    async (backgroundRefresh = false): Promise<ShipmentTableRow[] | null> => {
+      if (!backgroundRefresh) setLoading(true);
+      setError(null);
+      try {
+        const response = await api.getForecastTable({
+          search: searchQuery || undefined,
+          sort_by: 'doi',
+          sort_order: 'asc',
+        });
 
-      const transformedRows = response.rows.map(transformApiRowToTableRow);
-      setTableRows(transformedRows);
-      setSummary(response.summary);
-      hasRecalcForAppliedDoiRef.current = false;
-      return transformedRows;
-    } catch (err) {
-      console.error('Failed to fetch forecast data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load forecast data');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery]);
+        const transformedRows = response.rows.map(transformApiRowToTableRow);
+        setTableRows(transformedRows);
+        setSummary(response.summary);
+        hasRecalcForAppliedDoiRef.current = false;
+        setForecastCache({ rows: transformedRows, summary: response.summary });
+        return transformedRows;
+      } catch (err) {
+        console.error('Failed to fetch forecast data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load forecast data');
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [searchQuery]
+  );
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchForecastData(!!getForecastCache());
+      return;
+    }
     const debounceTimer = setTimeout(() => {
-      fetchForecastData();
+      fetchForecastData(false);
     }, 300);
     return () => clearTimeout(debounceTimer);
   }, [fetchForecastData]);

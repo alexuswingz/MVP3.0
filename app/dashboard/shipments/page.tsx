@@ -15,6 +15,7 @@ import {
 } from './components/PlanningTable';
 import NewShipmentModal, { type NewShipmentForm } from './components/NewShipmentModal';
 import { api, type ShipmentListItem, type ShipmentStats } from '@/lib/api';
+import { prefetchForecastTable } from '@/lib/forecast-cache';
 
 function apiShipmentToInternal(s: ShipmentListItem): Shipment {
   return {
@@ -120,6 +121,13 @@ const initialNewShipment: NewShipmentForm = {
 
 const NEW_SHIPMENT_STORAGE_KEY = 'mvp_new_shipment_data';
 
+// Module-level cache so reopening Shipments page shows last data immediately while refetching
+let shipmentsPageCache: {
+  active: Shipment[] | null;
+  archived: Shipment[] | null;
+  stats: ShipmentStats | null;
+} | null = null;
+
 export default function ShipmentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,6 +135,12 @@ export default function ShipmentsPage() {
   const [activeTab, setActiveTab] = useState<'shipments' | 'archive'>(() =>
     tabFromUrl === 'archive' ? 'archive' : 'shipments'
   );
+
+  // Prefetch forecast table when on Shipments so switching to Forecast is faster
+  useEffect(() => {
+    const t = setTimeout(() => prefetchForecastTable(), 800);
+    return () => clearTimeout(t);
+  }, []);
 
   // Keep activeTab in sync with URL (e.g. back/forward or direct link with ?tab=archive)
   useEffect(() => {
@@ -138,13 +152,16 @@ export default function ShipmentsPage() {
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
   
-  // API state: cache per tab so switching back shows table instantly
+  // API state: hydrate from module cache when available so table shows instantly on revisit
   const [shipmentsByTab, setShipmentsByTab] = useState<{
     active: Shipment[] | null;
     archived: Shipment[] | null;
-  }>({ active: null, archived: null });
-  const [stats, setStats] = useState<ShipmentStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  }>(() => ({
+    active: shipmentsPageCache?.active ?? null,
+    archived: shipmentsPageCache?.archived ?? null,
+  }));
+  const [stats, setStats] = useState<ShipmentStats | null>(() => shipmentsPageCache?.stats ?? null);
+  const [loading, setLoading] = useState(!shipmentsPageCache);
   const [error, setError] = useState<string | null>(null);
   /** When set, we're fetching for this tab in the background (no full-page loading). */
   const [loadingTab, setLoadingTab] = useState<'shipments' | 'archive' | null>(null);
@@ -166,8 +183,14 @@ export default function ShipmentsPage() {
           api.getShipmentStats(),
         ]);
         const key = statusFilter === 'active' ? 'active' : 'archived';
-        setShipmentsByTab((prev) => ({ ...prev, [key]: shipmentsData.map(apiShipmentToInternal) }));
+        const mapped = shipmentsData.map(apiShipmentToInternal);
+        setShipmentsByTab((prev) => ({ ...prev, [key]: mapped }));
         setStats(statsData);
+        shipmentsPageCache = {
+          ...(shipmentsPageCache ?? { active: null, archived: null, stats: null }),
+          [key]: mapped,
+          stats: statsData,
+        };
       } catch (err) {
         console.error('Failed to fetch shipments:', err);
         setError(err instanceof Error ? err.message : 'Failed to load shipments');
@@ -179,27 +202,41 @@ export default function ShipmentsPage() {
     [searchQuery]
   );
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
     const filter = activeTab === 'archive' ? 'archived' : 'active';
     const cacheKey = filter;
     const hasCache = shipmentsByTab[cacheKey] != null;
+    const hasPageCache = !!shipmentsPageCache;
 
-    if (hasLoadedOnceRef.current) {
-      if (!hasCache) setLoadingTab(activeTab);
-      fetchShipments(filter, {
-        silent: true,
-        onComplete: () => {
-          setLoadingTab(null);
-          hasLoadedOnceRef.current = true;
-        },
-      });
-    } else {
-      fetchShipments(filter, {
-        onComplete: () => {
-          hasLoadedOnceRef.current = true;
-        },
-      });
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (hasPageCache && hasCache) {
+        fetchShipments(filter, {
+          silent: true,
+          onComplete: () => {
+            setLoadingTab(null);
+            hasLoadedOnceRef.current = true;
+          },
+        });
+      } else {
+        fetchShipments(filter, {
+          onComplete: () => {
+            hasLoadedOnceRef.current = true;
+          },
+        });
+      }
+      return;
     }
+
+    if (!hasCache) setLoadingTab(activeTab);
+    fetchShipments(filter, {
+      silent: true,
+      onComplete: () => {
+        setLoadingTab(null);
+        hasLoadedOnceRef.current = true;
+      },
+    });
   }, [activeTab, fetchShipments]);
 
   // Refetch when returning from new-shipment page (Back after creating draft) so the new row appears

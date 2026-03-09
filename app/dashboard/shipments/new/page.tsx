@@ -110,6 +110,9 @@ const HEADER_BORDER = '#334155';
 const CARD_BG = '#1F2937';
 const BORDER = '#4B5563';
 
+// Module-level cache so reopening Add Products page shows last forecast data immediately while refetching
+let newShipmentForecastCache: ForecastTableResponse | null = null;
+
 // Transform API response to AddProductRow format
 function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]): AddProductRow {
   const inv = apiRow.inventory;
@@ -164,9 +167,9 @@ export default function NewShipmentAddProductsPage() {
   const [savedDefaultDoi, setSavedDefaultDoi] = useState('150');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // API data state
-  const [apiData, setApiData] = useState<ForecastTableResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // API data state: hydrate from cache when available for instant table on revisit
+  const [apiData, setApiData] = useState<ForecastTableResponse | null>(() => newShipmentForecastCache);
+  const [loading, setLoading] = useState(!newShipmentForecastCache);
   const [error, setError] = useState<string | null>(null);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
@@ -268,14 +271,15 @@ export default function NewShipmentAddProductsPage() {
     };
   }, [urlShipmentId, urlTab]);
 
-  // Fetch forecast data from API
-  const fetchForecastData = useCallback(async () => {
-    setLoading(true);
+  // Fetch forecast data from API (backgroundRefresh = true when we have cache so we don't show loading)
+  const fetchForecastData = useCallback(async (backgroundRefresh = false) => {
+    if (!backgroundRefresh) setLoading(true);
     setError(null);
     setRecalculatedUnitsByProductId(null);
     try {
       const data = await api.getForecastTable();
       setApiData(data);
+      newShipmentForecastCache = data;
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load product data');
@@ -284,8 +288,14 @@ export default function NewShipmentAddProductsPage() {
     }
   }, []);
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    fetchForecastData();
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchForecastData(!!newShipmentForecastCache);
+      return;
+    }
+    fetchForecastData(false);
   }, [fetchForecastData]);
 
   useEffect(() => {
@@ -1431,7 +1441,7 @@ export default function NewShipmentAddProductsPage() {
                 <span style={{ color: '#EF4444', fontSize: 14 }}>{error}</span>
                 <button
                   type="button"
-                  onClick={fetchForecastData}
+                  onClick={() => fetchForecastData()}
                   style={{
                     padding: '8px 16px',
                     borderRadius: 6,
