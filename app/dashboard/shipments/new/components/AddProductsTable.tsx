@@ -2,8 +2,65 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
+import ShipmentsColumnFilterDropdown, {
+  type ShipmentsColumnFilterData,
+} from './ShipmentsColumnFilterDropdown';
 
 const ROW_BORDER = '1px solid #334155';
+
+function getCellValue(row: AddProductRow, columnKey: string): string | number {
+  const v = (row as Record<string, unknown>)[columnKey];
+  if (v === undefined || v === null) return '';
+  return typeof v === 'number' ? v : String(v);
+}
+
+function applyCondition(
+  value: string | number,
+  conditionType: string,
+  conditionValue: string,
+  numeric: boolean
+): boolean {
+  if (!conditionType) return true;
+  const strVal = String(value ?? '').toLowerCase();
+  const strCond = String(conditionValue ?? '').toLowerCase();
+  const numVal = Number(value);
+  const numCond = Number(conditionValue);
+  switch (conditionType) {
+    case 'equals':
+      return numeric ? numVal === numCond : strVal === strCond;
+    case 'notEquals':
+      return numeric ? numVal !== numCond : strVal !== strCond;
+    case 'greaterThan':
+      return numVal > numCond;
+    case 'lessThan':
+      return numVal < numCond;
+    case 'greaterOrEqual':
+      return numVal >= numCond;
+    case 'lessOrEqual':
+      return numVal <= numCond;
+    case 'contains':
+      return strVal.includes(strCond);
+    case 'notContains':
+      return !strVal.includes(strCond);
+    default:
+      return true;
+  }
+}
+
+const NUMERIC_COLUMN_KEYS = new Set([
+  'unitsToMake',
+  'in',
+  'inventory',
+  'totalDoi',
+  'fbaAvailableDoi',
+  'boxInventory',
+  'unitsOrdered7',
+  'unitsOrdered30',
+  'unitsOrdered90',
+  'fbaTotal',
+  'fbaAvailable',
+  'awdTotal',
+]);
 
 // Footer stats configuration
 type FooterStatKey = 'products' | 'palettes' | 'boxes' | 'weight';
@@ -75,6 +132,24 @@ export interface AddProductRow {
 
 function getLabelsAvailableFromRow(row: AddProductRow): number {
   return row.labelsAvailable ?? row.label_inventory ?? row.labels_available ?? 0;
+}
+
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <img
+      src="/assets/Vector (1).png"
+      alt="Filter"
+      width={12}
+      height={12}
+      style={{
+        flexShrink: 0,
+        objectFit: 'contain',
+        ...(active
+          ? { filter: 'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)' }
+          : {}),
+      }}
+    />
+  );
 }
 
 export type TableColumnKey = (typeof COLUMNS)[number]['key'];
@@ -191,7 +266,12 @@ export function AddProductsTable({
   const [hoveredStat, setHoveredStat] = useState<FooterStatKey | null>(null);
   const [dragOverStat, setDragOverStat] = useState<FooterStatKey | null>(null);
   const dragStartIndexRef = useRef<number | null>(null);
-  
+
+  // Column filter state (Shipments table mode)
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, ShipmentsColumnFilterData>>({});
+  const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
   // Save footer stats order to localStorage when it changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -211,6 +291,103 @@ export function AddProductsTable({
   useEffect(() => {
     onAddedIdsChange?.(Array.from(selectedRows));
   }, [selectedRows, onAddedIdsChange]);
+
+  // Close column filter dropdown on outside click
+  useEffect(() => {
+    if (!openFilterColumn) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Element;
+      const isIcon = Object.values(filterIconRefs.current).some((ref) => ref?.contains(target));
+      const isDropdown = target.closest('[data-filter-dropdown]');
+      if (!isIcon && !isDropdown) setOpenFilterColumn(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [openFilterColumn]);
+
+  const getColumnValues = useCallback(
+    (columnKey: string): (string | number)[] => {
+      const values = new Set<string | number>();
+      rows.forEach((row) => {
+        const v = getCellValue(row, columnKey);
+        if (v !== '' && v !== undefined) values.add(v);
+      });
+      const arr = [...values];
+      if (NUMERIC_COLUMN_KEYS.has(columnKey)) {
+        return arr.sort((a, b) => Number(a) - Number(b));
+      }
+      return arr.sort((a, b) => String(a).localeCompare(String(b)));
+    },
+    [rows]
+  );
+
+  const handleApplyColumnFilter = useCallback((columnKey: string, data: ShipmentsColumnFilterData | null) => {
+    if (data === null) {
+      setColumnFilters((prev) => {
+        const next = { ...prev };
+        delete next[columnKey];
+        return next;
+      });
+      return;
+    }
+    setColumnFilters((prev) => ({ ...prev, [columnKey]: data }));
+  }, []);
+
+  const filteredRows = useMemo(() => {
+    let result = [...rows];
+    Object.entries(columnFilters).forEach(([colKey, filter]) => {
+      if (!filter) return;
+      if (filter.selectedValues != null && filter.selectedValues.size > 0) {
+        result = result.filter((row) =>
+          filter.selectedValues!.has(String(getCellValue(row, colKey)))
+        );
+      }
+      if (filter.conditionType) {
+        const numeric = NUMERIC_COLUMN_KEYS.has(colKey);
+        result = result.filter((row) =>
+          applyCondition(
+            getCellValue(row, colKey),
+            filter.conditionType!,
+            filter.conditionValue ?? '',
+            numeric
+          )
+        );
+      }
+    });
+    const sortFilter = Object.values(columnFilters).find((f) => f.sortField && f.sortOrder);
+    if (sortFilter?.sortField && sortFilter.sortOrder) {
+      const key = sortFilter.sortField;
+      const order = sortFilter.sortOrder === 'asc' ? 1 : -1;
+      const numeric = NUMERIC_COLUMN_KEYS.has(key);
+      result = [...result].sort((a, b) => {
+        const aVal = getCellValue(a, key);
+        const bVal = getCellValue(b, key);
+        if (numeric) {
+          return (Number(aVal) - Number(bVal)) * order;
+        }
+        return String(aVal).localeCompare(String(bVal)) * order;
+      });
+    }
+    return result;
+  }, [rows, columnFilters]);
+
+  const hasActiveFilter = useCallback(
+    (columnKey: string): boolean => {
+      const filter = columnFilters[columnKey];
+      if (!filter) return false;
+      if (filter.sortOrder) return true;
+      if (filter.selectedValues != null && filter.selectedValues.size > 0) {
+        const allVals = getColumnValues(columnKey);
+        const allSet = new Set(allVals.map(String));
+        const selSet = new Set(Array.from(filter.selectedValues).map(String));
+        if (allSet.size === 0) return false;
+        return !(allSet.size === selSet.size && [...allSet].every((v) => selSet.has(v)));
+      }
+      if (filter.conditionType) return true;
+      return false;
+    },
+    [columnFilters, getColumnValues]
+  );
 
   const visibleColumns = useMemo((): (ColDef & { left?: number })[] => {
     if (!visibleColumnKeys || visibleColumnKeys.length === 0) return COLUMNS as (ColDef & { left?: number })[];
@@ -1022,7 +1199,20 @@ export function AddProductsTable({
             >
               <tr style={{ height: 58, maxHeight: 58, backgroundColor: HEADER_BG }}>
                 {visibleColumns.map((col) => (
-                  <th key={col.key} style={thStyle(col)}>
+                  <th
+                    key={col.key}
+                    style={{
+                      ...thStyle(col),
+                      ...(col.key !== 'checkbox'
+                        ? {
+                            color:
+                              hasActiveFilter(col.key) || openFilterColumn === col.key
+                                ? '#3B82F6'
+                                : undefined,
+                          }
+                        : {}),
+                    }}
+                  >
                     {col.key === 'checkbox' ? (
                       <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '100%', height: '100%', minHeight: 58, margin: 0 }}>
                         <input
@@ -1033,30 +1223,84 @@ export function AddProductsTable({
                         />
                       </label>
                     ) : (
-                      <span>{col.label}</span>
+                      <div
+                        className="group"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <span>{col.label}</span>
+                        {hasActiveFilter(col.key) && (
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              backgroundColor: '#10B981',
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                        <button
+                          ref={(el) => {
+                            filterIconRefs.current[col.key] = el;
+                          }}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpenFilterColumn((p) => (p === col.key ? null : col.key));
+                          }}
+                          className={
+                            hasActiveFilter(col.key) || openFilterColumn === col.key
+                              ? 'opacity-100'
+                              : 'opacity-0 group-hover:opacity-100'
+                          }
+                          style={{
+                            transition: 'opacity 0.2s',
+                            padding: 2,
+                            border: 'none',
+                            background: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          aria-label={`Filter ${col.label}`}
+                        >
+                          <FilterIcon
+                            active={hasActiveFilter(col.key) || openFilterColumn === col.key}
+                          />
+                        </button>
+                      </div>
                     )}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr
-                  key={row.id}
-                  className="table-row"
-                  style={{
-                    height: 58,
-                    maxHeight: 58,
-                    backgroundColor: ROW_BG,
-                  }}
-                >
-                  {visibleColumns.map((col) => (
-                    <td key={col.key} style={getTdStyle(col)}>
-                      {renderCellContent(col, row, index)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {filteredRows.map((row) => {
+                const originalIndex = rows.findIndex((r) => r.id === row.id);
+                return (
+                  <tr
+                    key={row.id}
+                    className="table-row"
+                    style={{
+                      height: 58,
+                      maxHeight: 58,
+                      backgroundColor: ROW_BG,
+                    }}
+                  >
+                    {visibleColumns.map((col) => (
+                      <td key={col.key} style={getTdStyle(col)}>
+                        {renderCellContent(col, row, originalIndex >= 0 ? originalIndex : 0)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -1212,6 +1456,23 @@ export function AddProductsTable({
           )}
         </div>
       </div>
+
+      {openFilterColumn &&
+        filterIconRefs.current[openFilterColumn] != null && (
+          <ShipmentsColumnFilterDropdown
+            filterIconRef={{
+              get current() {
+                return filterIconRefs.current[openFilterColumn];
+              },
+            } as React.RefObject<HTMLButtonElement | null>}
+            columnKey={openFilterColumn}
+            availableValues={getColumnValues(openFilterColumn)}
+            currentFilter={columnFilters[openFilterColumn] ?? {}}
+            onApply={(data) => handleApplyColumnFilter(openFilterColumn, data)}
+            onClose={() => setOpenFilterColumn(null)}
+            isNumericColumn={NUMERIC_COLUMN_KEYS.has(openFilterColumn)}
+          />
+        )}
     </>
   );
 }
