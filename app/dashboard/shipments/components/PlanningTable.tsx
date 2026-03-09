@@ -35,7 +35,8 @@ const BORDER_COLOR = '#374151';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_ACTIVE = '#3B82F6';
 const TEXT_WHITE = '#FFFFFF';
-const ROW_HOVER_BG = TABLE_BG;
+/** Hover background — 2% palette green (#84FF00) over base #1A2235 */
+const ROW_HOVER_BG = '#1C2634';
 const STATUS_BUTTON_BG = '#374151'; // match 1000bananas2.0 PlanningTable
 
 /** Filter dropdown theme — layout for filter dropdown on status (Design: Dark bg, 204px, 8px radius, 1px border #334155, soft shadow) */
@@ -295,6 +296,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
   /** Anchor rect for the open actions menu (from trigger button). Used to position portal dropdown. */
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const menuPortalRef = useRef<HTMLDivElement>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 
   const openRow = openMenuRowId != null ? rows.find((r) => r.id === openMenuRowId) ?? null : null;
 
@@ -431,7 +433,8 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
         box-sizing: border-box !important;
         appearance: none !important;
         font-family: inherit !important;
-      }`}</style>
+      }
+      `}</style>
       <table
         className="w-full border-collapse"
         style={{ tableLayout: 'fixed', display: 'table', borderSpacing: 0 }}
@@ -532,25 +535,21 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
               </tr>
               <tr
                 onClick={() => onRowClick?.(row)}
-                className="cursor-pointer transition-colors"
+                className="planning-table-data-row cursor-pointer transition-colors"
                 style={{
-                  backgroundColor: ROW_BG,
+                  backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                   height: 'auto',
                   minHeight: 40,
                   display: 'table-row',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = ROW_HOVER_BG;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ROW_BG;
-                }}
+                onMouseEnter={() => setHoveredRowId(row.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
                 <td
                   style={{
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     height: 'auto',
                     minHeight: 40,
@@ -601,7 +600,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     height: 'auto',
                     minHeight: 40,
@@ -629,7 +628,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -642,7 +641,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -655,7 +654,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -668,7 +667,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '1rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     minHeight: 40,
                     display: 'table-cell',
@@ -690,7 +689,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '1rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     minHeight: 40,
                     display: 'table-cell',
@@ -715,7 +714,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.5rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     width: 90,
                     position: 'relative',
