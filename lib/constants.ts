@@ -27,6 +27,15 @@ export const NAV_ITEMS = [
       { id: 'bottles', label: 'Bottles', path: '/dashboard/bottles' },
     ]
   },
+  {
+    id: 'supply-chain',
+    label: 'Supply Chain',
+    icon: 'Link2',
+    path: '/dashboard/closures',
+    children: [
+      { id: 'closures', label: 'Closures', path: '/dashboard/closures' },
+    ]
+  },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
   { 
     id: 'settings', 

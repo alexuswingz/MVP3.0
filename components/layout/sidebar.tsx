@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Box,
   Rocket,
+  Link2,
   Settings,
   ChevronUp,
   PanelLeft,
@@ -21,14 +22,15 @@ import { useAuthStore } from '@/stores/auth-store';
 import { NAV_ITEMS } from '@/lib/constants';
 import type { NavItem } from '@/types';
 
-// Main nav only (Home, Products, Production, Action Items); Settings is in footer
-const MAIN_NAV_IDS = ['home', 'products', 'production', 'action-items'];
+// Main nav only (Home, Products, Production, Supply Chain, Action Items); Settings is in footer
+const MAIN_NAV_IDS = ['home', 'products', 'production', 'supply-chain', 'action-items'];
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard: Home,
   Package: ShoppingBag,
   TrendingUp: Box,
   Truck: Box,
+  Link2,
   ClipboardList: Rocket,
   Sprout: Rocket,
   Settings,
@@ -42,6 +44,7 @@ export function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     products: true,
     production: true,
+    'supply-chain': true,
   });
 
   const handleLogout = () => {
