@@ -386,61 +386,51 @@ export default function NewShipmentAddProductsPage() {
     return rows;
   }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string | number | null | undefined) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const response = await fetch(`${baseUrl}/shipment-products/export/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          tableMode,
+          tableRows,
+          nonTableRows,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
       }
-      return s;
-    };
-    const headers = ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
-    const dateStr = new Date().toISOString().slice(0, 10);
-    if (tableMode) {
-      const rows = tableRows.map((r) =>
-        [
-          escapeCsv(r.product ?? ''),
-          escapeCsv(r.brand ?? ''),
-          escapeCsv(r.asin ?? r.childAsin ?? ''),
-          escapeCsv(r.variation1 ?? ''),
-          escapeCsv(r.inventory ?? r.in ?? ''),
-          escapeCsv(r.unitsToMake ?? ''),
-          escapeCsv(r.totalDoi ?? ''),
-          escapeCsv(r.fbaAvailableDoi ?? ''),
-        ].join(',')
-      );
-      const csv = [headers.join(','), ...rows].join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
       a.download = `shipment_products_export_${dateStr}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } else {
-      const rows = nonTableRows.map((r) =>
-        [
-          escapeCsv(r.product ?? ''),
-          escapeCsv(r.brand ?? ''),
-          escapeCsv(r.asin ?? ''),
-          escapeCsv(r.size ?? ''),
-          escapeCsv(r.inventory ?? ''),
-          escapeCsv(r.unitsToMake ?? ''),
-          escapeCsv(r.daysOfInventory ?? ''),
-          escapeCsv(r.fbaAvailableDoi ?? ''),
-        ].join(',')
-      );
-      const csv = [headers.join(','), ...rows].join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `shipment_products_export_${dateStr}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      toast.vineCreated('Table exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export shipment products CSV';
+      toast.error('Failed to export shipment products CSV', { description: message });
+    } finally {
+      setShowSettingsDropdown(false);
     }
-    setShowSettingsDropdown(false);
-    toast.vineCreated('Table exported as CSV');
   }, [tableMode, tableRows, nonTableRows]);
 
   // Use summary data from API or calculate from rows

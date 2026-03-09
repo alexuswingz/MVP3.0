@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django.db.models import Q
 from django.utils import timezone
 from django.http import HttpResponse
@@ -379,6 +380,67 @@ class ShipmentItemViewSet(viewsets.ModelViewSet):
             item.quantity_received for item in shipment.items.all()
         )
         shipment.save(update_fields=['total_units', 'received_units'])
+
+
+class ShipmentProductsExportView(APIView):
+    """
+    CSV export helper for the New Shipment "Add Products" view.
+
+    The client posts the current rows and we return a CSV with the
+    same columns as the existing frontend export.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data or {}
+        table_mode = bool(data.get('tableMode'))
+        table_rows = data.get('tableRows') or []
+        non_table_rows = data.get('nonTableRows') or []
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        writer.writerow(
+            ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI']
+        )
+
+        if table_mode:
+            for r in table_rows:
+                r = r or {}
+                writer.writerow(
+                    [
+                        r.get('product', '') or '',
+                        r.get('brand', '') or '',
+                        r.get('asin') or r.get('childAsin') or '',
+                        r.get('variation1', '') or '',
+                        r.get('inventory') if r.get('inventory') is not None else r.get('in', ''),
+                        r.get('unitsToMake', '') or r.get('unitsToMake') or r.get('units_to_make', '') or r.get('unitsToMake') or r.get('unitsToMake', ''),
+                        r.get('totalDoi', ''),
+                        r.get('fbaAvailableDoi', ''),
+                    ]
+                )
+        else:
+            for r in non_table_rows:
+                r = r or {}
+                writer.writerow(
+                    [
+                        r.get('product', '') or '',
+                        r.get('brand', '') or '',
+                        r.get('asin', '') or '',
+                        r.get('size', '') or '',
+                        r.get('inventory', ''),
+                        r.get('unitsToMake', ''),
+                        r.get('daysOfInventory', ''),
+                        r.get('fbaAvailableDoi', ''),
+                    ]
+                )
+
+        buffer.seek(0)
+        filename = f'shipment_products_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class InventoryViewSet(viewsets.ReadOnlyModelViewSet):
