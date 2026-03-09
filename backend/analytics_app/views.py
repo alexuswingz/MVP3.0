@@ -2,7 +2,13 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
+from django.http import HttpResponse
+from datetime import date
+from io import StringIO
+import csv
 
 from .models import VineClaim, ActionItem
 from .serializers import VineClaimSerializer, ActionItemSerializer
@@ -43,6 +49,134 @@ class VineClaimViewSet(viewsets.ModelViewSet):
         qs = VineClaim.objects.filter(product__user=request.user, product_id=product_id)
         updated = qs.update(review_received=review_received)
         return Response({'updated': updated, 'review_received': review_received})
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export Vine products as CSV, aggregated per product.
+
+        Supports:
+        - filterset_fields: product, review_received
+        - ordering: claim_date, units_claimed, id
+        - search: case-insensitive match on product name, brand name, ASIN, or status label
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(product__name__icontains=search)
+                | Q(product__asin__icontains=search)
+                | Q(product__brand__name__icontains=search)
+            )
+
+        # Aggregate per product similar to frontend vine tracker
+        rows_by_product = {}
+        for claim in queryset:
+            product = claim.product
+            product_id = product.id
+            row = rows_by_product.get(product_id)
+            if row is None:
+                # Default status based on this claim; will adjust below if needed
+                status_label = 'Concluded' if claim.review_received else 'Awaiting Reviews'
+                launch_date = (
+                    product.launch_date.isoformat() if product.launch_date else ''
+                )
+                enrolled = 0
+                try:
+                    enrolled = int(
+                        getattr(getattr(product, 'extended', None), 'vine_units_enrolled', 0)
+                        or 0
+                    )
+                except Exception:
+                    enrolled = 0
+
+                row = {
+                    'status': status_label,
+                    'product_name': product.name or '',
+                    'brand': product.brand.name if product.brand else '',
+                    'size': product.size or '',
+                    'asin': product.asin or '',
+                    'launch_date': launch_date,
+                    'claimed': 0,
+                    'enrolled': enrolled,
+                }
+                rows_by_product[product_id] = row
+
+            # If any claim is not concluded, overall status should be Awaiting Reviews
+            if not claim.review_received:
+                row['status'] = 'Awaiting Reviews'
+
+            row['claimed'] += int(claim.units_claimed or 0)
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        writer.writerow(
+            ['Status', 'Product Name', 'Brand', 'Size', 'ASIN', 'Launch Date', 'Claimed', 'Enrolled']
+        )
+
+        for row in rows_by_product.values():
+            writer.writerow(
+                [
+                    row['status'],
+                    row['product_name'],
+                    row['brand'],
+                    row['size'],
+                    row['asin'],
+                    row['launch_date'],
+                    row['claimed'],
+                    row['enrolled'],
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'vine_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ActionItemsExportView(APIView):
+    """
+    Lightweight CSV export for action items.
+
+    This does not assume server-side persistence of action items; instead, the
+    client POSTs the rows it wants to export and the API returns a CSV file.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        items = request.data.get('items') or []
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match the columns used by the Action Items UI export
+        writer.writerow(
+            ['Status', 'Product Name', 'Product ID', 'Category', 'Subject', 'Assignee', 'Due Date']
+        )
+
+        for item in items:
+            item = item or {}
+            writer.writerow(
+                [
+                    item.get('status', '') or '',
+                    item.get('productName', '') or '',
+                    str(item.get('productId', '') or ''),
+                    item.get('category', '') or '',
+                    item.get('subject', '') or '',
+                    item.get('assignee', '') or '',
+                    item.get('dueDate', '') or '',
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'action_items_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class ActionItemViewSet(viewsets.ModelViewSet):

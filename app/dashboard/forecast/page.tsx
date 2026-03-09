@@ -11,6 +11,7 @@ import NGOOSmodal from '@/components/forecast/NGOOSmodal';
 import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { useUIStore } from '@/stores/ui-store';
 import { api, type ForecastTableResponse } from '@/lib/api';
+import { getForecastCache, setForecastCache } from '@/lib/forecast-cache';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
 import type { DoiSettings } from '@/lib/doi-settings';
 import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
@@ -61,17 +62,15 @@ function transformApiRowToTableRow(apiRow: ForecastTableResponse['rows'][0]): Sh
 }
 
 export default function ForecastPage() {
+  const forecastCache = getForecastCache();
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
   const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
-  const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
+  const [tableRows, setTableRows] = useState<ShipmentTableRow[]>(() => forecastCache?.rows ?? []);
   const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
-  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
-  const [summary, setSummary] = useState({
+  const [loading, setLoading] = useState(!forecastCache);
+  const [summary, setSummary] = useState(() => forecastCache?.summary ?? {
     totalProducts: 0,
     totalUnitsToMake: 0,
     avgDaysOfInventory: 0,
@@ -80,6 +79,9 @@ export default function ForecastPage() {
     doiThreshold: 130,
     totalPallets: 0,
   });
+  const [error, setError] = useState<string | null>(null);
+  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
+  const [seasonalityProductId, setSeasonalityProductId] = useState<string | null>(null);
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
@@ -176,33 +178,43 @@ export default function ForecastPage() {
     }
   }, [runUnitsToMakeRecalc]);
 
-  const fetchForecastData = useCallback(async (): Promise<ShipmentTableRow[] | null> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.getForecastTable({
-        search: searchQuery || undefined,
-        sort_by: 'doi',
-        sort_order: 'asc',
-      });
+  const fetchForecastData = useCallback(
+    async (backgroundRefresh = false): Promise<ShipmentTableRow[] | null> => {
+      if (!backgroundRefresh) setLoading(true);
+      setError(null);
+      try {
+        const response = await api.getForecastTable({
+          search: searchQuery || undefined,
+          sort_by: 'doi',
+          sort_order: 'asc',
+        });
 
-      const transformedRows = response.rows.map(transformApiRowToTableRow);
-      setTableRows(transformedRows);
-      setSummary(response.summary);
-      hasRecalcForAppliedDoiRef.current = false;
-      return transformedRows;
-    } catch (err) {
-      console.error('Failed to fetch forecast data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load forecast data');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery]);
+        const transformedRows = response.rows.map(transformApiRowToTableRow);
+        setTableRows(transformedRows);
+        setSummary(response.summary);
+        hasRecalcForAppliedDoiRef.current = false;
+        setForecastCache({ rows: transformedRows, summary: response.summary });
+        return transformedRows;
+      } catch (err) {
+        console.error('Failed to fetch forecast data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load forecast data');
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [searchQuery]
+  );
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchForecastData(!!getForecastCache());
+      return;
+    }
     const debounceTimer = setTimeout(() => {
-      fetchForecastData();
+      fetchForecastData(false);
     }, 300);
     return () => clearTimeout(debounceTimer);
   }, [fetchForecastData]);
@@ -263,41 +275,57 @@ export default function ForecastPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsDropdownOpen]);
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string | number | null | undefined) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const searchParams = new URLSearchParams();
+      if (searchQuery.trim()) {
+        searchParams.set('search', searchQuery.trim());
       }
-      return s;
-    };
-    const invTotal = (r: ShipmentTableRow) =>
-      typeof r.inventory === 'number' ? r.inventory : (r.inventory?.total ?? '');
-    const headers = ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
-    const rows = displayRows.map((r) =>
-      [
-        escapeCsv(r.product.name ?? ''),
-        escapeCsv(r.product.brand ?? ''),
-        escapeCsv(r.product.size ?? ''),
-        escapeCsv(r.product.asin ?? ''),
-        escapeCsv(invTotal(r)),
-        escapeCsv(r.unitsToMake ?? ''),
-        escapeCsv(r.daysOfInventory ?? ''),
-        escapeCsv(r.doiFba ?? ''),
-      ].join(',')
-    );
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `forecast_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSettingsDropdownOpen(false);
-    toast.vineCreated('Forecast table exported as CSV');
-  }, [displayRows]);
+      // Keep default sort aligned with the main table
+      searchParams.set('sort_by', 'doi');
+      searchParams.set('sort_order', 'asc');
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const url = `${baseUrl}/forecasts/export/${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `forecast_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Forecast table exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export forecast CSV';
+      toast.error('Failed to export forecast CSV', { description: message });
+    } finally {
+      setSettingsDropdownOpen(false);
+    }
+  }, [searchQuery]);
 
   // Use real data from API summary, with fallback calculations
   const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);

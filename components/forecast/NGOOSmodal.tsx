@@ -665,6 +665,27 @@ function NgoosContent({
   const dueDateCalendarRef = useRef<HTMLDivElement>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const actionItemsContainerRef = useRef<HTMLDivElement>(null);
+  const [actionItemsClosing, setActionItemsClosing] = useState(false);
+  const ACTION_ITEMS_TRANSITION_MS = 280;
+
+  // When action items are expanded, scroll them into view
+  useEffect(() => {
+    if (actionItemsExpanded && !actionItemsClosing && actionItemsContainerRef.current) {
+      actionItemsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [actionItemsExpanded, actionItemsClosing]);
+
+  const closeActionItems = useCallback(() => setActionItemsClosing(true), []);
+
+  useEffect(() => {
+    if (!actionItemsClosing) return;
+    const t = setTimeout(() => {
+      setActionItemsExpanded(false);
+      setActionItemsClosing(false);
+    }, ACTION_ITEMS_TRANSITION_MS);
+    return () => clearTimeout(t);
+  }, [actionItemsClosing]);
 
   type ActionItemEntry = { id: number; title: string; tagBgColor: string; tagText: string; description?: string; assignedTo?: string; dueDate?: string; status?: string };
   const [actionItemsByCategory, setActionItemsByCategory] = useState<Record<string, ActionItemEntry[]>>({
@@ -1036,16 +1057,22 @@ function NgoosContent({
               role="button"
               tabIndex={0}
               onClick={() => {
-                const next = !actionItemsExpanded;
-                setActionItemsExpanded(next);
-                onActionItemsExpandedChange?.(next);
+                if (actionItemsExpanded && !actionItemsClosing) {
+                  closeActionItems();
+                } else if (!actionItemsExpanded) {
+                  setActionItemsExpanded(true);
+                  onActionItemsExpandedChange?.(true);
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  const next = !actionItemsExpanded;
-                  setActionItemsExpanded(next);
-                  onActionItemsExpandedChange?.(next);
+                  if (actionItemsExpanded && !actionItemsClosing) {
+                    closeActionItems();
+                  } else if (!actionItemsExpanded) {
+                    setActionItemsExpanded(true);
+                    onActionItemsExpandedChange?.(true);
+                  }
                 }
               }}
               style={{
@@ -1054,13 +1081,13 @@ function NgoosContent({
                 gap: '12px',
                 padding: '1rem 1.25rem',
                 backgroundColor: 'transparent',
-                borderBottom: actionItemsExpanded ? '1px solid #334155' : 'none',
+                borderBottom: (actionItemsExpanded || actionItemsClosing) ? '1px solid #334155' : 'none',
                 cursor: 'pointer',
                 width: '100%',
               }}
             >
               <span style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', letterSpacing: '0.025em', flexShrink: 0 }}>Action Items</span>
-              {actionItemsExpanded && (
+              {(actionItemsExpanded || actionItemsClosing) && (
                 <>
               <div
                 style={{
@@ -1296,13 +1323,22 @@ function NgoosContent({
                 </>
               )}
               <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: '#94a3b8' }} aria-hidden>
-                <svg style={{ width: '20px', height: '20px', transform: actionItemsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg style={{ width: '20px', height: '20px', transform: (actionItemsExpanded && !actionItemsClosing) ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </span>
             </div>
-            {actionItemsExpanded && (
-              <div style={{ padding: '16px', backgroundColor: '#0F172A', overflowY: 'auto', maxHeight: 'min(40vh, 320px)' }}>
+            {(actionItemsExpanded || actionItemsClosing) && (
+              <div
+                ref={actionItemsContainerRef}
+                style={{
+                  overflow: 'hidden',
+                  height: actionItemsClosing ? 0 : 320,
+                  minHeight: 0,
+                  transition: `height ${ACTION_ITEMS_TRANSITION_MS}ms ease-out`,
+                }}
+              >
+                <div style={{ padding: '16px', backgroundColor: '#0F172A', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                   {(['Inventory', 'Price', 'Ads', 'PDP'] as const).map((cat) => {
                     const items = actionItemsByCategory[cat] ?? [];
@@ -1342,6 +1378,7 @@ function NgoosContent({
                       </ActionItemsColumn>
                     );
                   })}
+                </div>
                 </div>
               </div>
             )}

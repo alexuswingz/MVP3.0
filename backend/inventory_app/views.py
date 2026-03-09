@@ -2,8 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django.db.models import Q
 from django.utils import timezone
+from django.http import HttpResponse
+from datetime import date
+from io import StringIO
+import csv
 
 from .models import Shipment, ShipmentItem, CurrentInventory
 from .serializers import (
@@ -77,6 +82,89 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         elif self.action in ['create', 'update', 'partial_update']:
             return ShipmentCreateSerializer
         return ShipmentDetailSerializer
+    
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export shipments as CSV.
+
+        Applies the same filters/search/order as the list endpoint
+        (status, shipment_type, search, ordering) and returns all rows.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match the columns used by the Shipments page export
+        writer.writerow(
+            ['Status', 'Shipment', 'Type', 'Marketplace', 'Account', 'Add Products', 'Book Shipment']
+        )
+
+        status_label_map = {
+            'planning': 'Planning',
+            'ready': 'Ready',
+            'shipped': 'Shipped',
+            'received': 'Received',
+            'archived': 'Archived',
+            'in_transit': 'In Transit',
+            'receiving': 'Receiving',
+            'cancelled': 'Cancelled',
+        }
+
+        type_label_map = {
+            'awd': 'AWD',
+            'fba': 'FBA',
+            'mfg': 'MFG',
+            'hazmat': 'Hazmat',
+        }
+
+        for shipment in queryset:
+            status_label = status_label_map.get(shipment.status, shipment.status or '')
+            type_label = type_label_map.get(shipment.shipment_type, str(shipment.shipment_type or ''))
+
+            if shipment.status in ['shipped', 'received', 'archived']:
+                add_products_step = 'completed'
+                book_step = 'completed'
+            elif shipment.status == 'ready':
+                add_products_step = 'completed'
+                book_step = 'completed' if (shipment.amazon_shipment_id or '').strip() else 'in progress'
+            elif shipment.status == 'planning':
+                has_items = (shipment.item_count or 0) > 0 if hasattr(shipment, 'item_count') else shipment.items.exists()
+                if has_items:
+                    add_products_step = 'in progress'
+                    book_step = 'pending'
+                else:
+                    add_products_step = 'pending'
+                    book_step = 'pending'
+            else:
+                add_products_step = 'pending'
+                book_step = 'pending'
+
+            date_str = (
+                shipment.planned_ship_date.strftime('%Y.%m.%d')
+                if shipment.planned_ship_date
+                else ''
+            )
+            shipment_label = date_str or (shipment.name or '')
+
+            writer.writerow(
+                [
+                    status_label,
+                    shipment_label,
+                    type_label,
+                    'Amazon',
+                    shipment.ship_from_name or 'TPS Nutrients',
+                    add_products_step,
+                    book_step,
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'shipments_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     
     def perform_create(self, serializer):
         """Save the shipment - user is set in serializer.create()"""
@@ -292,6 +380,67 @@ class ShipmentItemViewSet(viewsets.ModelViewSet):
             item.quantity_received for item in shipment.items.all()
         )
         shipment.save(update_fields=['total_units', 'received_units'])
+
+
+class ShipmentProductsExportView(APIView):
+    """
+    CSV export helper for the New Shipment "Add Products" view.
+
+    The client posts the current rows and we return a CSV with the
+    same columns as the existing frontend export.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        data = request.data or {}
+        table_mode = bool(data.get('tableMode'))
+        table_rows = data.get('tableRows') or []
+        non_table_rows = data.get('nonTableRows') or []
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        writer.writerow(
+            ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI']
+        )
+
+        if table_mode:
+            for r in table_rows:
+                r = r or {}
+                writer.writerow(
+                    [
+                        r.get('product', '') or '',
+                        r.get('brand', '') or '',
+                        r.get('asin') or r.get('childAsin') or '',
+                        r.get('variation1', '') or '',
+                        r.get('inventory') if r.get('inventory') is not None else r.get('in', ''),
+                        r.get('unitsToMake', '') or r.get('unitsToMake') or r.get('units_to_make', '') or r.get('unitsToMake') or r.get('unitsToMake', ''),
+                        r.get('totalDoi', ''),
+                        r.get('fbaAvailableDoi', ''),
+                    ]
+                )
+        else:
+            for r in non_table_rows:
+                r = r or {}
+                writer.writerow(
+                    [
+                        r.get('product', '') or '',
+                        r.get('brand', '') or '',
+                        r.get('asin', '') or '',
+                        r.get('size', '') or '',
+                        r.get('inventory', ''),
+                        r.get('unitsToMake', ''),
+                        r.get('daysOfInventory', ''),
+                        r.get('fbaAvailableDoi', ''),
+                    ]
+                )
+
+        buffer.seek(0)
+        filename = f'shipment_products_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class InventoryViewSet(viewsets.ReadOnlyModelViewSet):

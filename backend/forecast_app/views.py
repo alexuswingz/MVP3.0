@@ -6,9 +6,12 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum, Prefetch
 from django.db import connection
+from django.http import HttpResponse
 from datetime import date
+from io import StringIO
 import time
 import math
+import csv
 
 from config.pagination import ProductPagination
 from .models import (
@@ -215,6 +218,48 @@ class ProductViewSet(viewsets.ModelViewSet):
         
         return Response(result)
 
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export products as CSV.
+
+        Applies the same filters/search/order as the list endpoint, but returns
+        all matching rows without pagination.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # Ensure we have brand data for CSV without extra queries
+        queryset = queryset.select_related('brand')
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match columns currently used by the frontend export
+        writer.writerow(
+            ['Status', 'Product Name', 'ASIN', 'SKU', 'Brand', 'Size', 'Marketplace', 'Seller Account']
+        )
+
+        for product in queryset:
+            status_label = 'Active' if product.is_active else 'Inactive'
+            writer.writerow(
+                [
+                    status_label,
+                    product.name or '',
+                    product.asin or '',
+                    product.sku or '',
+                    product.brand.name if getattr(product, 'brand', None) else '',
+                    product.size or '',
+                    'Amazon',
+                    'TPS Nutrients',
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'products_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
 
 class PackagingTypeViewSet(viewsets.ModelViewSet):
     serializer_class = PackagingTypeSerializer
@@ -284,6 +329,48 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         return ForecastCache.objects.filter(
             product__user=self.request.user
         ).select_related('product')
+    
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export forecast table as CSV.
+
+        Reuses the existing `table` action so that filters, sorting, and
+        calculations exactly match the Forecast dashboard.
+        """
+        table_response = self.table(request)
+        data = getattr(table_response, 'data', {}) or {}
+        rows = data.get('rows', [])
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match columns currently used by the frontend export
+        writer.writerow(
+            ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI']
+        )
+
+        for row in rows:
+            product = (row or {}).get('product', {}) or {}
+            inventory = (row or {}).get('inventory', {}) or {}
+            writer.writerow(
+                [
+                    product.get('name', '') or '',
+                    product.get('brand', '') or '',
+                    product.get('size', '') or '',
+                    product.get('asin', '') or '',
+                    inventory.get('total', ''),
+                    row.get('unitsToMake', ''),
+                    row.get('daysOfInventory', ''),
+                    row.get('doiFba', ''),
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'forecast_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     
     @action(detail=False, methods=['get'])
     def table(self, request):

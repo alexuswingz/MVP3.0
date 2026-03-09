@@ -287,40 +287,63 @@ export default function ProductsPage() {
     return list;
   }, [products, searchQuery, appliedStatusFilter, appliedProductsFilter, appliedMarketplaceFilter, appliedSellerAccountFilter, fadingMap]);
 
-  const handleExportCsv = useCallback(() => {
-    const headers = ['Status', 'Product Name', 'ASIN', 'SKU', 'Brand', 'Size', 'Marketplace', 'Seller Account'];
-    const escapeCsv = (val: string) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const searchParams = new URLSearchParams();
+
+      if (searchQuery.trim()) {
+        searchParams.set('search', searchQuery.trim());
       }
-      return s;
-    };
-    const rows = filteredProducts.map((p) => {
-      const isActive = activeIds.has(p.id);
-      return [
-        isActive ? 'Active' : 'Inactive',
-        escapeCsv(p.name ?? ''),
-        escapeCsv(p.asin ?? ''),
-        escapeCsv(p.sku ?? ''),
-        escapeCsv(p.brand ?? ''),
-        escapeCsv(p.size ?? ''),
-        escapeCsv(selectedMarketplace),
-        escapeCsv(SELLER_ACCOUNT),
-      ].join(',');
-    });
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `products_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSettingsDropdownOpen(false);
-    toast.vineCreated('Products exported as CSV');
-  }, [filteredProducts, activeIds, selectedMarketplace]);
+
+      // Map Active / Inactive status filter to backend is_active flag when possible
+      const showActive = appliedStatusFilter.activeChecked;
+      const showInactive = appliedStatusFilter.inactiveChecked;
+      if (showActive !== showInactive) {
+        // Only one of them is selected
+        searchParams.set('is_active', showActive ? 'true' : 'false');
+      }
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const url = `${baseUrl}/products/export/${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `products_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Products exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export products CSV';
+      toast.error('Failed to export products CSV', { description: message });
+    } finally {
+      setSettingsDropdownOpen(false);
+    }
+  }, [searchQuery, appliedStatusFilter.activeChecked, appliedStatusFilter.inactiveChecked]);
 
   const statusFilterResultCount = useMemo(() => {
     const showActive = statusFilter.activeChecked;

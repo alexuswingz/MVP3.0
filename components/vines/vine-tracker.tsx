@@ -137,49 +137,52 @@ const VineTracker = () => {
     setSearchValue(value);
   };
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const searchParams = new URLSearchParams();
+      if (searchValue.trim()) {
+        searchParams.set('search', searchValue.trim());
       }
-      return s;
-    };
-    let filtered = vineProducts.filter((p) => !p.isNew);
-    if (searchValue.trim()) {
-      const q = searchValue.toLowerCase();
-      filtered = filtered.filter(
-        (row) =>
-          (row.productName || '').toLowerCase().includes(q) ||
-          (row.brand || '').toLowerCase().includes(q) ||
-          (row.asin || '').toLowerCase().includes(q) ||
-          (row.status || '').toLowerCase().includes(q)
-      );
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const url = `${baseUrl}/vine-claims/export/${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `vine_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Vine products exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export vine CSV';
+      toast.error('Failed to export vine CSV', { description: message });
     }
-    const headers = ['Status', 'Product Name', 'Brand', 'Size', 'ASIN', 'Launch Date', 'Claimed', 'Enrolled'];
-    const rows = filtered.map((p) =>
-      [
-        escapeCsv(p.status ?? ''),
-        escapeCsv(p.productName ?? ''),
-        escapeCsv(p.brand ?? ''),
-        escapeCsv(p.size ?? ''),
-        escapeCsv(p.asin ?? ''),
-        escapeCsv(p.launchDate ?? ''),
-        String(p.claimed ?? 0),
-        String(p.enrolled ?? 0),
-      ].join(',')
-    );
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `vine_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.vineCreated('Vine products exported as CSV');
-  }, [vineProducts, searchValue]);
+  }, [searchValue]);
 
   /** True if there is an unsaved new-vine row with any data entered */
   const hasUnsavedNewVine = useMemo(

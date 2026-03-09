@@ -53,7 +53,7 @@ const VineTrackerHeader = ({ onSearch, onNewVineClick, onExportCsv }) => {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         </div>
-        <h1 className="text-xl font-bold text-foreground-primary">Vine</h1>
+        <h1 className="text-2xl font-bold text-foreground-primary">Vine</h1>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">

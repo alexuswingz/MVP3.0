@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { getQtyIncrement, roundQtyUpToNearestCase, roundQtyDownToNearestCase } from '@/lib/qty-increment';
 import ProductsFilterDropdown, { type ColumnFilterData } from './ProductsFilterDropdown';
 
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
+const ROW_HEIGHT_PX = 66;
 
 // Footer stats configuration - shared with AddProductsTable
 type FooterStatKey = 'products' | 'palettes' | 'boxes' | 'weight';
@@ -146,6 +148,7 @@ export function AddProductsNonTable({
   const [columnFilters, setColumnFilters] = useState<Record<string, ColumnFilterData>>({});
   const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const filterDropdownRef = useRef<HTMLDivElement | null>(null);
+  const rowsScrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Track if user has interacted with add/remove to prevent sync from overwriting
   const userHasInteracted = useRef(false);
@@ -539,6 +542,14 @@ export function AddProductsNonTable({
 
   const allSelected = filteredRows.length > 0 && selectedIndices.size === filteredRows.length;
 
+  const rowVirtualizer = useVirtualizer({
+    count: filteredRows.length,
+    getScrollElement: () => rowsScrollContainerRef.current,
+    estimateSize: () => ROW_HEIGHT_PX,
+    overscan: 10,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+
   // Animate DOI bar fill when Add is clicked: startPct (current blue) -> target%. Bar extends from current fill to full target.
   useEffect(() => {
     if (!barFillAnimation || barFillPhase !== 'start') return;
@@ -740,6 +751,7 @@ export function AddProductsNonTable({
           position: 'relative',
           paddingBottom: 97,
           overflowX: 'hidden',
+          overflowY: 'hidden',
           maxWidth: '100%',
           minWidth: 0,
           borderRadius: 16,
@@ -1068,36 +1080,63 @@ export function AddProductsNonTable({
           />
         )}
 
-        {/* Product rows - no inner scroll; main page scroll only */}
-        <div style={{ overflowX: 'hidden' }}>
-          {filteredRows.map((row, index) => {
-            const isSelected = selectedIndices.has(index);
-            const isAdded = addedIds.has(String(row.id));
-            const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
-            const doiColor = getDoiColor(row.daysOfInventory);
+        {/* Product rows - virtualized for lazy loading */}
+        <div
+          ref={rowsScrollContainerRef}
+          style={{
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            maxHeight: 'min(70vh, 720px)',
+          }}
+        >
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'relative',
+              width: '100%',
+            }}
+          >
+            {virtualItems.map((virtualRow) => {
+              const index = virtualRow.index;
+              const row = filteredRows[index];
+              const isSelected = selectedIndices.has(index);
+              const isAdded = addedIds.has(String(row.id));
+              const qtyDisplay = qtyValues[index] ?? (row.unitsToMake != null ? Number(row.unitsToMake).toLocaleString() : '');
+              const doiColor = getDoiColor(row.daysOfInventory);
 
-            return (
-              <div
-                key={`${row.id}-${index}`}
-                className={`non-table-row${isSelected ? ' non-table-row-selected' : ''}`}
-                onClick={(e) => handleRowClick(e, index)}
-                onDoubleClick={(e) => {
-                  if (
-                    (e.target as Element).closest('button') ||
-                    (e.target as Element).closest('input') ||
-                    (e.target as Element).closest('a')
-                  ) {
-                    return;
-                  }
-                  e.stopPropagation();
-                  onProductClick?.(row);
-                }}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 140px 220px 140px',
-                  height: 66,
-                  minHeight: 66,
-                  maxHeight: 66,
+              return (
+                <div
+                  key={row.id}
+                  data-index={index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    height: ROW_HEIGHT_PX,
+                  }}
+                >
+                  <div
+                    className={`non-table-row${isSelected ? ' non-table-row-selected' : ''}`}
+                    onClick={(e) => handleRowClick(e, index)}
+                    onDoubleClick={(e) => {
+                      if (
+                        (e.target as Element).closest('button') ||
+                        (e.target as Element).closest('input') ||
+                        (e.target as Element).closest('a')
+                      ) {
+                        return;
+                      }
+                      e.stopPropagation();
+                      onProductClick?.(row);
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 140px 220px 140px',
+                      height: ROW_HEIGHT_PX,
+                      minHeight: ROW_HEIGHT_PX,
+                      maxHeight: ROW_HEIGHT_PX,
                   padding: '8px 16px',
                   backgroundColor: ROW_BG,
                   alignItems: 'center',
@@ -2015,8 +2054,10 @@ export function AddProductsNonTable({
                   </div>
                 </div>
               </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

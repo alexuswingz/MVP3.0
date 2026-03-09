@@ -6,12 +6,16 @@ import NgoosAPI from '@/services/ngoosApi';
 import { toast } from '@/lib/toast';
 import AddClaimed from './add-claimed';
 import VineDetailsModal from './vine-details-modal';
-import ProductsFilterDropdown from '@/production/new-shipment/components/ProductsFilterDropdown';
 import { StatusFilterDropdown, DEFAULT_FILTER } from '@/components/products/StatusFilterDropdown';
 import {
   VineDropdownFilter,
   DEFAULT_VINE_PRODUCTS_FILTER,
 } from './vine-dropdown-filter';
+import { LaunchDateSortDropdown } from './LaunchDateSortDropdown';
+import {
+  ClaimedEnrolledFilterDropdown,
+  DEFAULT_CLAIMED_ENROLLED_FILTER,
+} from './ClaimedEnrolledFilterDropdown';
 
 // Calendar Dropdown Component
 const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
@@ -393,6 +397,16 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const [appliedVineProductsFilter, setAppliedVineProductsFilter] = useState(DEFAULT_VINE_PRODUCTS_FILTER);
   const vineProductsHeaderRef = useRef(null);
 
+  const [launchDateSortOpen, setLaunchDateSortOpen] = useState(false);
+  const [launchDateAnchor, setLaunchDateAnchor] = useState(null);
+  const [launchDateSortOrder, setLaunchDateSortOrder] = useState(null);
+  const [launchDateSortWorking, setLaunchDateSortWorking] = useState(null);
+  const launchDateHeaderRef = useRef(null);
+
+  const claimedHeaderRef = useRef(null);
+  const enrolledHeaderRef = useRef(null);
+  const [claimEnrolledWorkingFilter, setClaimEnrolledWorkingFilter] = useState(DEFAULT_CLAIMED_ENROLLED_FILTER);
+
   // Handler function to open the vine details modal - used by both plus button and row click
   const handleOpenVineDetailsModal = (row, focusOnClaimEntry = false) => {
     console.log('🔵 handleOpenVineDetailsModal CALLED for:', row.productName);
@@ -446,6 +460,18 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
     setVineProductsAnchor(vineProductsHeaderRef.current?.getBoundingClientRect() ?? null);
     setVineProductsFilterOpen((prev) => !prev);
   };
+
+  const handleLaunchDateHeaderClick = () => {
+    setLaunchDateAnchor(launchDateHeaderRef.current?.getBoundingClientRect() ?? null);
+    setLaunchDateSortOpen((prev) => {
+      if (!prev) setLaunchDateSortWorking(launchDateSortOrder);
+      return !prev;
+    });
+  };
+
+  const hasActiveLaunchDateSort = launchDateSortOrder === 'asc' || launchDateSortOrder === 'desc';
+
+  const launchDateSortHasChanges = launchDateSortWorking !== launchDateSortOrder;
 
   const hasActiveVineStatusFilter = useMemo(
     () => JSON.stringify(appliedVineStatusFilter) !== JSON.stringify(DEFAULT_FILTER),
@@ -670,7 +696,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       }
     };
 
-    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null || openStatusDropdownId !== null) {
+    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null || openStatusDropdownId !== null || launchDateSortOpen) {
       const timeoutId = setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
       }, 0);
@@ -680,7 +706,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         document.removeEventListener('click', handleClickOutside);
       };
     }
-  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId, openStatusDropdownId]);
+  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId, openStatusDropdownId, launchDateSortOpen]);
 
   // Focus search input when product dropdown opens; reset search when it closes
   useEffect(() => {
@@ -706,13 +732,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
     }
   }, [rows]);
 
-  // Handle filter icon click
+  // Handle filter icon click (for Claimed/Enrolled columns)
   const handleFilterClick = (columnKey, e) => {
     e.stopPropagation();
     const isOpening = openFilterColumn !== columnKey;
     setOpenFilterColumn(isOpening ? columnKey : null);
-    
-    // Initialize currentFilter when opening
+
+    // Initialize filter when opening
     if (isOpening) {
       const existingFilter = filters[columnKey] || {};
       setCurrentFilter({
@@ -720,6 +746,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         conditionType: existingFilter.condition || '',
         conditionValue: existingFilter.conditionValue || '',
       });
+      if (columnKey === 'claimed' || columnKey === 'enrolled') {
+        setClaimEnrolledWorkingFilter({
+          sortOrder: sortConfig.field === columnKey ? sortConfig.order : null,
+          conditionType: existingFilter.condition || '',
+          conditionValue: existingFilter.conditionValue || '',
+        });
+      }
     }
   };
 
@@ -878,7 +911,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       setSortedRowOrder(sortedIds);
     }
 
-    // Handle value filtering
+    // Handle value filtering (not used by claimed/enrolled)
     if (filterData.selectedValues && filterData.selectedValues.size > 0) {
       const selectedValuesArray = Array.from(filterData.selectedValues);
       newFilters[columnKey] = {
@@ -889,12 +922,15 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       delete newFilters[columnKey];
     }
 
-    // Handle condition filtering
-    if (filterData.conditionType && filterData.conditionValue) {
+    // Handle condition filtering (claimed/enrolled)
+    const condType = (filterData.conditionType || '').trim();
+    const condValRaw = filterData.conditionValue;
+    const condVal = condValRaw != null ? String(condValRaw).trim() : '';
+    if (condType && condVal !== '') {
       newFilters[columnKey] = {
         ...newFilters[columnKey],
-        condition: filterData.conditionType,
-        conditionValue: filterData.conditionValue,
+        condition: condType,
+        conditionValue: condVal,
       };
     }
 
@@ -1049,6 +1085,33 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         const bVal = bStatus === 'Awaiting Reviews' ? 0 : 1;
         return (aVal - bVal) * order;
       });
+    } else if (launchDateSortOrder === 'asc' || launchDateSortOrder === 'desc') {
+      const order = launchDateSortOrder === 'asc' ? 1 : -1;
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const parseLaunchDate = (str) => {
+          if (!str || !str.trim()) return 0;
+          const s = String(str).trim();
+          if (s.includes('/')) {
+            const parts = s.split('/');
+            if (parts.length === 3) {
+              const m = parseInt(parts[0], 10) - 1;
+              const d = parseInt(parts[1], 10);
+              const y = parseInt(parts[2], 10);
+              const date = new Date(y, m, d);
+              return isNaN(date.getTime()) ? 0 : date.getTime();
+            }
+          }
+          if (s.includes('-')) {
+            const date = new Date(s);
+            return isNaN(date.getTime()) ? 0 : date.getTime();
+          }
+          const date = new Date(s);
+          return isNaN(date.getTime()) ? 0 : date.getTime();
+        };
+        const aTs = parseLaunchDate(a.launchDate);
+        const bTs = parseLaunchDate(b.launchDate);
+        return (aTs - bTs) * order;
+      });
     } else if (sortedRowOrder) {
       // Apply manual column sort when no filter-based sort is active
       const sortedMap = new Map(sortedRowOrder.map((id, index) => [id, index]));
@@ -1109,18 +1172,32 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                     ? vineStatusHeaderRef
                     : col.key === 'productName'
                     ? vineProductsHeaderRef
+                    : col.key === 'launchDate'
+                    ? launchDateHeaderRef
+                    : col.key === 'claimed'
+                    ? claimedHeaderRef
+                    : col.key === 'enrolled'
+                    ? enrolledHeaderRef
                     : undefined
                 }
                 {...(col.key === 'status'
                   ? { 'data-vine-status-filter-trigger': true }
                   : col.key === 'productName'
                   ? { 'data-vine-products-filter-trigger': true }
+                  : col.key === 'launchDate'
+                  ? { 'data-launch-date-sort-trigger': true }
+                  : col.key === 'claimed' || col.key === 'enrolled'
+                  ? { 'data-claimed-enrolled-filter-trigger': true }
                   : {})}
                 onClick={
                   col.key === 'status'
                     ? handleVineStatusHeaderClick
                     : col.key === 'productName'
                     ? handleVineProductsHeaderClick
+                    : col.key === 'launchDate'
+                    ? handleLaunchDateHeaderClick
+                    : col.key === 'claimed' || col.key === 'enrolled'
+                    ? (e) => handleFilterClick(col.key, e)
                     : undefined
                 }
                 className={`${
@@ -1164,6 +1241,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                           ? vineProductsFilterOpen || hasActiveVineProductsFilter
                             ? '#3B82F6'
                             : '#9CA3AF'
+                          : col.key === 'launchDate'
+                          ? launchDateSortOpen || hasActiveLaunchDateSort
+                            ? '#3B82F6'
+                            : '#9CA3AF'
                           : isFilterActive(col.key) || openFilterColumn === col.key
                           ? '#007AFF'
                           : '#9CA3AF',
@@ -1181,6 +1262,24 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       />
                     )}
                     {col.key === 'productName' && hasActiveVineProductsFilter && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {col.key === 'launchDate' && hasActiveLaunchDateSort && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {(col.key === 'claimed' || col.key === 'enrolled') && isFilterActive(col.key) && (
                       <img
                         src="/assets/Vector (1).png"
                         alt=""
@@ -2401,17 +2500,37 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       </table>
       </div>
       
-      {/* Filter Dropdown */}
-      {openFilterColumn && (
-        <ProductsFilterDropdown
-          ref={filterDropdownRef}
-          columnKey={openFilterColumn}
-          filterIconRef={filterIconRefs.current[openFilterColumn]}
-          availableValues={getAvailableValues(openFilterColumn)}
-          currentFilter={currentFilter}
-          currentSort={sortConfig.field === openFilterColumn ? sortConfig.order : ''}
-          onApply={handleApplyFilter}
+      {/* Claimed/Enrolled Filter Dropdown */}
+      {(openFilterColumn === 'claimed' || openFilterColumn === 'enrolled') && (
+        <ClaimedEnrolledFilterDropdown
+          anchorRect={
+            openFilterColumn === 'claimed'
+              ? claimedHeaderRef.current?.getBoundingClientRect() ?? null
+              : enrolledHeaderRef.current?.getBoundingClientRect() ?? null
+          }
+          isOpen={true}
           onClose={() => setOpenFilterColumn(null)}
+          columnKey={openFilterColumn}
+          filter={claimEnrolledWorkingFilter}
+          onFilterChange={setClaimEnrolledWorkingFilter}
+          onApply={() => {
+            const cv = claimEnrolledWorkingFilter.conditionValue;
+            handleApplyFilter({
+              sortOrder: claimEnrolledWorkingFilter.sortOrder || undefined,
+              conditionType: claimEnrolledWorkingFilter.conditionType || undefined,
+              conditionValue: cv !== '' && cv != null ? String(cv) : undefined,
+              __fromSortClick: !!claimEnrolledWorkingFilter.sortOrder,
+            });
+          }}
+          onReset={() => {
+            handleApplyFilter(null);
+          }}
+          hasChanges={
+            claimEnrolledWorkingFilter.sortOrder !== (sortConfig.field === openFilterColumn ? sortConfig.order : null) ||
+            claimEnrolledWorkingFilter.conditionType !== (filters[openFilterColumn]?.condition || '') ||
+            claimEnrolledWorkingFilter.conditionValue !== (filters[openFilterColumn]?.conditionValue || '')
+          }
+          triggerDataAttribute="data-claimed-enrolled-filter-trigger"
         />
       )}
 
@@ -2463,6 +2582,30 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         activeLabel="Awaiting Reviews"
         inactiveLabel="Concluded"
         triggerDataAttribute="data-vine-status-filter-trigger"
+      />
+
+      <LaunchDateSortDropdown
+        anchorRect={launchDateAnchor}
+        isOpen={launchDateSortOpen}
+        onClose={() => {
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        sortOrder={launchDateSortWorking}
+        onSortChange={setLaunchDateSortWorking}
+        onApply={() => {
+          setLaunchDateSortOrder(launchDateSortWorking);
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        onReset={() => {
+          setLaunchDateSortOrder(null);
+          setLaunchDateSortWorking(null);
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        hasChanges={launchDateSortHasChanges}
+        triggerDataAttribute="data-launch-date-sort-trigger"
       />
 
       {/* CSS to hide number input spinners */}

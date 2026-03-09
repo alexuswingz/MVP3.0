@@ -15,6 +15,7 @@ import {
 } from './components/PlanningTable';
 import NewShipmentModal, { type NewShipmentForm } from './components/NewShipmentModal';
 import { api, type ShipmentListItem, type ShipmentStats } from '@/lib/api';
+import { prefetchForecastTable } from '@/lib/forecast-cache';
 
 function apiShipmentToInternal(s: ShipmentListItem): Shipment {
   return {
@@ -120,6 +121,13 @@ const initialNewShipment: NewShipmentForm = {
 
 const NEW_SHIPMENT_STORAGE_KEY = 'mvp_new_shipment_data';
 
+// Module-level cache so reopening Shipments page shows last data immediately while refetching
+let shipmentsPageCache: {
+  active: Shipment[] | null;
+  archived: Shipment[] | null;
+  stats: ShipmentStats | null;
+} | null = null;
+
 export default function ShipmentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,6 +135,12 @@ export default function ShipmentsPage() {
   const [activeTab, setActiveTab] = useState<'shipments' | 'archive'>(() =>
     tabFromUrl === 'archive' ? 'archive' : 'shipments'
   );
+
+  // Prefetch forecast table when on Shipments so switching to Forecast is faster
+  useEffect(() => {
+    const t = setTimeout(() => prefetchForecastTable(), 800);
+    return () => clearTimeout(t);
+  }, []);
 
   // Keep activeTab in sync with URL (e.g. back/forward or direct link with ?tab=archive)
   useEffect(() => {
@@ -138,35 +152,91 @@ export default function ShipmentsPage() {
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
   
-  // API state
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [stats, setStats] = useState<ShipmentStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // API state: hydrate from module cache when available so table shows instantly on revisit
+  const [shipmentsByTab, setShipmentsByTab] = useState<{
+    active: Shipment[] | null;
+    archived: Shipment[] | null;
+  }>(() => ({
+    active: shipmentsPageCache?.active ?? null,
+    archived: shipmentsPageCache?.archived ?? null,
+  }));
+  const [stats, setStats] = useState<ShipmentStats | null>(() => shipmentsPageCache?.stats ?? null);
+  const [loading, setLoading] = useState(!shipmentsPageCache);
   const [error, setError] = useState<string | null>(null);
+  /** When set, we're fetching for this tab in the background (no full-page loading). */
+  const [loadingTab, setLoadingTab] = useState<'shipments' | 'archive' | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
-  const fetchShipments = useCallback(async (statusFilter?: 'active' | 'archived') => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [shipmentsData, statsData] = await Promise.all([
-        api.getShipments({ 
-          status: statusFilter,
-          search: searchQuery || undefined,
-        }),
-        api.getShipmentStats(),
-      ]);
-      setShipments(shipmentsData.map(apiShipmentToInternal));
-      setStats(statsData);
-    } catch (err) {
-      console.error('Failed to fetch shipments:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load shipments');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery]);
+  const fetchShipments = useCallback(
+    async (
+      statusFilter?: 'active' | 'archived',
+      options?: { silent?: boolean; onComplete?: () => void }
+    ) => {
+      if (!options?.silent) setLoading(true);
+      setError(null);
+      try {
+        const [shipmentsData, statsData] = await Promise.all([
+          api.getShipments({
+            status: statusFilter,
+            search: searchQuery || undefined,
+          }),
+          api.getShipmentStats(),
+        ]);
+        const key = statusFilter === 'active' ? 'active' : 'archived';
+        const mapped = shipmentsData.map(apiShipmentToInternal);
+        setShipmentsByTab((prev) => ({ ...prev, [key]: mapped }));
+        setStats(statsData);
+        shipmentsPageCache = {
+          ...(shipmentsPageCache ?? { active: null, archived: null, stats: null }),
+          [key]: mapped,
+          stats: statsData,
+        };
+      } catch (err) {
+        console.error('Failed to fetch shipments:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load shipments');
+      } finally {
+        if (!options?.silent) setLoading(false);
+        options?.onComplete?.();
+      }
+    },
+    [searchQuery]
+  );
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+    const filter = activeTab === 'archive' ? 'archived' : 'active';
+    const cacheKey = filter;
+    const hasCache = shipmentsByTab[cacheKey] != null;
+    const hasPageCache = !!shipmentsPageCache;
+
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      if (hasPageCache && hasCache) {
+        fetchShipments(filter, {
+          silent: true,
+          onComplete: () => {
+            setLoadingTab(null);
+            hasLoadedOnceRef.current = true;
+          },
+        });
+      } else {
+        fetchShipments(filter, {
+          onComplete: () => {
+            hasLoadedOnceRef.current = true;
+          },
+        });
+      }
+      return;
+    }
+
+    if (!hasCache) setLoadingTab(activeTab);
+    fetchShipments(filter, {
+      silent: true,
+      onComplete: () => {
+        setLoadingTab(null);
+        hasLoadedOnceRef.current = true;
+      },
+    });
   }, [activeTab, fetchShipments]);
 
   // Refetch when returning from new-shipment page (Back after creating draft) so the new row appears
@@ -189,9 +259,10 @@ export default function ShipmentsPage() {
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [activeTab, fetchShipments]);
 
+  const currentShipments = activeTab === 'archive' ? shipmentsByTab.archived : shipmentsByTab.active;
   const planningRows = useMemo<PlanningTableRow[]>(
-    () => shipments.map(shipmentToPlanningRow),
-    [shipments]
+    () => (currentShipments ?? []).map(shipmentToPlanningRow),
+    [currentShipments]
   );
 
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
@@ -213,48 +284,71 @@ export default function ShipmentsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsDropdownOpen]);
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string | number | null | undefined) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-    const headers = ['Status', 'Shipment', 'Type', 'Marketplace', 'Account', 'Add Products', 'Book Shipment'];
-    const rows = planningRows.map((r) =>
-      [
-        escapeCsv(r.status ?? ''),
-        escapeCsv(r.shipment ?? ''),
-        escapeCsv(r.type ?? ''),
-        escapeCsv(r.marketplace ?? ''),
-        escapeCsv(r.account ?? ''),
-        escapeCsv(r.addProducts ?? ''),
-        escapeCsv(r.bookShipment ?? ''),
-      ].join(',')
-    );
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `shipments_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSettingsDropdownOpen(false);
-    toast.vineCreated('Shipments table exported as CSV');
-  }, [planningRows]);
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
 
-  const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
+      const searchParams = new URLSearchParams();
+      if (searchQuery.trim()) {
+        searchParams.set('search', searchQuery.trim());
+      }
+      searchParams.set('status', activeTab === 'archive' ? 'archived' : 'active');
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const url = `${baseUrl}/shipments/export/${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `shipments_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Shipments table exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export shipments CSV';
+      toast.error('Failed to export shipments CSV', { description: message });
+    } finally {
+      setSettingsDropdownOpen(false);
+    }
+  }, [searchQuery, activeTab]);
+
+  const shipmentsCount =
+    stats?.total != null
+      ? stats.total - (stats.received ?? 0) - (stats.cancelled ?? 0)
+      : (shipmentsByTab.active ?? []).length;
   const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
 
-  const handleTabChange = useCallback((tab: 'shipments' | 'archive') => {
-    setActiveTab(tab);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', tab);
-    router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
-  }, [router, searchParams]);
+  const handleTabChange = useCallback(
+    (tab: 'shipments' | 'archive') => {
+      setActiveTab(tab);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', tab);
+      router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   const handleRowClick = (row: PlanningTableRow) => {
     // Navigate to the next incomplete step
@@ -624,7 +718,7 @@ export default function ShipmentsPage() {
 
         {/* Planning Table — same structure as 1000bananas2.0 */}
         {!loading && !error && activeTab === 'shipments' && (
-          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
             {planningRows.length === 0 ? (
               <div style={{
                 textAlign: 'center',
@@ -632,7 +726,14 @@ export default function ShipmentsPage() {
                 color: '#9CA3AF',
                 fontSize: '14px',
               }}>
-                No shipments found. Click "New Shipment" to create one.
+                {loadingTab === 'shipments' ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading shipments...
+                  </span>
+                ) : (
+                  'No shipments found. Click "New Shipment" to create one.'
+                )}
               </div>
             ) : (
               <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />
@@ -641,7 +742,7 @@ export default function ShipmentsPage() {
         )}
 
         {!loading && !error && activeTab === 'archive' && (
-          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
             {planningRows.length === 0 ? (
               <div style={{
                 textAlign: 'center',
@@ -649,7 +750,14 @@ export default function ShipmentsPage() {
                 color: '#9CA3AF',
                 fontSize: '14px',
               }}>
-                No archived shipments found.
+                {loadingTab === 'archive' ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading archive...
+                  </span>
+                ) : (
+                  'No archived shipments found.'
+                )}
               </div>
             ) : (
               <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />

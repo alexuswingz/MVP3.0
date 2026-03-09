@@ -168,7 +168,29 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [editingValue, setEditingValue] = useState('');
   const [descriptionHtml, setDescriptionHtml] = useState('');
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  
+  const actionItemsContainerRef = useRef<HTMLDivElement>(null);
+  const [actionItemsClosing, setActionItemsClosing] = useState(false);
+  const ACTION_ITEMS_TRANSITION_MS = 280;
+
+  // When action items are expanded, scroll them into view so the user doesn't have to scroll down
+  useEffect(() => {
+    if (actionItemsExpanded && !actionItemsClosing && actionItemsContainerRef.current) {
+      actionItemsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [actionItemsExpanded, actionItemsClosing]);
+
+  // Smooth close: set closing state (triggers height transition), then unmount after transition
+  const closeActionItems = useCallback(() => setActionItemsClosing(true), []);
+
+  useEffect(() => {
+    if (!actionItemsClosing) return;
+    const t = setTimeout(() => {
+      setActionItemsExpanded(false);
+      setActionItemsClosing(false);
+    }, ACTION_ITEMS_TRANSITION_MS);
+    return () => clearTimeout(t);
+  }, [actionItemsClosing]);
+
   // Store all action items with their edits
   type AttachmentType = {
     id: string;
@@ -2291,7 +2313,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
             {activeTab === 'inventory' && (
               <>
                 {/* Collapsed Action Items Header */}
-                {!actionItemsExpanded && (
+                {!actionItemsExpanded && !actionItemsClosing && (
                   <button
                     onClick={() => setActionItemsExpanded(true)}
                     style={{
@@ -2335,36 +2357,49 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                   </button>
                 )}
 
-                {/* Expanded Action Items */}
-                {actionItemsExpanded && (
-                  <div style={{
-                    marginTop: '0px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    backgroundColor: '#0F172A',
-                    overflow: 'hidden',
-                    height: '340px',
-                  }}>
-                    {/* Header with Search and Close */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '16px 20px',
-                      borderBottom: '1px solid #334155',
+                {/* Expanded Action Items - stays mounted while closing for smooth height transition */}
+                {(actionItemsExpanded || actionItemsClosing) && (
+                  <div
+                    ref={actionItemsContainerRef}
+                    style={{
+                      marginTop: '0px',
+                      borderRadius: '8px',
+                      border: '1px solid #334155',
                       backgroundColor: '#0F172A',
-                    }}>
+                      overflow: 'hidden',
+                      height: actionItemsClosing ? 0 : 340,
+                      minHeight: 0,
+                      transition: `height ${ACTION_ITEMS_TRANSITION_MS}ms ease-out`,
+                    }}
+                  >
+                    {/* Header with Search and Close - clickable to close */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={closeActionItems}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeActionItems(); } }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        borderBottom: '1px solid #334155',
+                        backgroundColor: '#0F172A',
+                        cursor: 'pointer',
+                      }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#e2e8f0', margin: 0 }}>
                           Action Items
                         </h3>
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                           <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', width: '14px', height: '14px', color: '#64748b' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                           </svg>
                           <input
                             type="text"
                             placeholder="Search..."
+                            onClick={(e) => e.stopPropagation()}
                             style={{
                               backgroundColor: '#1A2235',
                               border: '1px solid #334155',
@@ -2379,7 +2414,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                             }}
                           />
                         </div>
-                        <div style={{ position: 'relative' }}>
+                        <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => setActionItemsMenuOpen(!actionItemsMenuOpen)}
                             style={{
@@ -2622,7 +2657,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         </div>
                       </div>
                       <button
-                          onClick={() => setActionItemsExpanded(false)}
+                          onClick={closeActionItems}
                           style={{
                             backgroundColor: 'transparent',
                             border: 'none',

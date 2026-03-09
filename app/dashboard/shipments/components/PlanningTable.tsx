@@ -2,7 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { MoreVertical, Search, Trash2 } from 'lucide-react';
+
+const PLANNING_ROW_HEIGHT_PX = 42;
 
 export type StepStatus = 'pending' | 'in progress' | 'incomplete' | 'completed';
 
@@ -35,7 +38,8 @@ const BORDER_COLOR = '#374151';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_ACTIVE = '#3B82F6';
 const TEXT_WHITE = '#FFFFFF';
-const ROW_HOVER_BG = TABLE_BG;
+/** Hover background — 2% palette green (#84FF00) over base #1A2235 */
+const ROW_HOVER_BG = '#1C2634';
 const STATUS_BUTTON_BG = '#374151'; // match 1000bananas2.0 PlanningTable
 
 /** Filter dropdown theme — layout for filter dropdown on status (Design: Dark bg, 204px, 8px radius, 1px border #334155, soft shadow) */
@@ -295,6 +299,8 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
   /** Anchor rect for the open actions menu (from trigger button). Used to position portal dropdown. */
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const menuPortalRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 
   const openRow = openMenuRowId != null ? rows.find((r) => r.id === openMenuRowId) ?? null : null;
 
@@ -399,6 +405,14 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
     return [...filteredRows].sort((a, b) => compareRowByColumn(a, b, sortColumn, sortDirection));
   }, [filteredRows, sortColumn, sortDirection]);
 
+  const rowVirtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => PLANNING_ROW_HEIGHT_PX,
+    overscan: 8,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+
   const handleSortClick = useCallback((direction: 'asc' | 'desc') => {
     if (!openFilterColumn) return;
     setSortColumn(openFilterColumn as keyof PlanningTableRow);
@@ -409,6 +423,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
 
   return (
     <div
+      ref={scrollContainerRef}
       className="rounded-xl overflow-hidden"
       style={{
         border: '1px solid #1A2235',
@@ -431,7 +446,8 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
         box-sizing: border-box !important;
         appearance: none !important;
         font-family: inherit !important;
-      }`}</style>
+      }
+      `}</style>
       <table
         className="w-full border-collapse"
         style={{ tableLayout: 'fixed', display: 'table', borderSpacing: 0 }}
@@ -513,7 +529,18 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
           </tr>
         </thead>
         <tbody style={{ borderColor: BORDER_COLOR, display: 'table-row-group' }}>
-          {sortedRows.map((row, index) => (
+          {virtualItems.length > 0 && virtualItems[0].start > 0 && (
+            <tr style={{ height: virtualItems[0].start, backgroundColor: ROW_BG }}>
+              <td
+                colSpan={COLUMN_CONFIG.length + 1}
+                style={{ padding: 0, height: virtualItems[0].start, border: 'none', lineHeight: 0 }}
+              />
+            </tr>
+          )}
+          {virtualItems.map((virtualRow) => {
+            const row = sortedRows[virtualRow.index];
+            const index = virtualRow.index;
+            return (
             <React.Fragment key={row.id || `row-${index}`}>
               <tr style={{ height: 1, backgroundColor: ROW_BG }}>
                 <td
@@ -532,25 +559,21 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
               </tr>
               <tr
                 onClick={() => onRowClick?.(row)}
-                className="cursor-pointer transition-colors"
+                className="planning-table-data-row cursor-pointer transition-colors"
                 style={{
-                  backgroundColor: ROW_BG,
+                  backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                   height: 'auto',
                   minHeight: 40,
                   display: 'table-row',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = ROW_HOVER_BG;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = ROW_BG;
-                }}
+                onMouseEnter={() => setHoveredRowId(row.id)}
+                onMouseLeave={() => setHoveredRowId(null)}
               >
                 <td
                   style={{
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     height: 'auto',
                     minHeight: 40,
@@ -601,7 +624,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     height: 'auto',
                     minHeight: 40,
@@ -629,7 +652,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -642,7 +665,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -655,7 +678,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.75rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     fontSize: '0.875rem',
                     color: TEXT_WHITE,
@@ -668,7 +691,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '1rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     minHeight: 40,
                     display: 'table-cell',
@@ -690,7 +713,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '1rem 1.25rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     minHeight: 40,
                     display: 'table-cell',
@@ -715,7 +738,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                     padding: '0.5rem',
                     verticalAlign: 'middle',
                     textAlign: 'center',
-                    backgroundColor: 'inherit',
+                    backgroundColor: hoveredRowId === row.id ? ROW_HOVER_BG : ROW_BG,
                     borderTop: 'none',
                     width: 90,
                     position: 'relative',
@@ -746,7 +769,19 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                 </td>
               </tr>
             </React.Fragment>
-          ))}
+          );
+          })}
+          {virtualItems.length > 0 && (() => {
+            const last = virtualItems[virtualItems.length - 1];
+            const totalSize = rowVirtualizer.getTotalSize();
+            const bottomHeight = totalSize - last.end;
+            if (bottomHeight <= 0) return null;
+            return (
+              <tr key="bottom-spacer" style={{ height: bottomHeight, backgroundColor: ROW_BG }}>
+                <td colSpan={COLUMN_CONFIG.length + 1} style={{ padding: 0, height: bottomHeight, border: 'none', lineHeight: 0 }} />
+              </tr>
+            );
+          })()}
         </tbody>
       </table>
       {rows.length === 0 && (

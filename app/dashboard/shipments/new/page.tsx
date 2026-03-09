@@ -110,6 +110,9 @@ const HEADER_BORDER = '#334155';
 const CARD_BG = '#1F2937';
 const BORDER = '#4B5563';
 
+// Module-level cache so reopening Add Products page shows last forecast data immediately while refetching
+let newShipmentForecastCache: ForecastTableResponse | null = null;
+
 // Transform API response to AddProductRow format
 function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]): AddProductRow {
   const inv = apiRow.inventory;
@@ -164,9 +167,9 @@ export default function NewShipmentAddProductsPage() {
   const [savedDefaultDoi, setSavedDefaultDoi] = useState('150');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // API data state
-  const [apiData, setApiData] = useState<ForecastTableResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // API data state: hydrate from cache when available for instant table on revisit
+  const [apiData, setApiData] = useState<ForecastTableResponse | null>(() => newShipmentForecastCache);
+  const [loading, setLoading] = useState(!newShipmentForecastCache);
   const [error, setError] = useState<string | null>(null);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showHeaderDropdown, setShowHeaderDropdown] = useState(false);
@@ -268,14 +271,15 @@ export default function NewShipmentAddProductsPage() {
     };
   }, [urlShipmentId, urlTab]);
 
-  // Fetch forecast data from API
-  const fetchForecastData = useCallback(async () => {
-    setLoading(true);
+  // Fetch forecast data from API (backgroundRefresh = true when we have cache so we don't show loading)
+  const fetchForecastData = useCallback(async (backgroundRefresh = false) => {
+    if (!backgroundRefresh) setLoading(true);
     setError(null);
     setRecalculatedUnitsByProductId(null);
     try {
       const data = await api.getForecastTable();
       setApiData(data);
+      newShipmentForecastCache = data;
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load product data');
@@ -284,8 +288,14 @@ export default function NewShipmentAddProductsPage() {
     }
   }, []);
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    fetchForecastData();
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      fetchForecastData(!!newShipmentForecastCache);
+      return;
+    }
+    fetchForecastData(false);
   }, [fetchForecastData]);
 
   useEffect(() => {
@@ -386,61 +396,51 @@ export default function NewShipmentAddProductsPage() {
     return rows;
   }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string | number | null | undefined) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const response = await fetch(`${baseUrl}/shipment-products/export/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          tableMode,
+          tableRows,
+          nonTableRows,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
       }
-      return s;
-    };
-    const headers = ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
-    const dateStr = new Date().toISOString().slice(0, 10);
-    if (tableMode) {
-      const rows = tableRows.map((r) =>
-        [
-          escapeCsv(r.product ?? ''),
-          escapeCsv(r.brand ?? ''),
-          escapeCsv(r.asin ?? r.childAsin ?? ''),
-          escapeCsv(r.variation1 ?? ''),
-          escapeCsv(r.inventory ?? r.in ?? ''),
-          escapeCsv(r.unitsToMake ?? ''),
-          escapeCsv(r.totalDoi ?? ''),
-          escapeCsv(r.fbaAvailableDoi ?? ''),
-        ].join(',')
-      );
-      const csv = [headers.join(','), ...rows].join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
       a.download = `shipment_products_export_${dateStr}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } else {
-      const rows = nonTableRows.map((r) =>
-        [
-          escapeCsv(r.product ?? ''),
-          escapeCsv(r.brand ?? ''),
-          escapeCsv(r.asin ?? ''),
-          escapeCsv(r.size ?? ''),
-          escapeCsv(r.inventory ?? ''),
-          escapeCsv(r.unitsToMake ?? ''),
-          escapeCsv(r.daysOfInventory ?? ''),
-          escapeCsv(r.fbaAvailableDoi ?? ''),
-        ].join(',')
-      );
-      const csv = [headers.join(','), ...rows].join('\r\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `shipment_products_export_${dateStr}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      toast.vineCreated('Table exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export shipment products CSV';
+      toast.error('Failed to export shipment products CSV', { description: message });
+    } finally {
+      setShowSettingsDropdown(false);
     }
-    setShowSettingsDropdown(false);
-    toast.vineCreated('Table exported as CSV');
   }, [tableMode, tableRows, nonTableRows]);
 
   // Use summary data from API or calculate from rows
@@ -525,29 +525,35 @@ export default function NewShipmentAddProductsPage() {
     updateWorkflowTabInUrl('add-products');
   }, [updateWorkflowTabInUrl]);
 
-  const handleBookShipmentTabClick = useCallback(async () => {
+  const handleBookShipmentTabClick = useCallback(() => {
     if (addedProductIds.size === 0) return;
+    // Switch tab and URL immediately so the transition feels instant
+    setActiveWorkflowTab('book-shipment');
+    updateWorkflowTabInUrl('book-shipment');
+    // Create or update shipment in the background (no await)
     if (draftShipmentId == null) {
-      const ok = await createDraftShipment(true);
-      if (ok) {
-        setActiveWorkflowTab('book-shipment');
-        updateWorkflowTabInUrl('book-shipment');
-      }
+      void createDraftShipment(true).then((ok) => {
+        if (!ok) toast.error('Failed to create draft shipment', { description: 'Please try again or refresh.' });
+      });
     } else {
-      // Update existing shipment status to 'ready' (Add Products completed, Book Shipment in progress)
-      try {
-        await api.updateShipment(draftShipmentId, { status: 'ready' });
-      } catch (err) {
+      api.updateShipment(draftShipmentId, { status: 'ready' }).catch((err) => {
         console.error('Failed to update shipment status:', err);
-      }
-      setActiveWorkflowTab('book-shipment');
-      updateWorkflowTabInUrl('book-shipment');
+        toast.error('Failed to update shipment status', { description: 'You can continue; try saving again if needed.' });
+      });
     }
   }, [addedProductIds.size, draftShipmentId, createDraftShipment, updateWorkflowTabInUrl]);
 
+  const isAddProductsView = activeView === 'all-products' && activeWorkflowTab === 'add-products';
+
   return (
-    <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
-      {/* CSS for hover-only scrollbar on main content */}
+    <div
+      className={`flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden${isAddProductsView ? ' add-products-page-root-no-scroll' : ''}`}
+      style={{
+        backgroundColor: PAGE_BG,
+        overflowY: isAddProductsView ? 'hidden' : undefined,
+      }}
+    >
+      {/* CSS for hover-only scrollbar on main content; when on Add Products, hide outer scrollbar completely to avoid double scrollbar */}
       <style>{`
         .shipment-content-scroll::-webkit-scrollbar {
           width: 8px !important;
@@ -575,6 +581,23 @@ export default function NewShipmentAddProductsPage() {
         }
         .shipment-content-scroll::-webkit-scrollbar-corner {
           background: transparent !important;
+        }
+        /* On Add Products tab: hide outer scrollbar entirely so only the table/list scrollbar shows */
+        .shipment-content-scroll.add-products-no-outer-scroll {
+          overflow-y: hidden !important;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .shipment-content-scroll.add-products-no-outer-scroll::-webkit-scrollbar {
+          display: none !important;
+        }
+        /* Page root: hide scrollbar when on Add Products so no outer track shows */
+        .add-products-page-root-no-scroll {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .add-products-page-root-no-scroll::-webkit-scrollbar {
+          display: none !important;
         }
       `}</style>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
@@ -1391,13 +1414,13 @@ export default function NewShipmentAddProductsPage() {
       {activeView === 'all-products' && (
         <main style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
           <div
-            className="shipment-content-scroll"
+            className={`shipment-content-scroll${activeWorkflowTab === 'add-products' ? ' add-products-no-outer-scroll' : ''}`}
             style={{
               flex: 1,
               minHeight: 0,
               minWidth: 0,
               overflowX: 'hidden',
-              overflowY: activeWorkflowTab === 'add-products' && tableMode ? 'hidden' : 'auto',
+              overflowY: activeWorkflowTab === 'add-products' ? 'hidden' : 'auto',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -1418,7 +1441,7 @@ export default function NewShipmentAddProductsPage() {
                 <span style={{ color: '#EF4444', fontSize: 14 }}>{error}</span>
                 <button
                   type="button"
-                  onClick={fetchForecastData}
+                  onClick={() => fetchForecastData()}
                   style={{
                     padding: '8px 16px',
                     borderRadius: 6,
