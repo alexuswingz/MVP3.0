@@ -1682,251 +1682,259 @@ export function ActionItems() {
                 {filteredTableItems.map((row) => {
                   const ROW_BG = '#1A2235';
                   return (
-                  <tr
-                    key={row.id}
-                    className="cursor-pointer transition-all duration-200 overflow-hidden"
-                    style={{
-                      background: ROW_BG,
-                      boxShadow: '0 1px 0 0 rgba(255,255,255,0.04)',
-                      height: 66,
-                      border: '1px solid #404040',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#1A2636';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = ROW_BG;
-                    }}
-                  >
-                    <td className="px-4 align-middle rounded-l-xl" style={{ paddingLeft: 20, paddingTop: 4, paddingBottom: 4 }}>
-                      <div
-                        className="inline-flex items-center cursor-pointer box-border"
-                        style={{
-                          background: '#4B5563',
-                          boxShadow: '0 1px 3px 0 rgba(0,0,0,0.2), 0 1px 2px -1px rgba(0,0,0,0.2)',
-                          width: 150,
-                          minWidth: 150,
-                          height: 24,
-                          borderRadius: 4,
-                          border: '1px solid #4A4D51',
-                          padding: '4px 12px',
-                          gap: 8,
-                        }}
-                      >
-                        <StatusIcon status={row.status} size={16} />
-                        <span className="flex-1 min-w-0 truncate" style={{ color: '#E5E5E5', fontSize: 12, whiteSpace: 'nowrap' }}>{row.status}</span>
-                        <svg className="w-4 h-4 flex-shrink-0 ml-auto" fill="none" stroke="#D0D0D0" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </td>
-                    <td className="px-4 align-middle" style={{ paddingLeft: 24, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDetailId(row.id)}
-                        className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer w-full text-left border-0 bg-transparent p-0"
-                      >
-                        <span
-                          role="checkbox"
-                          aria-checked={checkedRowIds.has(row.id)}
-                          onClick={(e) => { e.stopPropagation(); setCheckedRowIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; }); }}
-                          className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border-2 cursor-pointer"
-                          style={{ borderColor: checkedRowIds.has(row.id) ? '#3B82F6' : '#6b7280', background: checkedRowIds.has(row.id) ? '#3B82F6' : 'transparent' }}
+                    <tr
+                      key={row.id}
+                      className="cursor-pointer transition-all duration-200 overflow-hidden"
+                      style={{
+                        background: ROW_BG,
+                        boxShadow: '0 1px 0 0 rgba(255,255,255,0.04)',
+                        height: 66,
+                        border: '1px solid #404040',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#1A2636';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = ROW_BG;
+                      }}
+                    >
+                      <td className="px-4 align-middle rounded-l-xl" style={{ paddingLeft: 20, paddingTop: 4, paddingBottom: 4 }}>
+                        <div
+                          className="inline-flex items-center cursor-pointer box-border"
+                          style={{
+                            background: '#4B5563',
+                            boxShadow: '0 1px 3px 0 rgba(0,0,0,0.2), 0 1px 2px -1px rgba(0,0,0,0.2)',
+                            width: 150,
+                            minWidth: 150,
+                            height: 24,
+                            borderRadius: 4,
+                            border: '1px solid #4A4D51',
+                            padding: '4px 12px',
+                            gap: 8,
+                          }}
                         >
-                          {checkedRowIds.has(row.id) && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                          )}
-                        </span>
-                        <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
-                          <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
+                          <StatusIcon status={row.status} size={16} />
+                          <span className="flex-1 min-w-0 truncate" style={{ color: '#E5E5E5', fontSize: 12, whiteSpace: 'nowrap' }}>{row.status}</span>
+                          <svg className="w-4 h-4 flex-shrink-0 ml-auto" fill="none" stroke="#D0D0D0" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{row.productName}</p>
-                          <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard?.writeText(row.productId).catch(() => {});
-                              }}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
-                                  navigator.clipboard?.writeText(row.productId).catch(() => {});
-                                }
-                              }}
-                              className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex"
-                              title="Copy ASIN"
-                            >
-                              {row.productId}
-                            </span>
-                            {(row.productBrand || row.productSize) && (
-                              <>
-                                {row.productBrand && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{row.productBrand}</span>
-                                  </>
-                                )}
-                                {row.productSize && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{row.productSize}</span>
-                                  </>
-                                )}
-                              </>
+                      </td>
+                      <td className="px-4 align-middle" style={{ paddingLeft: 24, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDetailId(row.id)}
+                          className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer w-full text-left border-0 bg-transparent p-0"
+                        >
+                          <span
+                            role="checkbox"
+                            aria-checked={checkedRowIds.has(row.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCheckedRowIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(row.id)) next.delete(row.id);
+                                else next.add(row.id);
+                                return next;
+                              });
+                            }}
+                            className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border-2 cursor-pointer"
+                            style={{ borderColor: checkedRowIds.has(row.id) ? '#3B82F6' : '#6b7280', background: checkedRowIds.has(row.id) ? '#3B82F6' : 'transparent' }}
+                          >
+                            {checkedRowIds.has(row.id) && (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                             )}
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard?.writeText(row.productId).catch(() => {});
-                              }}
-                              onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
+                          </span>
+                          <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
+                            <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
+                            </svg>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{row.productName}</p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   navigator.clipboard?.writeText(row.productId).catch(() => {});
-                                }
-                              }}
-                              className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex ml-0.5"
-                              title="Copy ASIN"
-                            >
-                              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                            </span>
-                          </p>
-                        </div>
-                      </button>
-                    </td>
-                    <td className="align-middle text-left" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4, minWidth: 120 }}>
-                      {(row.category === 'Inventory' || row.category === 'inventory') ? (
-                        <span
-                          className="inline-flex items-center justify-start box-border truncate"
-                          style={{
-                            width: 72,
-                            height: 23,
-                            borderRadius: 4,
-                            opacity: 1,
-                            paddingTop: 4,
-                            paddingRight: 8,
-                            paddingBottom: 4,
-                            paddingLeft: 8,
-                            gap: 10,
-                            color: '#12B981',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            lineHeight: '100%',
-                            background: '#182A2C',
-                          }}
-                        >
-                          {row.category}
-                        </span>
-                      ) : (row.category === 'Price' || row.category === 'price') ? (
-                        <span
-                          className="inline-flex items-center justify-start box-border truncate"
-                          style={{
-                            width: 46,
-                            height: 23,
-                            borderRadius: 4,
-                            opacity: 1,
-                            paddingTop: 4,
-                            paddingRight: 8,
-                            paddingBottom: 4,
-                            paddingLeft: 8,
-                            gap: 10,
-                            color: '#F59E0C',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            lineHeight: '100%',
-                            background: '#2C2825',
-                          }}
-                        >
-                          {row.category}
-                        </span>
-                      ) : (row.category === 'Ads' || row.category === 'ads') ? (
-                        <span
-                          className="inline-flex items-center justify-start box-border truncate"
-                          style={{
-                            width: 39,
-                            height: 23,
-                            borderRadius: 4,
-                            opacity: 1,
-                            paddingTop: 4,
-                            paddingRight: 8,
-                            paddingBottom: 4,
-                            paddingLeft: 8,
-                            gap: 10,
-                            color: '#3B83F6',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            lineHeight: '100%',
-                            background: '#1F335E',
-                          }}
-                        >
-                          {row.category}
-                        </span>
-                      ) : (row.category === 'PDP' || row.category === 'pdp') ? (
-                        <span
-                          className="inline-flex items-center justify-start box-border truncate"
-                          style={{
-                            width: 41,
-                            height: 23,
-                            borderRadius: 4,
-                            opacity: 1,
-                            paddingTop: 4,
-                            paddingRight: 8,
-                            paddingBottom: 4,
-                            paddingLeft: 8,
-                            gap: 10,
-                            color: '#8B5CF6',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            lineHeight: '100%',
-                            background: '#212139',
-                          }}
-                        >
-                          {row.category}
-                        </span>
-                      ) : CATEGORY_IMAGES[row.category] ? (
-                        <Image
-                          src={CATEGORY_IMAGES[row.category]}
-                          alt={row.category}
-                          width={72}
-                          height={23}
-                          className="object-contain"
-                          style={{ borderRadius: 4 }}
-                        />
-                      ) : (
-                        <span
-                          className="inline-flex items-center justify-start box-border truncate"
-                          style={{
-                            fontWeight: 600,
-                            fontSize: 12,
-                            lineHeight: '100%',
-                            color: '#12B981',
-                            background: 'rgba(34, 197, 94, 0.15)',
-                            border: '1px solid rgba(34, 197, 94, 0.3)',
-                            width: 72,
-                            height: 23,
-                            borderRadius: 4,
-                            padding: '4px 8px',
-                            gap: 6,
-                          }}
-                        >
-                          {row.category}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 align-middle text-sm text-white" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
-                      {row.subject}
-                    </td>
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    navigator.clipboard?.writeText(row.productId).catch(() => {});
+                                  }
+                                }}
+                                className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex"
+                                title="Copy ASIN"
+                              >
+                                {row.productId}
+                              </span>
+                              {(row.productBrand || row.productSize) && (
+                                <>
+                                  {row.productBrand && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{row.productBrand}</span>
+                                    </>
+                                  )}
+                                  {row.productSize && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{row.productSize}</span>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard?.writeText(row.productId).catch(() => {});
+                                }}
+                                onKeyDown={(e) => {
+                                  e.stopPropagation();
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    navigator.clipboard?.writeText(row.productId).catch(() => {});
+                                  }
+                                }}
+                                className="p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer inline-flex ml-0.5"
+                                title="Copy ASIN"
+                              >
+                                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </span>
+                            </p>
+                          </div>
+                        </button>
+                      </td>
+                      <td className="align-middle text-left" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4, minWidth: 120 }}>
+                        {(row.category === 'Inventory' || row.category === 'inventory') ? (
+                          <span
+                            className="inline-flex items-center justify-start box-border truncate"
+                            style={{
+                              width: 72,
+                              height: 23,
+                              borderRadius: 4,
+                              opacity: 1,
+                              paddingTop: 4,
+                              paddingRight: 8,
+                              paddingBottom: 4,
+                              paddingLeft: 8,
+                              gap: 10,
+                              color: '#12B981',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: '100%',
+                              background: '#182A2C',
+                            }}
+                          >
+                            {row.category}
+                          </span>
+                        ) : (row.category === 'Price' || row.category === 'price') ? (
+                          <span
+                            className="inline-flex items-center justify-start box-border truncate"
+                            style={{
+                              width: 46,
+                              height: 23,
+                              borderRadius: 4,
+                              opacity: 1,
+                              paddingTop: 4,
+                              paddingRight: 8,
+                              paddingBottom: 4,
+                              paddingLeft: 8,
+                              gap: 10,
+                              color: '#F59E0C',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: '100%',
+                              background: '#2C2825',
+                            }}
+                          >
+                            {row.category}
+                          </span>
+                        ) : (row.category === 'Ads' || row.category === 'ads') ? (
+                          <span
+                            className="inline-flex items-center justify-start box-border truncate"
+                            style={{
+                              width: 39,
+                              height: 23,
+                              borderRadius: 4,
+                              opacity: 1,
+                              paddingTop: 4,
+                              paddingRight: 8,
+                              paddingBottom: 4,
+                              paddingLeft: 8,
+                              gap: 10,
+                              color: '#3B83F6',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: '100%',
+                              background: '#1F335E',
+                            }}
+                          >
+                            {row.category}
+                          </span>
+                        ) : (row.category === 'PDP' || row.category === 'pdp') ? (
+                          <span
+                            className="inline-flex items-center justify-start box-border truncate"
+                            style={{
+                              width: 41,
+                              height: 23,
+                              borderRadius: 4,
+                              opacity: 1,
+                              paddingTop: 4,
+                              paddingRight: 8,
+                              paddingBottom: 4,
+                              paddingLeft: 8,
+                              gap: 10,
+                              color: '#8B5CF6',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: '100%',
+                              background: '#212139',
+                            }}
+                          >
+                            {row.category}
+                          </span>
+                        ) : CATEGORY_IMAGES[row.category] ? (
+                          <Image
+                            src={CATEGORY_IMAGES[row.category]}
+                            alt={row.category}
+                            width={72}
+                            height={23}
+                            className="object-contain"
+                            style={{ borderRadius: 4 }}
+                          />
+                        ) : (
+                          <span
+                            className="inline-flex items-center justify-start box-border truncate"
+                            style={{
+                              fontWeight: 600,
+                              fontSize: 12,
+                              lineHeight: '100%',
+                              color: '#12B981',
+                              background: 'rgba(34, 197, 94, 0.15)',
+                              border: '1px solid rgba(34, 197, 94, 0.3)',
+                              width: 72,
+                              height: 23,
+                              borderRadius: 4,
+                              padding: '4px 8px',
+                              gap: 6,
+                            }}
+                          >
+                            {row.category}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 align-middle text-sm text-white" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
+                        {row.subject}
+                      </td>
                     <td className="px-4 align-middle" style={{ paddingLeft: 16, paddingRight: 24, paddingTop: 4, paddingBottom: 4 }}>
                       <div className="flex items-center gap-2">
                         <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0" style={{ background: '#1e40af' }}>
