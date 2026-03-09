@@ -331,6 +331,48 @@ class ForecastViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related('product')
     
     @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export forecast table as CSV.
+
+        Reuses the existing `table` action so that filters, sorting, and
+        calculations exactly match the Forecast dashboard.
+        """
+        table_response = self.table(request)
+        data = getattr(table_response, 'data', {}) or {}
+        rows = data.get('rows', [])
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match columns currently used by the frontend export
+        writer.writerow(
+            ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI']
+        )
+
+        for row in rows:
+            product = (row or {}).get('product', {}) or {}
+            inventory = (row or {}).get('inventory', {}) or {}
+            writer.writerow(
+                [
+                    product.get('name', '') or '',
+                    product.get('brand', '') or '',
+                    product.get('size', '') or '',
+                    product.get('asin', '') or '',
+                    inventory.get('total', ''),
+                    row.get('unitsToMake', ''),
+                    row.get('daysOfInventory', ''),
+                    row.get('doiFba', ''),
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'forecast_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    
+    @action(detail=False, methods=['get'])
     def table(self, request):
         """
         Get forecast table data for all products with real calculations.

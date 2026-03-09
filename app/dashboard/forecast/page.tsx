@@ -263,41 +263,57 @@ export default function ForecastPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [settingsDropdownOpen]);
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string | number | null | undefined) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const searchParams = new URLSearchParams();
+      if (searchQuery.trim()) {
+        searchParams.set('search', searchQuery.trim());
       }
-      return s;
-    };
-    const invTotal = (r: ShipmentTableRow) =>
-      typeof r.inventory === 'number' ? r.inventory : (r.inventory?.total ?? '');
-    const headers = ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
-    const rows = displayRows.map((r) =>
-      [
-        escapeCsv(r.product.name ?? ''),
-        escapeCsv(r.product.brand ?? ''),
-        escapeCsv(r.product.size ?? ''),
-        escapeCsv(r.product.asin ?? ''),
-        escapeCsv(invTotal(r)),
-        escapeCsv(r.unitsToMake ?? ''),
-        escapeCsv(r.daysOfInventory ?? ''),
-        escapeCsv(r.doiFba ?? ''),
-      ].join(',')
-    );
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `forecast_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSettingsDropdownOpen(false);
-    toast.vineCreated('Forecast table exported as CSV');
-  }, [displayRows]);
+      // Keep default sort aligned with the main table
+      searchParams.set('sort_by', 'doi');
+      searchParams.set('sort_order', 'asc');
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const url = `${baseUrl}/forecasts/export/${
+        searchParams.toString() ? `?${searchParams.toString()}` : ''
+      }`;
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `forecast_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Forecast table exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export forecast CSV';
+      toast.error('Failed to export forecast CSV', { description: message });
+    } finally {
+      setSettingsDropdownOpen(false);
+    }
+  }, [searchQuery]);
 
   // Use real data from API summary, with fallback calculations
   const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);
