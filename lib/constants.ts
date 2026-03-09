@@ -31,9 +31,9 @@ export const NAV_ITEMS = [
     id: 'supply-chain',
     label: 'Supply Chain',
     icon: 'Link2',
-    path: '/dashboard/closures',
+    path: '/dashboard/supply-chain',
     children: [
-      { id: 'closures', label: 'Closures', path: '/dashboard/closures' },
+      { id: 'closures', label: 'Closures', path: '/dashboard/supply-chain/closures' },
     ]
   },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
