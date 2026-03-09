@@ -138,35 +138,68 @@ export default function ShipmentsPage() {
   const [showNewShipmentModal, setShowNewShipmentModal] = useState(false);
   const [newShipment, setNewShipment] = useState<NewShipmentForm>(initialNewShipment);
   
-  // API state
-  const [shipments, setShipments] = useState<Shipment[]>([]);
+  // API state: cache per tab so switching back shows table instantly
+  const [shipmentsByTab, setShipmentsByTab] = useState<{
+    active: Shipment[] | null;
+    archived: Shipment[] | null;
+  }>({ active: null, archived: null });
   const [stats, setStats] = useState<ShipmentStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** When set, we're fetching for this tab in the background (no full-page loading). */
+  const [loadingTab, setLoadingTab] = useState<'shipments' | 'archive' | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
-  const fetchShipments = useCallback(async (statusFilter?: 'active' | 'archived') => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [shipmentsData, statsData] = await Promise.all([
-        api.getShipments({ 
-          status: statusFilter,
-          search: searchQuery || undefined,
-        }),
-        api.getShipmentStats(),
-      ]);
-      setShipments(shipmentsData.map(apiShipmentToInternal));
-      setStats(statsData);
-    } catch (err) {
-      console.error('Failed to fetch shipments:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load shipments');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery]);
+  const fetchShipments = useCallback(
+    async (
+      statusFilter?: 'active' | 'archived',
+      options?: { silent?: boolean; onComplete?: () => void }
+    ) => {
+      if (!options?.silent) setLoading(true);
+      setError(null);
+      try {
+        const [shipmentsData, statsData] = await Promise.all([
+          api.getShipments({
+            status: statusFilter,
+            search: searchQuery || undefined,
+          }),
+          api.getShipmentStats(),
+        ]);
+        const key = statusFilter === 'active' ? 'active' : 'archived';
+        setShipmentsByTab((prev) => ({ ...prev, [key]: shipmentsData.map(apiShipmentToInternal) }));
+        setStats(statsData);
+      } catch (err) {
+        console.error('Failed to fetch shipments:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load shipments');
+      } finally {
+        if (!options?.silent) setLoading(false);
+        options?.onComplete?.();
+      }
+    },
+    [searchQuery]
+  );
 
   useEffect(() => {
-    fetchShipments(activeTab === 'archive' ? 'archived' : 'active');
+    const filter = activeTab === 'archive' ? 'archived' : 'active';
+    const cacheKey = filter;
+    const hasCache = shipmentsByTab[cacheKey] != null;
+
+    if (hasLoadedOnceRef.current) {
+      if (!hasCache) setLoadingTab(activeTab);
+      fetchShipments(filter, {
+        silent: true,
+        onComplete: () => {
+          setLoadingTab(null);
+          hasLoadedOnceRef.current = true;
+        },
+      });
+    } else {
+      fetchShipments(filter, {
+        onComplete: () => {
+          hasLoadedOnceRef.current = true;
+        },
+      });
+    }
   }, [activeTab, fetchShipments]);
 
   // Refetch when returning from new-shipment page (Back after creating draft) so the new row appears
@@ -189,9 +222,10 @@ export default function ShipmentsPage() {
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [activeTab, fetchShipments]);
 
+  const currentShipments = activeTab === 'archive' ? shipmentsByTab.archived : shipmentsByTab.active;
   const planningRows = useMemo<PlanningTableRow[]>(
-    () => shipments.map(shipmentToPlanningRow),
-    [shipments]
+    () => (currentShipments ?? []).map(shipmentToPlanningRow),
+    [currentShipments]
   );
 
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
@@ -263,15 +297,21 @@ export default function ShipmentsPage() {
     }
   }, [searchQuery, activeTab]);
 
-  const shipmentsCount = stats?.total ? stats.total - stats.received - stats.cancelled : shipments.length;
+  const shipmentsCount =
+    stats?.total != null
+      ? stats.total - (stats.received ?? 0) - (stats.cancelled ?? 0)
+      : (shipmentsByTab.active ?? []).length;
   const archiveCount = (stats?.received ?? 0) + (stats?.cancelled ?? 0);
 
-  const handleTabChange = useCallback((tab: 'shipments' | 'archive') => {
-    setActiveTab(tab);
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', tab);
-    router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
-  }, [router, searchParams]);
+  const handleTabChange = useCallback(
+    (tab: 'shipments' | 'archive') => {
+      setActiveTab(tab);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', tab);
+      router.replace(`/dashboard/shipments?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams]
+  );
 
   const handleRowClick = (row: PlanningTableRow) => {
     // Navigate to the next incomplete step
@@ -641,7 +681,7 @@ export default function ShipmentsPage() {
 
         {/* Planning Table — same structure as 1000bananas2.0 */}
         {!loading && !error && activeTab === 'shipments' && (
-          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
             {planningRows.length === 0 ? (
               <div style={{
                 textAlign: 'center',
@@ -649,7 +689,14 @@ export default function ShipmentsPage() {
                 color: '#9CA3AF',
                 fontSize: '14px',
               }}>
-                No shipments found. Click "New Shipment" to create one.
+                {loadingTab === 'shipments' ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading shipments...
+                  </span>
+                ) : (
+                  'No shipments found. Click "New Shipment" to create one.'
+                )}
               </div>
             ) : (
               <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />
@@ -658,7 +705,7 @@ export default function ShipmentsPage() {
         )}
 
         {!loading && !error && activeTab === 'archive' && (
-          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+          <motion.section initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
             {planningRows.length === 0 ? (
               <div style={{
                 textAlign: 'center',
@@ -666,7 +713,14 @@ export default function ShipmentsPage() {
                 color: '#9CA3AF',
                 fontSize: '14px',
               }}>
-                No archived shipments found.
+                {loadingTab === 'archive' ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading archive...
+                  </span>
+                ) : (
+                  'No archived shipments found.'
+                )}
               </div>
             ) : (
               <PlanningTable rows={planningRows} onRowClick={handleRowClick} onStepClick={handleStepClick} onDeleteRow={handleDeleteRow} />

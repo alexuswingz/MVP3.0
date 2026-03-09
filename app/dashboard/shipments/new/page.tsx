@@ -515,29 +515,35 @@ export default function NewShipmentAddProductsPage() {
     updateWorkflowTabInUrl('add-products');
   }, [updateWorkflowTabInUrl]);
 
-  const handleBookShipmentTabClick = useCallback(async () => {
+  const handleBookShipmentTabClick = useCallback(() => {
     if (addedProductIds.size === 0) return;
+    // Switch tab and URL immediately so the transition feels instant
+    setActiveWorkflowTab('book-shipment');
+    updateWorkflowTabInUrl('book-shipment');
+    // Create or update shipment in the background (no await)
     if (draftShipmentId == null) {
-      const ok = await createDraftShipment(true);
-      if (ok) {
-        setActiveWorkflowTab('book-shipment');
-        updateWorkflowTabInUrl('book-shipment');
-      }
+      void createDraftShipment(true).then((ok) => {
+        if (!ok) toast.error('Failed to create draft shipment', { description: 'Please try again or refresh.' });
+      });
     } else {
-      // Update existing shipment status to 'ready' (Add Products completed, Book Shipment in progress)
-      try {
-        await api.updateShipment(draftShipmentId, { status: 'ready' });
-      } catch (err) {
+      api.updateShipment(draftShipmentId, { status: 'ready' }).catch((err) => {
         console.error('Failed to update shipment status:', err);
-      }
-      setActiveWorkflowTab('book-shipment');
-      updateWorkflowTabInUrl('book-shipment');
+        toast.error('Failed to update shipment status', { description: 'You can continue; try saving again if needed.' });
+      });
     }
   }, [addedProductIds.size, draftShipmentId, createDraftShipment, updateWorkflowTabInUrl]);
 
+  const isAddProductsView = activeView === 'all-products' && activeWorkflowTab === 'add-products';
+
   return (
-    <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
-      {/* CSS for hover-only scrollbar on main content */}
+    <div
+      className={`flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden${isAddProductsView ? ' add-products-page-root-no-scroll' : ''}`}
+      style={{
+        backgroundColor: PAGE_BG,
+        overflowY: isAddProductsView ? 'hidden' : undefined,
+      }}
+    >
+      {/* CSS for hover-only scrollbar on main content; when on Add Products, hide outer scrollbar completely to avoid double scrollbar */}
       <style>{`
         .shipment-content-scroll::-webkit-scrollbar {
           width: 8px !important;
@@ -565,6 +571,23 @@ export default function NewShipmentAddProductsPage() {
         }
         .shipment-content-scroll::-webkit-scrollbar-corner {
           background: transparent !important;
+        }
+        /* On Add Products tab: hide outer scrollbar entirely so only the table/list scrollbar shows */
+        .shipment-content-scroll.add-products-no-outer-scroll {
+          overflow-y: hidden !important;
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .shipment-content-scroll.add-products-no-outer-scroll::-webkit-scrollbar {
+          display: none !important;
+        }
+        /* Page root: hide scrollbar when on Add Products so no outer track shows */
+        .add-products-page-root-no-scroll {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .add-products-page-root-no-scroll::-webkit-scrollbar {
+          display: none !important;
         }
       `}</style>
       {/* Header — match 1000bananas2.0 NewShipmentHeader */}
@@ -1381,13 +1404,13 @@ export default function NewShipmentAddProductsPage() {
       {activeView === 'all-products' && (
         <main style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden', padding: '0 24px 24px', display: 'flex', flexDirection: 'column' }}>
           <div
-            className="shipment-content-scroll"
+            className={`shipment-content-scroll${activeWorkflowTab === 'add-products' ? ' add-products-no-outer-scroll' : ''}`}
             style={{
               flex: 1,
               minHeight: 0,
               minWidth: 0,
               overflowX: 'hidden',
-              overflowY: activeWorkflowTab === 'add-products' && tableMode ? 'hidden' : 'auto',
+              overflowY: activeWorkflowTab === 'add-products' ? 'hidden' : 'auto',
               display: 'flex',
               flexDirection: 'column',
             }}

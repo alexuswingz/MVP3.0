@@ -1142,6 +1142,7 @@ export function AddProductsTable({
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
         }}
       >
         <div
@@ -1155,6 +1156,7 @@ export function AddProductsTable({
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
         <div
