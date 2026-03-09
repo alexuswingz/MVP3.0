@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from django.utils import timezone
+from django.http import HttpResponse
+from datetime import date
+from io import StringIO
+import csv
 
 from .models import Shipment, ShipmentItem, CurrentInventory
 from .serializers import (
@@ -77,6 +81,89 @@ class ShipmentViewSet(viewsets.ModelViewSet):
         elif self.action in ['create', 'update', 'partial_update']:
             return ShipmentCreateSerializer
         return ShipmentDetailSerializer
+    
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export shipments as CSV.
+
+        Applies the same filters/search/order as the list endpoint
+        (status, shipment_type, search, ordering) and returns all rows.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match the columns used by the Shipments page export
+        writer.writerow(
+            ['Status', 'Shipment', 'Type', 'Marketplace', 'Account', 'Add Products', 'Book Shipment']
+        )
+
+        status_label_map = {
+            'planning': 'Planning',
+            'ready': 'Ready',
+            'shipped': 'Shipped',
+            'received': 'Received',
+            'archived': 'Archived',
+            'in_transit': 'In Transit',
+            'receiving': 'Receiving',
+            'cancelled': 'Cancelled',
+        }
+
+        type_label_map = {
+            'awd': 'AWD',
+            'fba': 'FBA',
+            'mfg': 'MFG',
+            'hazmat': 'Hazmat',
+        }
+
+        for shipment in queryset:
+            status_label = status_label_map.get(shipment.status, shipment.status or '')
+            type_label = type_label_map.get(shipment.shipment_type, str(shipment.shipment_type or ''))
+
+            if shipment.status in ['shipped', 'received', 'archived']:
+                add_products_step = 'completed'
+                book_step = 'completed'
+            elif shipment.status == 'ready':
+                add_products_step = 'completed'
+                book_step = 'completed' if (shipment.amazon_shipment_id or '').strip() else 'in progress'
+            elif shipment.status == 'planning':
+                has_items = (shipment.item_count or 0) > 0 if hasattr(shipment, 'item_count') else shipment.items.exists()
+                if has_items:
+                    add_products_step = 'in progress'
+                    book_step = 'pending'
+                else:
+                    add_products_step = 'pending'
+                    book_step = 'pending'
+            else:
+                add_products_step = 'pending'
+                book_step = 'pending'
+
+            date_str = (
+                shipment.planned_ship_date.strftime('%Y.%m.%d')
+                if shipment.planned_ship_date
+                else ''
+            )
+            shipment_label = date_str or (shipment.name or '')
+
+            writer.writerow(
+                [
+                    status_label,
+                    shipment_label,
+                    type_label,
+                    'Amazon',
+                    shipment.ship_from_name or 'TPS Nutrients',
+                    add_products_step,
+                    book_step,
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'shipments_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     
     def perform_create(self, serializer):
         """Save the shipment - user is set in serializer.create()"""
