@@ -2,9 +2,13 @@
  * Shared forecast table cache so that:
  * - Reopening the Forecast page shows last data immediately while refetching.
  * - Prefetching from Shipments (or other pages) makes switching to Forecast faster.
+ * - sessionStorage is used so after refresh we can show last data instantly.
  */
 import { api, type ForecastTableResponse } from '@/lib/api';
 import type { ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
+
+const SESSION_KEY = 'forecast_table_cache';
+const MAX_SESSION_SIZE = 1.5 * 1024 * 1024; // 1.5MB to avoid quota errors
 
 export type ForecastCacheData = {
   rows: ShipmentTableRow[];
@@ -12,6 +16,34 @@ export type ForecastCacheData = {
 };
 
 let cache: ForecastCacheData | null = null;
+
+function readSessionCache(): ForecastCacheData | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as ForecastCacheData;
+    if (!data?.rows?.length || !data?.summary) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache(data: ForecastCacheData | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!data) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return;
+    }
+    const s = JSON.stringify(data);
+    if (s.length > MAX_SESSION_SIZE) return;
+    sessionStorage.setItem(SESSION_KEY, s);
+  } catch {
+    // quota or disabled storage
+  }
+}
 
 function transformApiRowToTableRow(
   apiRow: ForecastTableResponse['rows'][0]
@@ -40,11 +72,18 @@ function transformApiRowToTableRow(
 }
 
 export function getForecastCache(): ForecastCacheData | null {
-  return cache;
+  if (cache) return cache;
+  const session = readSessionCache();
+  if (session) {
+    cache = session;
+    return cache;
+  }
+  return null;
 }
 
 export function setForecastCache(data: ForecastCacheData | null): void {
   cache = data;
+  writeSessionCache(data);
 }
 
 /**

@@ -10,10 +10,6 @@ import {
   ClosuresTable,
   type ClosureRow,
 } from '../components/ClosuresTable';
-import {
-  BottlesSummaryCards,
-  type BottlesSummaryStats,
-} from '@/components/bottles';
 
 // Mock data – replace with API when available
 const MOCK_CLOSURES: ClosureRow[] = [
@@ -27,14 +23,6 @@ const MOCK_CLOSURES: ClosureRow[] = [
   { id: '8', name: '16oz Sprayer Trigger No-Foam', warehouseInventory: 16700, supplierInventory: 44200 },
 ];
 
-const MOCK_STATS: BottlesSummaryStats = {
-  totalDoi: 107,
-  unitsToMake: 107699,
-  palletsToMake: 849,
-  productsAtRisk: 343,
-  productsAtRiskDetail: '1 critical, 36 low',
-};
-
 export default function SupplyChainClosuresPage() {
   const [activeTab, setActiveTab] = useState<ClosureTabId>('Inventory');
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,7 +34,6 @@ export default function SupplyChainClosuresPage() {
   const isDarkMode = theme !== 'light';
 
   const closures = useMemo(() => MOCK_CLOSURES, []);
-  const stats = useMemo(() => MOCK_STATS, []);
 
   useEffect(() => {
     if (!settingsDropdownOpen) return;
@@ -66,7 +53,7 @@ export default function SupplyChainClosuresPage() {
   const handleNewOrder = () => {};
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0">
+    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 pt-9 px-4 pb-0 lg:-m-6 lg:pt-11 lg:px-6 lg:pb-0">
       <ClosuresHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -97,14 +84,14 @@ export default function SupplyChainClosuresPage() {
         }
       />
 
-      <BottlesSummaryCards stats={stats} isDarkMode={isDarkMode} />
-
-      <ClosuresTable
-        closures={closures}
-        searchQuery={searchQuery}
-        isDarkMode={isDarkMode}
-        isLoading={false}
-      />
+      <div className="mt-[60px]">
+        <ClosuresTable
+          closures={closures}
+          searchQuery={searchQuery}
+          isDarkMode={isDarkMode}
+          isLoading={false}
+        />
+      </div>
     </div>
   );
 }

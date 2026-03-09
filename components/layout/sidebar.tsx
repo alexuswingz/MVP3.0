@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Home,
@@ -21,6 +21,9 @@ import { useUIStore } from '@/stores/ui-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { NAV_ITEMS } from '@/lib/constants';
 import type { NavItem } from '@/types';
+import { prefetchForecastTable, getForecastCache } from '@/lib/forecast-cache';
+
+const FORECAST_PATH = '/dashboard/forecast';
 
 // Main nav only (Home, Products, Production, Supply Chain, Action Items); Settings is in footer
 const MAIN_NAV_IDS = ['home', 'products', 'production', 'supply-chain', 'action-items'];
@@ -58,6 +61,15 @@ export function Sidebar() {
       [itemId]: !prev[itemId],
     }));
   };
+
+  const onForecastLinkHover = useCallback(() => {
+    if (!getForecastCache()) prefetchForecastTable();
+  }, []);
+
+  // Prefetch forecast as soon as Production section is expanded (user likely heading to Forecast/Shipments/Bottles)
+  useEffect(() => {
+    if (expandedItems['production'] && !getForecastCache()) prefetchForecastTable();
+  }, [expandedItems['production']]);
 
   const isChildActive = (item: typeof NAV_ITEMS[number]) => {
     if ('children' in item && item.children) {
@@ -223,9 +235,8 @@ export function Sidebar() {
                     >
                       <div className="ml-6 pl-2 space-y-0.5 mt-0.5">
                         {item.children!.map((child) => {
-                          const isChildItemActive = pathname === child.path || 
+                          const isChildItemActive = pathname === child.path ||
                             (child.path !== '/dashboard/products' && child.path !== '/dashboard/forecast' && pathname.startsWith(child.path));
-                          
                           return (
                             <Link
                               key={child.id}
@@ -237,6 +248,7 @@ export function Sidebar() {
                                   ? 'text-white'
                                   : 'text-white/70 hover:bg-white/10 hover:text-white'
                               )}
+                              onMouseEnter={child.path === FORECAST_PATH ? onForecastLinkHover : undefined}
                             >
                               {child.label}
                             </Link>
