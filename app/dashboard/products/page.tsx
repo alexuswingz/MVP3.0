@@ -1,20 +1,37 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   Search,
-  Settings,
-  ChevronDown,
   Copy,
   MoreVertical,
-  TrendingUp,
-  RefreshCw,
 } from 'lucide-react';
 import { useProductStore } from '@/stores/product-store';
 import { useUIStore } from '@/stores/ui-store';
+import { toast } from '@/lib/toast';
+import {
+  StatusFilterDropdown,
+  DEFAULT_FILTER,
+  type StatusFilterState,
+} from '@/components/products/StatusFilterDropdown';
+import {
+  ProductsFilterDropdown,
+  DEFAULT_PRODUCTS_FILTER,
+  type ProductsFilterState,
+} from '@/components/products/ProductsFilterDropdown';
+import {
+  MarketplaceFilterDropdown,
+  DEFAULT_MARKETPLACE_FILTER,
+  type MarketplaceFilterState,
+} from '@/components/products/MarketplaceFilterDropdown';
+import {
+  SellerAccountFilterDropdown,
+  getDefaultSellerAccountFilter,
+  type SellerAccountFilterState,
+} from '@/components/products/SellerAccountFilterDropdown';
 
 const cardStyles = (isDarkMode: boolean) => ({
   card: (borderTopColor: string) => ({
@@ -47,14 +64,42 @@ const cardStyles = (isDarkMode: boolean) => ({
 const MARKETPLACES = ['Amazon', 'Walmart'] as const;
 type Marketplace = (typeof MARKETPLACES)[number];
 const SELLER_ACCOUNT = 'TPS Nutrients';
+const AVAILABLE_SELLER_ACCOUNTS = [SELLER_ACCOUNT];
 
 export default function ProductsPage() {
   const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace>('Amazon');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeIds, setActiveIds] = useState<Set<string>>(() => new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const hasInitializedActive = useRef(false);
-  const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats } = useProductStore();
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+  const [statusFilterAnchor, setStatusFilterAnchor] = useState<DOMRect | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState<StatusFilterState>(DEFAULT_FILTER);
+  const [fadingMap, setFadingMap] = useState<Record<string, boolean>>({});
+  const statusHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [productsFilterOpen, setProductsFilterOpen] = useState(false);
+  const [productsFilterAnchor, setProductsFilterAnchor] = useState<DOMRect | null>(null);
+  const [productsFilter, setProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
+  const [appliedProductsFilter, setAppliedProductsFilter] = useState<ProductsFilterState>(DEFAULT_PRODUCTS_FILTER);
+  const productsHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [marketplaceFilterOpen, setMarketplaceFilterOpen] = useState(false);
+  const [marketplaceFilterAnchor, setMarketplaceFilterAnchor] = useState<DOMRect | null>(null);
+  const [marketplaceFilter, setMarketplaceFilter] = useState<MarketplaceFilterState>(DEFAULT_MARKETPLACE_FILTER);
+  const [appliedMarketplaceFilter, setAppliedMarketplaceFilter] = useState<MarketplaceFilterState>(DEFAULT_MARKETPLACE_FILTER);
+  const marketplaceTableHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [sellerAccountFilterOpen, setSellerAccountFilterOpen] = useState(false);
+  const [sellerAccountFilterAnchor, setSellerAccountFilterAnchor] = useState<DOMRect | null>(null);
+  const [sellerAccountFilter, setSellerAccountFilter] = useState<SellerAccountFilterState>(() =>
+    getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS)
+  );
+  const [appliedSellerAccountFilter, setAppliedSellerAccountFilter] =
+    useState<SellerAccountFilterState>(() =>
+      getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS)
+    );
+  const sellerAccountHeaderRef = useRef<HTMLTableCellElement>(null);
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const { products, isLoading, totalCount, stats, fetchProducts, fetchProductStats, updateProduct, setProductActive } = useProductStore();
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
   const styles = cardStyles(isDarkMode);
@@ -65,27 +110,333 @@ export default function ProductsPage() {
     fetchProductStats();
   }, [fetchProducts, fetchProductStats]);
 
-  // Default all product toggles to "on" when products first load (matches design)
-  useEffect(() => {
-    if (products.length > 0 && !hasInitializedActive.current) {
-      hasInitializedActive.current = true;
-      setActiveIds(new Set(products.map((p) => p.id)));
+  // Toggle state is derived from products (single source of truth)
+  const activeIds = useMemo(
+    () => new Set(products.filter((p) => p.isActive !== false).map((p) => p.id)),
+    [products]
+  );
+
+  const handleStatusFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (statusFilterOpen) {
+      setStatusFilterOpen(false);
+      setStatusFilterAnchor(null);
+    } else {
+      const rect = statusHeaderRef.current?.getBoundingClientRect();
+      if (rect) {
+        setStatusFilterAnchor(rect);
+        setStatusFilterOpen(true);
+      }
     }
+  }, [statusFilterOpen]);
+
+  const handleProductsFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (productsFilterOpen) {
+      setProductsFilterOpen(false);
+      setProductsFilterAnchor(null);
+    } else {
+      const rect = productsHeaderRef.current?.getBoundingClientRect();
+      if (rect) {
+        setProductsFilterAnchor(rect);
+        setProductsFilterOpen(true);
+      }
+    }
+  }, [productsFilterOpen]);
+
+  const handleMarketplaceFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (marketplaceFilterOpen) {
+      setMarketplaceFilterOpen(false);
+      setMarketplaceFilterAnchor(null);
+    } else {
+      const rect = marketplaceTableHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setMarketplaceFilterAnchor(rect);
+        setMarketplaceFilterOpen(true);
+      }
+    }
+  }, [marketplaceFilterOpen]);
+
+  const handleSellerAccountFilterClick = useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (sellerAccountFilterOpen) {
+      setSellerAccountFilterOpen(false);
+      setSellerAccountFilterAnchor(null);
+    } else {
+      const rect = sellerAccountHeaderRef.current?.getBoundingClientRect?.();
+      if (rect) {
+        setSellerAccountFilterAnchor(rect);
+        setSellerAccountFilterOpen(true);
+      }
+    }
+  }, [sellerAccountFilterOpen]);
+
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        settingsButtonRef.current?.contains(e.target as Node) ||
+        settingsDropdownRef.current?.contains(e.target as Node)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  // Client-side filtering - search first, then status filter, then products filter, then sort
+  const filteredProducts = useMemo(() => {
+    let list = products;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.asin.toLowerCase().includes(query) ||
+          p.sku.toLowerCase().includes(query)
+      );
+    }
+    // Apply status filter (Active / Inactive)
+    const showActive = appliedStatusFilter.activeChecked;
+    const showInactive = appliedStatusFilter.inactiveChecked;
+    if (!showActive || !showInactive) {
+      list = list.filter((p) => {
+        const isActive = p.isActive !== false;
+        const passes = (isActive && showActive) || (!isActive && showInactive);
+        // While a row is in fadingMap, keep it visible even if it no longer matches
+        return passes || fadingMap[p.id];
+      });
+    }
+    // Apply seller account filter (products use SELLER_ACCOUNT constant)
+    const checkedSellerAccounts = Object.entries(appliedSellerAccountFilter.selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checkedSellerAccounts.length > 0) {
+      list = list.filter((p) => {
+        const productAccount = SELLER_ACCOUNT;
+        return checkedSellerAccounts.includes(productAccount);
+      });
+    }
+
+    // Apply products filter (name / brand / size)
+    const valuesSelected = appliedProductsFilter.selectedValues;
+    const brandsSelected = appliedProductsFilter.selectedBrands;
+    const sizesSelected = appliedProductsFilter.selectedSizes;
+
+    if (
+      (valuesSelected && valuesSelected.length > 0) ||
+      (brandsSelected && brandsSelected.length > 0) ||
+      (sizesSelected && sizesSelected.length > 0)
+    ) {
+      const valuesSet = valuesSelected ? new Set(valuesSelected) : null;
+      const brandsSet = brandsSelected ? new Set(brandsSelected) : null;
+      const sizesSet = sizesSelected ? new Set(sizesSelected) : null;
+
+      list = list.filter((p) => {
+        const name = p.name || '';
+        const brand = p.brand || '';
+        const size = p.size || '';
+
+        const matchesValue = valuesSet ? valuesSet.has(name) : true;
+        const matchesBrand = brandsSet ? brandsSet.has(brand) : true;
+        const matchesSize = sizesSet ? sizesSet.has(size) : true;
+
+        return matchesValue && matchesBrand && matchesSize;
+      });
+    }
+
+    // Sort: marketplace (by name) > products (name) > status > seller account
+    if (appliedMarketplaceFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aName = a.name?.toLowerCase() ?? '';
+        const bName = b.name?.toLowerCase() ?? '';
+        if (aName === bName) return 0;
+        const cmp = aName < bName ? -1 : 1;
+        return appliedMarketplaceFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (appliedProductsFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aName = a.name?.toLowerCase() ?? '';
+        const bName = b.name?.toLowerCase() ?? '';
+        if (aName === bName) return 0;
+        const cmp = aName < bName ? -1 : 1;
+        return appliedProductsFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (appliedStatusFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aActive = a.isActive !== false ? 1 : 0;
+        const bActive = b.isActive !== false ? 1 : 0;
+        return appliedStatusFilter.sortOrder === 'asc'
+          ? aActive - bActive
+          : bActive - aActive;
+      });
+    } else if (appliedSellerAccountFilter.sortOrder) {
+      list = [...list].sort((a, b) => {
+        const aAccount = SELLER_ACCOUNT;
+        const bAccount = SELLER_ACCOUNT;
+        const cmp = aAccount.localeCompare(bAccount);
+        return appliedSellerAccountFilter.sortOrder === 'asc' ? cmp : -cmp;
+      });
+    }
+    return list;
+  }, [products, searchQuery, appliedStatusFilter, appliedProductsFilter, appliedMarketplaceFilter, appliedSellerAccountFilter, fadingMap]);
+
+  const handleExportCsv = useCallback(() => {
+    const headers = ['Status', 'Product Name', 'ASIN', 'SKU', 'Brand', 'Size', 'Marketplace', 'Seller Account'];
+    const escapeCsv = (val: string) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const rows = filteredProducts.map((p) => {
+      const isActive = activeIds.has(p.id);
+      return [
+        isActive ? 'Active' : 'Inactive',
+        escapeCsv(p.name ?? ''),
+        escapeCsv(p.asin ?? ''),
+        escapeCsv(p.sku ?? ''),
+        escapeCsv(p.brand ?? ''),
+        escapeCsv(p.size ?? ''),
+        escapeCsv(selectedMarketplace),
+        escapeCsv(SELLER_ACCOUNT),
+      ].join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `products_export_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSettingsDropdownOpen(false);
+    toast.vineCreated('Products exported as CSV');
+  }, [filteredProducts, activeIds, selectedMarketplace]);
+
+  const statusFilterResultCount = useMemo(() => {
+    const showActive = statusFilter.activeChecked;
+    const showInactive = statusFilter.inactiveChecked;
+    let count = products.length;
+    if (!showActive || !showInactive) {
+      count = products.filter((p) => {
+        const isActive = p.isActive !== false;
+        return (isActive && showActive) || (!isActive && showInactive);
+      }).length;
+    }
+    return count;
+  }, [products, statusFilter.activeChecked, statusFilter.inactiveChecked]);
+
+  const hasActiveStatusFilter =
+    !appliedStatusFilter.activeChecked ||
+    !appliedStatusFilter.inactiveChecked ||
+    appliedStatusFilter.sortOrder != null;
+
+  const statusFilterHasChanges = useMemo(
+    () => JSON.stringify(statusFilter) !== JSON.stringify(appliedStatusFilter),
+    [statusFilter, appliedStatusFilter]
+  );
+
+  const hasActiveMarketplaceFilter = useMemo(() => {
+    const { walmartChecked, amazonChecked, sortOrder } = appliedMarketplaceFilter;
+    return !walmartChecked || !amazonChecked || sortOrder != null;
+  }, [appliedMarketplaceFilter]);
+
+  const marketplaceFilterHasChanges = useMemo(
+    () => JSON.stringify(marketplaceFilter) !== JSON.stringify(appliedMarketplaceFilter),
+    [marketplaceFilter, appliedMarketplaceFilter]
+  );
+
+  const marketplaceFilterResultCount = products.length;
+
+  const sellerAccountFilterResultCount = useMemo(() => {
+    const checked = Object.entries(sellerAccountFilter.selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    if (checked.length === 0) return 0;
+    return products.filter((p) => checked.includes(SELLER_ACCOUNT)).length;
+  }, [products, sellerAccountFilter.selectedAccounts]);
+
+  const hasActiveSellerAccountFilter = useMemo(() => {
+    const { sortOrder, selectedAccounts } = appliedSellerAccountFilter;
+    const allChecked = AVAILABLE_SELLER_ACCOUNTS.every((acc) => selectedAccounts[acc]);
+    return sortOrder != null || !allChecked;
+  }, [appliedSellerAccountFilter]);
+
+  const sellerAccountFilterHasChanges = useMemo(
+    () => JSON.stringify(sellerAccountFilter) !== JSON.stringify(appliedSellerAccountFilter),
+    [sellerAccountFilter, appliedSellerAccountFilter]
+  );
+
+  const hasActiveProductsFilter = useMemo(() => {
+    const { sortOrder, condition, selectedValues, selectedBrands, selectedSizes } =
+      appliedProductsFilter;
+    const hasSort = sortOrder != null;
+    const hasCondition = condition !== 'None';
+    const hasValues =
+      Array.isArray(selectedValues) && selectedValues.length > 0;
+    const hasBrands =
+      Array.isArray(selectedBrands) && selectedBrands.length > 0;
+    const hasSizes = Array.isArray(selectedSizes) && selectedSizes.length > 0;
+    return hasSort || hasCondition || hasValues || hasBrands || hasSizes;
+  }, [appliedProductsFilter]);
+
+  const productNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((p) => p.name)
+            .filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
+        )
+      ),
+    [products]
+  );
+
+  const productBrands = useMemo(() => {
+    const baseBrands = Array.from(
+      new Set(
+        products
+          .map((p) => p.brand)
+          .filter(
+            (brand): brand is string =>
+              typeof brand === 'string' && brand.trim().length > 0
+          )
+      )
+    );
+    const extras = ['Bloom City', 'TPS Plant Foods'];
+    for (const extra of extras) {
+      if (!baseBrands.includes(extra)) baseBrands.push(extra);
+    }
+    return baseBrands;
   }, [products]);
 
-  // Client-side filtering - no API call needed for search
-  const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    const query = searchQuery.toLowerCase();
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(query) ||
-        p.asin.toLowerCase().includes(query) ||
-        p.sku.toLowerCase().includes(query)
-    );
-  }, [products, searchQuery]);
+  const productSizes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((p) => p.size)
+            .filter((size): size is string => typeof size === 'string' && size.trim().length > 0)
+        )
+      ),
+    [products]
+  );
 
-  // Manual refresh - force fetch
+  const productsFilterHasChanges = useMemo(
+    () => JSON.stringify(productsFilter) !== JSON.stringify(appliedProductsFilter),
+    [productsFilter, appliedProductsFilter]
+  );
+
+  // Manual refresh - products come from API, toggles derive from products
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await Promise.all([
@@ -95,14 +446,45 @@ export default function ProductsPage() {
     setIsRefreshing(false);
   }, [fetchProducts, fetchProductStats]);
 
-  const toggleActive = (id: string) => {
-    setActiveIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const toggleActive = useCallback(
+    async (id: string) => {
+      const product = products.find((p) => p.id === id);
+      if (!product) return;
+
+      const nextActive = !(product.isActive !== false);
+
+      // Optimistically update local state
+      setProductActive(id, nextActive);
+
+       // If this toggle will move the row *out* of the currently applied
+       // status filter, keep it visible briefly and fade it out.
+       const showActive = appliedStatusFilter.activeChecked;
+       const showInactive = appliedStatusFilter.inactiveChecked;
+       const passesAfterToggle =
+         (nextActive && showActive) || (!nextActive && showInactive);
+       if (!passesAfterToggle && (showActive !== showInactive)) {
+         setFadingMap((prev) => ({ ...prev, [id]: true }));
+         setTimeout(() => {
+           setFadingMap((prev) => {
+             const copy = { ...prev };
+             delete copy[id];
+             return copy;
+           });
+         }, 250);
+       }
+
+      try {
+        await updateProduct(id, { isActive: nextActive });
+      } catch (err) {
+        // Roll back status change on error
+        setProductActive(id, !nextActive);
+        toast.error('Failed to update product status', {
+          description: err instanceof Error ? err.message : 'Try refreshing the page.',
+        });
+      }
+    },
+    [products, updateProduct, setProductActive, appliedStatusFilter]
+  );
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0">
@@ -132,31 +514,36 @@ export default function ProductsPage() {
               padding: 2,
             }}
           >
-            {MARKETPLACES.map((mp) => (
-              <button
-                key={mp}
-                type="button"
-                role="tab"
-                aria-selected={selectedMarketplace === mp}
-                aria-label={`Switch to ${mp}`}
-                onClick={() => setSelectedMarketplace(mp)}
-                style={{
-                  height: '100%',
-                  paddingLeft: 12,
-                  paddingRight: 12,
-                  borderRadius: 4,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: selectedMarketplace === mp ? '#F9FAFB' : '#9CA3AF',
-                  backgroundColor: selectedMarketplace === mp ? '#334155' : 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {mp}
-              </button>
-            ))}
+            {MARKETPLACES.map((mp) => {
+              const isDisabled = mp === 'Walmart'; // Only Amazon for now; Walmart reserved for future
+              return (
+                <button
+                  key={mp}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedMarketplace === mp}
+                  aria-disabled={isDisabled}
+                  aria-label={isDisabled ? `${mp} (coming soon)` : `Switch to ${mp}`}
+                  onClick={() => !isDisabled && setSelectedMarketplace(mp)}
+                  style={{
+                    height: '100%',
+                    paddingLeft: 12,
+                    paddingRight: 12,
+                    borderRadius: 4,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: selectedMarketplace === mp ? '#F9FAFB' : isDisabled ? '#6B7280' : '#9CA3AF',
+                    backgroundColor: selectedMarketplace === mp ? '#334155' : 'transparent',
+                    border: 'none',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    opacity: isDisabled ? 0.6 : 1,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {mp}
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -179,13 +566,43 @@ export default function ProductsPage() {
               }}
             />
           </div>
-          <button
-            type="button"
-            className="flex items-center justify-center hover:opacity-80 transition-opacity"
-            aria-label="Settings"
-          >
-            <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
-          </button>
+          <div className="relative">
+            <button
+              ref={settingsButtonRef}
+              type="button"
+              onClick={() => setSettingsDropdownOpen((o) => !o)}
+              className="flex items-center justify-center hover:opacity-80 transition-opacity"
+              aria-label="Settings"
+              aria-expanded={settingsDropdownOpen}
+              aria-haspopup="true"
+            >
+              <Image src="/assets/settings-icon.png" alt="Settings" width={24} height={24} />
+            </button>
+            {settingsDropdownOpen && (
+              <div
+                ref={settingsDropdownRef}
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+                style={{
+                  backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                  borderColor: isDarkMode ? '#334155' : '#E5E7EB',
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportCsv}
+                  className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+                  style={{
+                    color: isDarkMode ? '#F9FAFB' : '#111827',
+                    backgroundColor: 'transparent',
+                  }}
+                >
+                  Export as CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -249,55 +666,145 @@ export default function ProductsPage() {
             >
               <tr style={{ height: 'auto' }}>
                 <th
-                  className="text-center text-xs font-bold uppercase tracking-wider"
+                  ref={statusHeaderRef}
+                  data-status-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleStatusFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleStatusFilterClick();
+                    }
+                  }}
+                  className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '10%',
-                    backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: statusFilterOpen || hasActiveStatusFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
+                    position: 'relative',
+                    zIndex: 101,
                   }}
                 >
-                  STATUS
+                  <span className="inline-flex items-center gap-1.5">
+                    STATUS
+                    {hasActiveStatusFilter && (
+                      <Image
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="inline-block"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                      />
+                    )}
+                  </span>
                 </th>
                 <th
-                  className="text-left text-xs font-bold uppercase tracking-wider"
+                  ref={productsHeaderRef}
+                  data-products-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleProductsFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleProductsFilterClick();
+                    }
+                  }}
+                  className="text-left text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '45%',
                     backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: productsFilterOpen || hasActiveProductsFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
                 >
-                  <div className="flex items-center gap-1">
-                    <span>PRODUCTS</span>
-                    <ChevronDown style={{ width: 16, height: 16, flexShrink: 0 }} />
-                  </div>
+                  <span className="inline-flex items-center gap-1.5">
+                    PRODUCTS
+                    {hasActiveProductsFilter && (
+                      <Image
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="inline-block"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                      />
+                    )}
+                  </span>
                 </th>
                 <th
-                  className="text-center text-xs font-bold uppercase tracking-wider"
+                  ref={marketplaceTableHeaderRef}
+                  data-marketplace-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleMarketplaceFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleMarketplaceFilterClick();
+                    }
+                  }}
+                  className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '15%',
                     backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: marketplaceFilterOpen || hasActiveMarketplaceFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
                 >
-                  MARKETPLACE
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    MARKETPLACE
+                    {hasActiveMarketplaceFilter && (
+                      <Image
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="inline-block"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                      />
+                    )}
+                  </span>
                 </th>
                 <th
-                  className="text-center text-xs font-bold uppercase tracking-wider"
+                  ref={sellerAccountHeaderRef}
+                  data-seller-account-filter-trigger
+                  role="button"
+                  tabIndex={0}
+                  onClick={handleSellerAccountFilterClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSellerAccountFilterClick();
+                    }
+                  }}
+                  className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer hover:opacity-80 transition-opacity"
                   style={{
                     padding: '1rem 1rem',
                     width: '18%',
                     backgroundColor: 'inherit',
-                    color: '#9CA3AF',
+                    color: sellerAccountFilterOpen || hasActiveSellerAccountFilter ? '#3B82F6' : '#9CA3AF',
                     boxSizing: 'border-box',
                   }}
                 >
-                  SELLER ACCOUNT
+                  <span className="inline-flex items-center gap-1.5 justify-center">
+                    SELLER ACCOUNT
+                    {hasActiveSellerAccountFilter && (
+                      <Image
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        className="inline-block"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)' }}
+                      />
+                    )}
+                  </span>
                 </th>
                 <th
                   style={{
@@ -330,7 +837,14 @@ export default function ProductsPage() {
               const isActive = activeIds.has(product.id);
               const ROW_BG = isDarkMode ? '#1A2235' : '#FFFFFF';
               const BORDER_COLOR = isDarkMode ? '#374151' : '#E5E7EB';
-              const rowOpacity = isActive ? 1 : 0.45;
+              const showActive = appliedStatusFilter.activeChecked;
+              const showInactive = appliedStatusFilter.inactiveChecked;
+              const isActivePassingFilter =
+                (isActive && showActive) || (!isActive && showInactive);
+              let rowOpacity = isActive ? 1 : 0.45;
+              if (fadingMap[product.id] && !isActivePassingFilter) {
+                rowOpacity = 0;
+              }
               return (
                 <React.Fragment key={product.id}>
                   <tr className="transition-opacity duration-200" style={{ height: 1, backgroundColor: ROW_BG, opacity: rowOpacity }}>
@@ -358,7 +872,9 @@ export default function ProductsPage() {
                       opacity: rowOpacity,
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = ROW_BG;
+                      e.currentTarget.style.backgroundColor = isDarkMode
+                        ? '#1A2636'
+                        : '#E5E7EB';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = ROW_BG;
@@ -485,7 +1001,43 @@ export default function ProductsPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   e.preventDefault();
-                                  navigator.clipboard.writeText(product.asin).catch(() => {});
+                                  const text = product.asin;
+                                  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                                    navigator.clipboard.writeText(text).then(() => {
+                                      toast.vineCreated(`ASIN copied: ${text}`);
+                                    }).catch(() => {
+                                      // Fallback for clipboard permission denied
+                                      try {
+                                        const ta = document.createElement('textarea');
+                                        ta.value = text;
+                                        ta.style.position = 'fixed';
+                                        ta.style.opacity = '0';
+                                        document.body.appendChild(ta);
+                                        ta.focus();
+                                        ta.select();
+                                        document.execCommand('copy');
+                                        document.body.removeChild(ta);
+                                        toast.vineCreated(`ASIN copied: ${text}`);
+                                      } catch {
+                                        toast.error('Failed to copy ASIN');
+                                      }
+                                    });
+                                  } else {
+                                    try {
+                                      const ta = document.createElement('textarea');
+                                      ta.value = text;
+                                      ta.style.position = 'fixed';
+                                      ta.style.opacity = '0';
+                                      document.body.appendChild(ta);
+                                      ta.focus();
+                                      ta.select();
+                                      document.execCommand('copy');
+                                      document.body.removeChild(ta);
+                                      toast.vineCreated(`ASIN copied: ${text}`);
+                                    } catch {
+                                      toast.error('Failed to copy ASIN');
+                                    }
+                                  }
                                 }}
                                 style={{
                                   background: 'none',
@@ -590,6 +1142,98 @@ export default function ProductsPage() {
           </div>
         </div>
       </motion.div>
+
+      <StatusFilterDropdown
+        anchorRect={statusFilterAnchor}
+        isOpen={statusFilterOpen}
+        onClose={() => {
+          setStatusFilterOpen(false);
+          setStatusFilterAnchor(null);
+        }}
+        filter={statusFilter}
+        onFilterChange={setStatusFilter}
+        onApply={() => {
+          setAppliedStatusFilter(statusFilter);
+          setStatusFilterOpen(false);
+          setStatusFilterAnchor(null);
+        }}
+        onReset={() => {
+          setStatusFilter(DEFAULT_FILTER);
+          setAppliedStatusFilter(DEFAULT_FILTER);
+        }}
+        resultCount={statusFilterResultCount}
+        hasChanges={statusFilterHasChanges}
+      />
+
+      <ProductsFilterDropdown
+        anchorRect={productsFilterAnchor}
+        isOpen={productsFilterOpen}
+        onClose={() => {
+          setProductsFilterOpen(false);
+          setProductsFilterAnchor(null);
+        }}
+        filter={productsFilter}
+        onFilterChange={setProductsFilter}
+        onApply={() => {
+          setAppliedProductsFilter(productsFilter);
+          setProductsFilterOpen(false);
+          setProductsFilterAnchor(null);
+        }}
+        onReset={() => {
+          setProductsFilter(DEFAULT_PRODUCTS_FILTER);
+          setAppliedProductsFilter(DEFAULT_PRODUCTS_FILTER);
+        }}
+        hasChanges={productsFilterHasChanges}
+        availableValues={productNames}
+        availableBrands={productBrands}
+        availableSizes={productSizes}
+      />
+
+      <MarketplaceFilterDropdown
+        anchorRect={marketplaceFilterAnchor}
+        isOpen={marketplaceFilterOpen}
+        onClose={() => {
+          setMarketplaceFilterOpen(false);
+          setMarketplaceFilterAnchor(null);
+        }}
+        filter={marketplaceFilter}
+        onFilterChange={setMarketplaceFilter}
+        onApply={() => {
+          setAppliedMarketplaceFilter(marketplaceFilter);
+          setMarketplaceFilterOpen(false);
+          setMarketplaceFilterAnchor(null);
+        }}
+        onReset={() => {
+          setMarketplaceFilter(DEFAULT_MARKETPLACE_FILTER);
+          setAppliedMarketplaceFilter(DEFAULT_MARKETPLACE_FILTER);
+        }}
+        resultCount={marketplaceFilterResultCount}
+        hasChanges={marketplaceFilterHasChanges}
+      />
+
+      <SellerAccountFilterDropdown
+        anchorRect={sellerAccountFilterAnchor}
+        isOpen={sellerAccountFilterOpen}
+        onClose={() => {
+          setSellerAccountFilterOpen(false);
+          setSellerAccountFilterAnchor(null);
+        }}
+        filter={sellerAccountFilter}
+        onFilterChange={setSellerAccountFilter}
+        onApply={() => {
+          setAppliedSellerAccountFilter(sellerAccountFilter);
+          setSellerAccountFilterOpen(false);
+          setSellerAccountFilterAnchor(null);
+        }}
+        onReset={() => {
+          const def = getDefaultSellerAccountFilter(AVAILABLE_SELLER_ACCOUNTS);
+          setSellerAccountFilter(def);
+          setAppliedSellerAccountFilter(def);
+        }}
+        availableAccounts={AVAILABLE_SELLER_ACCOUNTS}
+        resultCount={sellerAccountFilterResultCount}
+        hasChanges={sellerAccountFilterHasChanges}
+      />
     </div>
   );
 }

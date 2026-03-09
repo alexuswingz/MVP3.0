@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Search, Settings, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NewShipmentTable, type ShipmentTableRow } from '@/components/forecast/forecast-shipment-table';
 import DoiSettingsPopover, { getDefaultDoiSettings } from '@/components/forecast/doi-settings-popover';
@@ -14,6 +14,7 @@ import { api, type ForecastTableResponse } from '@/lib/api';
 import { getShipmentDoiStorageKey, calculateDoiTotal, DEFAULT_DOI_SETTINGS } from '@/lib/doi-settings';
 import type { DoiSettings } from '@/lib/doi-settings';
 import { recalculateUnitsToMakeForDoiChange } from '@/lib/units-to-make-doi';
+import { toast } from '@/lib/toast';
 
 function toNgoosSelectedRow(row: ShipmentTableRow) {
   return {
@@ -30,6 +31,8 @@ function toNgoosSelectedRow(row: ShipmentTableRow) {
     brand: row.product.brand,
     sku: row.product.sku,
     image_url: row.product.imageUrl ?? null,
+    needsSeasonality: row.needsSeasonality === true,
+    seasonalityUploaded: row.seasonalityUploaded === true,
   };
 }
 
@@ -61,7 +64,9 @@ export default function ForecastPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [ngoosModalOpen, setNgoosModalOpen] = useState(false);
   const [selectedNgoosRow, setSelectedNgoosRow] = useState<ShipmentTableRow | null>(null);
+  const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
   const [tableRows, setTableRows] = useState<ShipmentTableRow[]>([]);
+  const [uploadedSeasonalityProductIds, setUploadedSeasonalityProductIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
@@ -94,6 +99,9 @@ export default function ForecastPage() {
   const [doiSettingsValues, setDoiSettingsValues] = useState<DoiSettings | null>(null);
   const manuallyEditedProductIds = useRef<Set<string>>(new Set());
   const hasRecalcForAppliedDoiRef = useRef(false);
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
   const runUnitsToMakeRecalc = useCallback((targetDOI: number) => {
     setTableRows((prev) => {
@@ -168,7 +176,7 @@ export default function ForecastPage() {
     }
   }, [runUnitsToMakeRecalc]);
 
-  const fetchForecastData = useCallback(async () => {
+  const fetchForecastData = useCallback(async (): Promise<ShipmentTableRow[] | null> => {
     setLoading(true);
     setError(null);
     try {
@@ -177,14 +185,16 @@ export default function ForecastPage() {
         sort_by: 'doi',
         sort_order: 'asc',
       });
-      
+
       const transformedRows = response.rows.map(transformApiRowToTableRow);
       setTableRows(transformedRows);
       setSummary(response.summary);
       hasRecalcForAppliedDoiRef.current = false;
+      return transformedRows;
     } catch (err) {
       console.error('Failed to fetch forecast data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load forecast data');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -228,6 +238,66 @@ export default function ForecastPage() {
     const nextIdx = dir === 'next' ? Math.min(idx + 1, tableRows.length - 1) : Math.max(idx - 1, 0);
     setSelectedNgoosRow(tableRows[nextIdx]);
   }, [selectedNgoosRow, tableRows]);
+
+  // Rows with needsSeasonality overridden to false and seasonalityUploaded true for products that just uploaded seasonality (so units + DOI bar show again, and warning icon shows)
+  const displayRows = useMemo(() => {
+    if (uploadedSeasonalityProductIds.size === 0) return tableRows;
+    return tableRows.map((r) =>
+      uploadedSeasonalityProductIds.has(String(r.product.id))
+        ? { ...r, needsSeasonality: false, seasonalityUploaded: true }
+        : r
+    );
+  }, [tableRows, uploadedSeasonalityProductIds]);
+
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        settingsButtonRef.current?.contains(e.target as Node) ||
+        settingsDropdownRef.current?.contains(e.target as Node)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const invTotal = (r: ShipmentTableRow) =>
+      typeof r.inventory === 'number' ? r.inventory : (r.inventory?.total ?? '');
+    const headers = ['Product Name', 'Brand', 'Size', 'ASIN', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
+    const rows = displayRows.map((r) =>
+      [
+        escapeCsv(r.product.name ?? ''),
+        escapeCsv(r.product.brand ?? ''),
+        escapeCsv(r.product.size ?? ''),
+        escapeCsv(r.product.asin ?? ''),
+        escapeCsv(invTotal(r)),
+        escapeCsv(r.unitsToMake ?? ''),
+        escapeCsv(r.daysOfInventory ?? ''),
+        escapeCsv(r.doiFba ?? ''),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `forecast_export_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSettingsDropdownOpen(false);
+    toast.vineCreated('Forecast table exported as CSV');
+  }, [displayRows]);
 
   // Use real data from API summary, with fallback calculations
   const totalUnitsToMake = summary.totalUnitsToMake || tableRows.reduce((s, r) => s + (r.unitsToMake ?? 0), 0);
@@ -324,9 +394,42 @@ export default function ForecastPage() {
             )}
             Refresh
           </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Settings">
-            <Settings className="w-4 h-4" />
-          </Button>
+          <div className="relative" ref={settingsDropdownRef}>
+            <button
+              ref={settingsButtonRef}
+              type="button"
+              className="flex items-center justify-center hover:opacity-80 transition-opacity"
+              aria-label="Settings"
+              aria-expanded={settingsDropdownOpen}
+              aria-haspopup="true"
+              onClick={() => setSettingsDropdownOpen((o) => !o)}
+            >
+              <Image src="/assets/Icon Button.png" alt="Settings" width={24} height={24} />
+            </button>
+            {settingsDropdownOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+                style={{
+                  backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                  borderColor: isDarkMode ? '#334155' : '#E5E7EB',
+                }}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportCsv}
+                  className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+                  style={{
+                    color: isDarkMode ? '#F9FAFB' : '#111827',
+                    backgroundColor: 'transparent',
+                  }}
+                >
+                  Export as CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -444,10 +547,16 @@ export default function ForecastPage() {
           </div>
         ) : (
         <NewShipmentTable
-          rows={tableRows}
+          rows={displayRows}
           onProductClick={(p) => console.log('Product click', p.id)}
           onOpenNgoos={(row) => {
             setSelectedNgoosRow(row);
+            setNgoosOpenWithSettings(false);
+            setNgoosModalOpen(true);
+          }}
+          onEdit={(row) => {
+            setSelectedNgoosRow(row);
+            setNgoosOpenWithSettings(true);
             setNgoosModalOpen(true);
           }}
           onQtyChange={handleQtyChange}
@@ -457,7 +566,7 @@ export default function ForecastPage() {
             setSeasonalityProductId(productId);
             setSeasonalityModalOpen(true);
           }}
-          totalProducts={tableRows.length}
+          totalProducts={displayRows.length}
           totalPalettes={totalPallets}
           totalBoxes={92}
           totalTimeHours={2}
@@ -471,13 +580,27 @@ export default function ForecastPage() {
           onClose={() => {
             setNgoosModalOpen(false);
             setSelectedNgoosRow(null);
+            setNgoosOpenWithSettings(false);
           }}
-          selectedRow={selectedNgoosRow ? toNgoosSelectedRow(selectedNgoosRow) : null}
+          openSettingsOnMount={ngoosOpenWithSettings}
+          selectedRow={
+            selectedNgoosRow
+              ? toNgoosSelectedRow(
+                  displayRows.find((r) => String(r.product.id) === String(selectedNgoosRow?.product.id)) ??
+                    selectedNgoosRow
+                )
+              : null
+          }
           isDarkMode={isDarkMode}
-          allProducts={tableRows.map((r) => ({ id: r.product.id }))}
+          allProducts={displayRows.map((r) => ({ id: r.product.id }))}
           onNavigate={handleNgoosNavigate}
           showAddButton={false}
           showActionItems
+          onSeasonalityUploaded={(productId) => {
+            if (productId) {
+              setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
+            }
+          }}
         />
         <UploadSeasonalityModal
           isOpen={seasonalityModalOpen}
@@ -487,6 +610,13 @@ export default function ForecastPage() {
           }}
           productId={seasonalityProductId}
           isDarkMode={isDarkMode}
+          onSeasonalityUploaded={(productId) => {
+            if (productId) {
+              setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
+            }
+            setSeasonalityModalOpen(false);
+            setSeasonalityProductId(null);
+          }}
         />
       </motion.div>
     </div>

@@ -52,7 +52,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
   const rows: VineProductRow[] = [];
   byProduct.forEach((productClaims, productId) => {
     const first = productClaims[0];
-    const claimed = productClaims.reduce((s, c) => s + c.units_claimed, 0);
+    const claimed = productClaims.reduce((s, c) => s + Number(c.units_claimed || 0), 0);
     const allConcluded = productClaims.every((c) => c.review_received);
     const status = allConcluded ? 'Concluded' : 'Awaiting Reviews';
     const launchDate = first.product_launch_date && typeof first.product_launch_date === 'string'
@@ -68,7 +68,7 @@ function vineClaimsToRows(claims: Awaited<ReturnType<typeof api.getVineClaims>>)
       statusColor: status === 'Concluded' ? '#10B981' : '#3B82F6',
       productName: first.product_name || '',
       brand: first.brand_name || '',
-      size: '',
+      size: first.product_size ?? '',
       asin: first.product_asin || '',
       launchDate,
       claimed,
@@ -91,7 +91,7 @@ const VineTracker = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchVineClaims = useCallback(async () => {
+  const fetchVineClaims = useCallback(async (productIdToTop?: number) => {
     try {
       setError(null);
       const claims = await api.getVineClaims({ ordering: '-claim_date' });
@@ -110,7 +110,12 @@ const VineTracker = () => {
               p.productId != null &&
               !apiProductIds.has(p.productId))
         );
-        return [...localOnly, ...fromApi];
+        const merged = [...localOnly, ...fromApi];
+        if (productIdToTop == null) return merged;
+        const idx = merged.findIndex((r) => (r.productId ?? r.id) === productIdToTop);
+        if (idx <= 0) return merged;
+        const row = merged[idx];
+        return [row, ...merged.slice(0, idx), ...merged.slice(idx + 1)];
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load vine claims');
@@ -131,6 +136,50 @@ const VineTracker = () => {
   const handleSearch = (value: string) => {
     setSearchValue(value);
   };
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    let filtered = vineProducts.filter((p) => !p.isNew);
+    if (searchValue.trim()) {
+      const q = searchValue.toLowerCase();
+      filtered = filtered.filter(
+        (row) =>
+          (row.productName || '').toLowerCase().includes(q) ||
+          (row.brand || '').toLowerCase().includes(q) ||
+          (row.asin || '').toLowerCase().includes(q) ||
+          (row.status || '').toLowerCase().includes(q)
+      );
+    }
+    const headers = ['Status', 'Product Name', 'Brand', 'Size', 'ASIN', 'Launch Date', 'Claimed', 'Enrolled'];
+    const rows = filtered.map((p) =>
+      [
+        escapeCsv(p.status ?? ''),
+        escapeCsv(p.productName ?? ''),
+        escapeCsv(p.brand ?? ''),
+        escapeCsv(p.size ?? ''),
+        escapeCsv(p.asin ?? ''),
+        escapeCsv(p.launchDate ?? ''),
+        String(p.claimed ?? 0),
+        String(p.enrolled ?? 0),
+      ].join(',')
+    );
+    const csv = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `vine_export_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.vineCreated('Vine products exported as CSV');
+  }, [vineProducts, searchValue]);
 
   /** True if there is an unsaved new-vine row with any data entered */
   const hasUnsavedNewVine = useMemo(
@@ -193,9 +242,15 @@ const VineTracker = () => {
     async (updatedRow: VineProductRow) => {
       const prev = vineProducts.find((p) => p.id === updatedRow.id);
       const prevClaimIds = new Set((prev?.claimHistory || []).map((c) => String(c.id)));
-      const newClaims = (updatedRow.claimHistory || []).filter(
-        (c) => !prevClaimIds.has(String(c.id)) || (typeof c.id === 'string' && String(c.id).startsWith('new-'))
+      const prevClaimKeys = new Set(
+        (prev?.claimHistory || []).map((c) => `${claimDateToApiFormat(String(c.date))}|${c.units ?? 0}`)
       );
+      const newClaims = (updatedRow.claimHistory || []).filter((c) => {
+        if (prevClaimIds.has(String(c.id))) return false;
+        const key = `${claimDateToApiFormat(String(c.date))}|${c.units ?? 0}`;
+        if (prevClaimKeys.has(key)) return false;
+        return true;
+      });
       // Resolve productId: explicit productId or row.id when it's the product id (API-sourced rows)
       const productId =
         updatedRow.productId != null && typeof updatedRow.productId === 'number'
@@ -213,7 +268,7 @@ const VineTracker = () => {
         }
         const enrolled = updatedRow.enrolled ?? 0;
         const alreadyClaimed = prev?.claimed ?? 0;
-        const totalNew = newClaims.reduce((s, c) => s + (c.units || 0), 0);
+        const totalNew = newClaims.reduce((s, c) => s + Number(c.units || 0), 0);
         const attemptedTotal = alreadyClaimed + totalNew;
         if (enrolled <= 0 && totalNew > 0) {
           const msg = 'Set enrolled units first (cannot claim units when enrolled is 0).';
@@ -240,12 +295,11 @@ const VineTracker = () => {
             await api.createVineClaim({
               product_id: productId,
               claim_date: claimDate,
-              units_claimed: nc.units || 0,
+              units_claimed: nc.units ?? 0,
               notes: '',
             });
           }
-          await fetchVineClaims();
-          toast.success('Vine claim saved.');
+          await fetchVineClaims(productId);
           return;
         } catch (e) {
           const msg = e instanceof Error ? e.message : 'Failed to save claim';
@@ -285,7 +339,6 @@ const VineTracker = () => {
         setError(null);
         await api.updateProduct(productId, { launch_date: normalized });
         await fetchVineClaims();
-        toast.success('Launch date saved.');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to save launch date';
         setError(msg);
@@ -302,7 +355,6 @@ const VineTracker = () => {
         setError(null);
         await api.updateProduct(productId, { vine_units_enrolled: normalized });
         await fetchVineClaims();
-        toast.success('Enrolled units saved.');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to save enrolled units';
         setError(msg);
@@ -328,7 +380,7 @@ const VineTracker = () => {
     [fetchVineClaims]
   );
 
-  /** Called only when user explicitly clicks Create on a new Vine row. Persists launch date and enrolled only; no claim is created until user adds one. */
+  /** Called only when user explicitly clicks Create on a new Vine row. Persists product fields and a placeholder VineClaim so the product appears in the list after refresh. */
   const handleCreateNewVine = useCallback(
     async (row: VineProductRow) => {
       const productId = row.productId ?? (typeof row.id === 'number' ? row.id : undefined);
@@ -339,34 +391,36 @@ const VineTracker = () => {
       }
       setError(null);
       try {
-        // Sync product fields only; do not create a 0-unit claim
         const launchDateTrimmed = (row.launchDate || '').trim();
         if (launchDateTrimmed) {
           const normalized = claimDateToApiFormat(launchDateTrimmed);
           if (normalized) {
             await api.updateProduct(productId, { launch_date: normalized, vine_units_enrolled: row.enrolled ?? 0 });
+          } else {
+            await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
           }
         } else {
           await api.updateProduct(productId, { launch_date: null, vine_units_enrolled: row.enrolled ?? 0 });
         }
-        // Keep row in list with empty claim history; no refetch so it doesn't disappear (product has no claims yet)
-        setVineProducts((prev) =>
-          prev.map((p) =>
-            p.id === row.id
-              ? { ...p, ...row, isNew: false, claimHistory: [], claimed: 0, productId: productId ?? p.productId }
-              : p
-          )
-        );
-        toast.success(
-          'Vine saved and added to the list. Add claim entries below; it will persist after refresh once you add your first claim.'
-        );
+        // Create a placeholder VineClaim (0 units) so this product is returned by GET /vine-claims/ and persists after refresh
+        const today = new Date();
+        const claimDate = today.toISOString().slice(0, 10);
+        await api.createVineClaim({
+          product_id: productId,
+          claim_date: claimDate,
+          units_claimed: 0,
+          notes: '',
+        });
+        await fetchVineClaims(productId);
+        const label = [row.productName, row.size, row.asin].filter(Boolean).join(' • ') || 'Vine created';
+        toast.vineCreated(`Vine created for ${label}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to create vine';
         setError(msg);
         toast.error(msg);
       }
     },
-    []
+    [fetchVineClaims]
   );
 
   const handleDeleteRow = useCallback(
@@ -417,7 +471,7 @@ const VineTracker = () => {
       className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0 overflow-hidden"
     >
       <div className="flex-shrink-0">
-        <VineTrackerHeader onSearch={handleSearch} onNewVineClick={handleNewVine} />
+        <VineTrackerHeader onSearch={handleSearch} onNewVineClick={handleNewVine} onExportCsv={handleExportCsv} />
       </div>
       {error && (
         <div className="text-sm text-amber-500 px-2">

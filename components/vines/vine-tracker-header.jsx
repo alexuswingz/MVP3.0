@@ -1,14 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { useTheme } from '@/context/ThemeContext';
 
-const VineTrackerHeader = ({ onSearch, onNewVineClick }) => {
+const VineTrackerHeader = ({ onSearch, onNewVineClick, onExportCsv }) => {
   const { isDarkMode } = useTheme();
   const [searchValue, setSearchValue] = useState('');
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const settingsButtonRef = useRef(null);
+  const settingsDropdownRef = useRef(null);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearchValue(value);
     onSearch && onSearch(value);
+  };
+
+  useEffect(() => {
+    if (!settingsDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (
+        settingsButtonRef.current?.contains(e.target) ||
+        settingsDropdownRef.current?.contains(e.target)
+      )
+        return;
+      setSettingsDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [settingsDropdownOpen]);
+
+  const handleExportClick = () => {
+    onExportCsv?.();
+    setSettingsDropdownOpen(false);
   };
 
   return (
@@ -30,7 +53,7 @@ const VineTrackerHeader = ({ onSearch, onNewVineClick }) => {
             onError={(e) => { e.target.style.display = 'none'; }}
           />
         </div>
-        <h1 className="text-xl font-bold text-foreground-primary">Vine</h1>
+        <h1 className="text-2xl font-bold text-foreground-primary">Vine</h1>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -67,6 +90,44 @@ const VineTrackerHeader = ({ onSearch, onNewVineClick }) => {
         >
           + New Vine
         </button>
+
+        <div className="relative">
+          <button
+            ref={settingsButtonRef}
+            type="button"
+            onClick={() => setSettingsDropdownOpen((o) => !o)}
+            className="flex items-center justify-center hover:opacity-80 transition-opacity"
+            aria-label="Settings"
+            aria-expanded={settingsDropdownOpen}
+            aria-haspopup="true"
+          >
+            <Image src="/assets/settings-icon.png" alt="Settings" width={24} height={24} />
+          </button>
+          {settingsDropdownOpen && (
+            <div
+              ref={settingsDropdownRef}
+              role="menu"
+              className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
+              style={{
+                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+                borderColor: isDarkMode ? '#334155' : '#E5E7EB',
+              }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleExportClick}
+                className="w-full text-left px-3 py-2 text-sm hover:opacity-90 transition-opacity"
+                style={{
+                  color: isDarkMode ? '#F9FAFB' : '#111827',
+                  backgroundColor: 'transparent',
+                }}
+              >
+                Export as CSV
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

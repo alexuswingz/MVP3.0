@@ -19,6 +19,10 @@ interface UploadSeasonalityModalProps {
   productId: string | null;
   isDarkMode?: boolean;
   onUploadSuccess?: (fileName: string) => void;
+  /** Called when seasonality data is successfully uploaded; use to refresh units/bar (e.g. refetch table). */
+  onSeasonalityUploaded?: (productId: string | null) => void;
+  /** When true, open directly on the preview/chart view (product already has seasonality data uploaded). */
+  initialShowPreview?: boolean;
 }
 
 function SuccessToast({
@@ -126,6 +130,8 @@ export function UploadSeasonalityModal({
   onClose,
   productId,
   onUploadSuccess,
+  onSeasonalityUploaded,
+  initialShowPreview = false,
 }: UploadSeasonalityModalProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -133,6 +139,14 @@ export function UploadSeasonalityModal({
   const [showToast, setShowToast] = useState(false);
   const [toastFileName, setToastFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync showPreview with isOpen and initialShowPreview
+  useEffect(() => {
+    if (isOpen) {
+      setShowPreview(initialShowPreview);
+      if (!initialShowPreview) setFile(null);
+    }
+  }, [isOpen, initialShowPreview]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -176,14 +190,33 @@ export function UploadSeasonalityModal({
       setToastFileName(file.name);
       setShowToast(true);
       onUploadSuccess?.(file.name);
+      onSeasonalityUploaded?.(productId);
       setFile(null);
       setShowPreview(false);
       onClose();
     }
   };
 
-  const handleDownloadTemplate = () => {
-    console.log('Download template');
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch('/api/seasonality/template');
+      if (!response.ok) {
+        console.error('Failed to download seasonality template');
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'Seasonality Data Template.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading seasonality template', error);
+    }
   };
 
   const handleClose = () => {
@@ -287,8 +320,10 @@ export function UploadSeasonalityModal({
                   marginBottom: 20,
                 }}
               >
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#E2E8F0' }}>Preview</span>
-                <span style={{ fontSize: 12, color: '#64748B' }}>{file?.name}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#E2E8F0' }}>
+                {initialShowPreview ? 'Seasonality Curve' : 'Preview'}
+              </span>
+                {file?.name && <span style={{ fontSize: 12, color: '#64748B' }}>{file.name}</span>}
               </div>
 
               {/* Chart / Graph Area */}
@@ -418,22 +453,53 @@ export function UploadSeasonalityModal({
               <ArrowLeft size={16} />
               Back to Upload
             </button>
-            <button
-              onClick={handleConfirm}
-              style={{
-                padding: '10px 24px',
-                borderRadius: 8,
-                border: 'none',
-                backgroundColor: '#3B82F6',
-                color: '#FFFFFF',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'background-color 0.2s',
-              }}
-            >
-              Confirm
-            </button>
+            {initialShowPreview ? (
+              <button
+                onClick={handleClose}
+                style={{
+                  width: 78,
+                  height: 31,
+                  borderRadius: 4,
+                  border: 'none',
+                  backgroundColor: '#007AFF',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  transition: 'opacity 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                Close
+              </button>
+            ) : (
+              <button
+                onClick={handleConfirm}
+                style={{
+                  width: 78,
+                  height: 31,
+                  borderRadius: 4,
+                  border: 'none',
+                  backgroundColor: '#007AFF',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  transition: 'opacity 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                Confirm
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -504,72 +570,136 @@ export function UploadSeasonalityModal({
 
         {/* Content / Drop Zone */}
         <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            padding: '64px 12px',
             margin: '32px 24px',
-            borderRadius: 12,
-            cursor: 'pointer',
-            backgroundColor: isDragging ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-            transition: 'background-color 0.2s',
             minHeight: 206,
             width: 552,
             maxWidth: 'calc(100% - 48px)',
             boxSizing: 'border-box',
-            backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%234E6079' stroke-width='2' stroke-dasharray='10%2c 10' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              style={{ display: 'none' }}
-            />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+          {file ? (
+            /* File selected — show only the file name with a remove button */
             <div
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 8,
-                backgroundColor: '#E2E8F0',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: 12,
+                padding: '12px 16px',
+                backgroundColor: '#1E293B',
+                borderRadius: 8,
+                border: '1px solid #334155',
+                width: '100%',
               }}
             >
-              <Upload size={24} color="#1A2235" />
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 14, color: '#E2E8F0', margin: 0 }}>
-                Drag and drop photo or{' '}
-                <span style={{ color: '#3B82F6', cursor: 'pointer' }}>Click to upload</span>
-              </p>
-              <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0 0' }}>
-                Max size: 10MB (CSV)
-              </p>
-            </div>
-            {file && (
               <div
                 style={{
-                  marginTop: 8,
-                  padding: '8px 12px',
-                  backgroundColor: '#263041',
+                  width: 36,
+                  height: 36,
                   borderRadius: 6,
-                  fontSize: 13,
+                  backgroundColor: '#263041',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Upload size={16} color="#94A3B8" />
+              </div>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 14,
                   color: '#E2E8F0',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {file.name}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748B',
+                  flexShrink: 0,
+                }}
+                aria-label="Remove file"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            /* No file — show the drag-and-drop zone */
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 12,
+                padding: '64px 12px',
+                borderRadius: 12,
+                cursor: 'pointer',
+                backgroundColor: isDragging ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                transition: 'background-color 0.2s',
+                width: '100%',
+                height: '100%',
+                minHeight: 206,
+                boxSizing: 'border-box',
+                backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%234E6079' stroke-width='2' stroke-dasharray='10%2c 10' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e")`,
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 8,
+                  backgroundColor: '#E2E8F0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Upload size={24} color="#1A2235" />
               </div>
-            )}
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: 14, color: '#E2E8F0', margin: 0 }}>
+                  Drag and drop photo or{' '}
+                  <span style={{ color: '#3B82F6', cursor: 'pointer' }}>Click to upload</span>
+                </p>
+                <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0 0' }}>
+                  Max size: 10MB (CSV)
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -622,15 +752,22 @@ export function UploadSeasonalityModal({
             onClick={handleContinue}
             disabled={!file}
             style={{
-              padding: '10px 24px',
-              borderRadius: 8,
+              width: 148,
+              height: 31,
+              borderRadius: 4,
               border: 'none',
-              backgroundColor: file ? '#3B82F6' : '#334155',
-              color: file ? '#FFFFFF' : '#64748B',
+              backgroundColor: '#007AFF',
+              color: '#FFFFFF',
               fontSize: 14,
               fontWeight: 500,
               cursor: file ? 'pointer' : 'not-allowed',
-              transition: 'background-color 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              opacity: file ? 1 : 0.5,
+              transition: 'opacity 0.2s',
+              flexShrink: 0,
             }}
           >
             Continue to Preview

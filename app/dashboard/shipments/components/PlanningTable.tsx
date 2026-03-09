@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreVertical, Trash2 } from 'lucide-react';
+import { MoreVertical, Search, Trash2 } from 'lucide-react';
 
 export type StepStatus = 'pending' | 'in progress' | 'incomplete' | 'completed';
 
@@ -37,6 +37,22 @@ const TEXT_ACTIVE = '#3B82F6';
 const TEXT_WHITE = '#FFFFFF';
 const ROW_HOVER_BG = TABLE_BG;
 const STATUS_BUTTON_BG = '#374151'; // match 1000bananas2.0 PlanningTable
+
+/** Filter dropdown theme — layout for filter dropdown on status (Design: Dark bg, 204px, 8px radius, 1px border #334155, soft shadow) */
+const FILTER_DROPDOWN_THEME = {
+  bg: '#0F172A',
+  border: '#334155',
+  shadow: '0 2px 4px 2px rgba(0, 0, 0, 0.15)',
+  headerText: '#E5E7EB',
+  subtleText: '#9CA3AF',
+  sectionBorder: '#334155',
+  inputBg: '#111827',
+  inputBorder: '#4B5563',
+  inputText: '#E5E7EB',
+  hoverRow: '#1F2937',
+  valueText: '#E5E7EB',
+  chipBgActive: '#3B82F6',
+};
 
 function StatusCircle({
   status,
@@ -129,6 +145,28 @@ function SortIcon() {
   );
 }
 
+/** Filter icon for header columns — same as Add Products (uses asset from public/assets) */
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <img
+      src="/assets/Vector (1).png"
+      alt="Filter"
+      width={12}
+      height={12}
+      className="shrink-0 ml-1"
+      style={{
+        objectFit: 'contain',
+        ...(active
+          ? {
+              filter: 'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)',
+            }
+          : {}),
+      }}
+      aria-hidden
+    />
+  );
+}
+
 const COLUMN_CONFIG: { key: keyof PlanningTableRow; width: string; label: string; subLabel?: string; sortable?: boolean }[] = [
   { key: 'status', width: '14%', label: 'STATUS' },
   { key: 'shipment', width: '14%', label: 'SHIPMENT', sortable: true },
@@ -141,8 +179,118 @@ const COLUMN_CONFIG: { key: keyof PlanningTableRow; width: string; label: string
 
 const MENU_DROPDOWN_HEIGHT = 44;
 
+/** Get unique values for a column from rows (for filter dropdown) */
+function getColumnValues(rows: PlanningTableRow[], key: keyof PlanningTableRow): string[] {
+  const set = new Set<string>();
+  for (const row of rows) {
+    const v = row[key];
+    if (v != null && typeof v !== 'object') set.add(String(v));
+  }
+  return Array.from(set).sort();
+}
+
+const STEP_STATUS_ORDER: Record<StepStatus, number> = {
+  pending: 0,
+  'in progress': 1,
+  incomplete: 2,
+  completed: 3,
+};
+
+function compareRowByColumn(a: PlanningTableRow, b: PlanningTableRow, key: keyof PlanningTableRow, direction: 'asc' | 'desc'): number {
+  const mult = direction === 'asc' ? 1 : -1;
+  const aVal = a[key];
+  const bVal = b[key];
+  if (key === 'addProducts' || key === 'bookShipment') {
+    const aOrder = STEP_STATUS_ORDER[(aVal as StepStatus) ?? 'pending'];
+    const bOrder = STEP_STATUS_ORDER[(bVal as StepStatus) ?? 'pending'];
+    return mult * (aOrder - bOrder);
+  }
+  const aStr = aVal != null ? String(aVal) : '';
+  const bStr = bVal != null ? String(bVal) : '';
+  return mult * aStr.localeCompare(bStr, undefined, { numeric: true });
+}
+
+/** Condition options for "Filter by condition" (matches Add Products filter) */
+const FILTER_CONDITIONS = [
+  { value: '', label: 'None' },
+  { value: 'greaterThan', label: 'Greater than' },
+  { value: 'greaterOrEqual', label: 'Greater than or equal to' },
+  { value: 'lessThan', label: 'Less than' },
+  { value: 'lessOrEqual', label: 'Less than or equal to' },
+  { value: 'equals', label: 'Is equal to' },
+  { value: 'notEquals', label: 'Is not equal to' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'notContains', label: 'Does not contain' },
+];
+
+/** Applied filter per column: null = no filter, Set = only show rows whose column value is in the set */
+type AppliedFiltersState = Record<string, Set<string> | null>;
+
+/** Condition filter per column: type (e.g. contains, equals) and value */
+type AppliedConditionState = Record<string, { type: string; value: string } | null>;
+
+/** Returns true if cell value (as string) matches the condition */
+function matchesCondition(cellStr: string, conditionType: string, conditionValue: string): boolean {
+  if (!conditionType) return true;
+  const s = cellStr;
+  const v = conditionValue;
+  const sLower = s.toLowerCase();
+  const vLower = v.toLowerCase();
+  switch (conditionType) {
+    case 'equals':
+      return sLower === vLower;
+    case 'notEquals':
+      return sLower !== vLower;
+    case 'contains':
+      return sLower.includes(vLower);
+    case 'notContains':
+      return !sLower.includes(vLower);
+    case 'greaterThan': {
+      const nS = Number(s);
+      const nV = Number(v);
+      if (Number.isFinite(nS) && Number.isFinite(nV)) return nS > nV;
+      return s.localeCompare(v, undefined, { numeric: true }) > 0;
+    }
+    case 'greaterOrEqual': {
+      const nS = Number(s);
+      const nV = Number(v);
+      if (Number.isFinite(nS) && Number.isFinite(nV)) return nS >= nV;
+      return s.localeCompare(v, undefined, { numeric: true }) >= 0;
+    }
+    case 'lessThan': {
+      const nS = Number(s);
+      const nV = Number(v);
+      if (Number.isFinite(nS) && Number.isFinite(nV)) return nS < nV;
+      return s.localeCompare(v, undefined, { numeric: true }) < 0;
+    }
+    case 'lessOrEqual': {
+      const nS = Number(s);
+      const nV = Number(v);
+      if (Number.isFinite(nS) && Number.isFinite(nV)) return nS <= nV;
+      return s.localeCompare(v, undefined, { numeric: true }) <= 0;
+    }
+    default:
+      return true;
+  }
+}
+
 export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDeleteRow, emptyMessage }: PlanningTableProps) {
+  const [sortColumn, setSortColumn] = useState<keyof PlanningTableRow | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [appliedColumnFilters, setAppliedColumnFilters] = useState<AppliedFiltersState>({});
+  const [appliedConditionByColumn, setAppliedConditionByColumn] = useState<AppliedConditionState>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [filterAnchorRect, setFilterAnchorRect] = useState<DOMRect | null>(null);
+  const [filterValuesExpanded, setFilterValuesExpanded] = useState(true);
+  const [filterConditionExpanded, setFilterConditionExpanded] = useState(false);
+  const [filterSearchTerm, setFilterSearchTerm] = useState('');
+  const [selectedFilterValues, setSelectedFilterValues] = useState<Set<string>>(new Set());
+  const [filterConditionType, setFilterConditionType] = useState('');
+  const [filterConditionValue, setFilterConditionValue] = useState('');
+  const [conditionMenuOpen, setConditionMenuOpen] = useState(false);
+  const [conditionMenuPosition, setConditionMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const conditionTriggerRef = useRef<HTMLButtonElement>(null);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
   const [openMenuRowId, setOpenMenuRowId] = useState<string | null>(null);
   /** Anchor rect for the open actions menu (from trigger button). Used to position portal dropdown. */
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
@@ -164,15 +312,100 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openMenuRowId]);
 
-  const handleFilterClick = useCallback((key: string, e: React.MouseEvent) => {
+  useEffect(() => {
+    if (!openFilterColumn) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (filterDropdownRef.current?.contains(target)) return;
+      const trigger = document.querySelector(`[data-planning-filter-trigger="${openFilterColumn}"]`);
+      if (trigger?.contains(target)) return;
+      setOpenFilterColumn(null);
+      setFilterAnchorRect(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openFilterColumn]);
+
+  useEffect(() => {
+    if (conditionMenuOpen && conditionTriggerRef.current) {
+      const rect = conditionTriggerRef.current.getBoundingClientRect();
+      setConditionMenuPosition({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    } else if (!conditionMenuOpen) {
+      setConditionMenuPosition(null);
+    }
+  }, [conditionMenuOpen]);
+
+  const handleFilterIconClick = useCallback((key: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setOpenFilterColumn((prev) => (prev === key ? null : key));
-  }, []);
+    if (openFilterColumn === key) {
+      setOpenFilterColumn(null);
+      setFilterAnchorRect(null);
+      return;
+    }
+    const th = (e.currentTarget as HTMLElement).closest('th');
+    setFilterAnchorRect(th ? th.getBoundingClientRect() : (e.currentTarget as HTMLElement).getBoundingClientRect());
+    setOpenFilterColumn(key);
+    const values = getColumnValues(rows, key as keyof PlanningTableRow);
+    const applied = appliedColumnFilters[key];
+    setSelectedFilterValues(applied != null && applied.size > 0 ? new Set(applied) : new Set(values));
+    const cond = appliedConditionByColumn[key];
+    setFilterConditionType(cond?.type ?? '');
+    setFilterConditionValue(cond?.value ?? '');
+    setFilterSearchTerm('');
+    setFilterValuesExpanded(true);
+    setFilterConditionExpanded(false);
+  }, [openFilterColumn, rows, appliedColumnFilters, appliedConditionByColumn]);
 
   const isFilterActive = useCallback(
-    (key: string) => openFilterColumn === key,
-    [openFilterColumn]
+    (key: string) => {
+      if (openFilterColumn === key) return true;
+      const applied = appliedColumnFilters[key];
+      const cond = appliedConditionByColumn[key];
+      const hasValuesFilter = applied != null && applied.size > 0;
+      const hasConditionFilter = cond != null && cond.type !== '';
+      return hasValuesFilter || hasConditionFilter;
+    },
+    [openFilterColumn, appliedColumnFilters, appliedConditionByColumn]
   );
+
+  const filteredRows = useMemo(() => {
+    let result = rows;
+    for (const col of COLUMN_CONFIG) {
+      const key = String(col.key);
+      const allowed = appliedColumnFilters[key];
+      const cond = appliedConditionByColumn[key];
+      // Filter by selected values (if any)
+      if (allowed != null && allowed.size > 0) {
+        result = result.filter((row) => {
+          const val = row[col.key];
+          const str = val != null && typeof val !== 'object' ? String(val) : '';
+          return allowed.has(str);
+        });
+      }
+      // Filter by condition (if any)
+      if (cond != null && cond.type !== '') {
+        result = result.filter((row) => {
+          const val = row[col.key];
+          const str = val != null && typeof val !== 'object' ? String(val) : '';
+          return matchesCondition(str, cond.type, cond.value);
+        });
+      }
+    }
+    return result;
+  }, [rows, appliedColumnFilters, appliedConditionByColumn]);
+
+  const sortedRows = useMemo(() => {
+    if (!sortColumn) return filteredRows;
+    return [...filteredRows].sort((a, b) => compareRowByColumn(a, b, sortColumn, sortDirection));
+  }, [filteredRows, sortColumn, sortDirection]);
+
+  const handleSortClick = useCallback((direction: 'asc' | 'desc') => {
+    if (!openFilterColumn) return;
+    setSortColumn(openFilterColumn as keyof PlanningTableRow);
+    setSortDirection(direction);
+    setOpenFilterColumn(null);
+    setFilterAnchorRect(null);
+  }, [openFilterColumn]);
 
   return (
     <div
@@ -184,6 +417,21 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
         overflow: 'auto',
       }}
     >
+      {/* Reset button on Status filter: design 57×23, radius 4px, #252F42, border #334155 — injected here so it applies to portaled dropdown */}
+      <style>{`.planning-table-status-filter-reset-btn {
+        min-width: 57px !important;
+        min-height: 23px !important;
+        padding: 4px 12px !important;
+        font-size: 12px !important;
+        border-radius: 4px !important;
+        border: 1px solid #334155 !important;
+        background-color: #252F42 !important;
+        color: #E5E7EB !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+        appearance: none !important;
+        font-family: inherit !important;
+      }`}</style>
       <table
         className="w-full border-collapse"
         style={{ tableLayout: 'fixed', display: 'table', borderSpacing: 0 }}
@@ -200,7 +448,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
             {COLUMN_CONFIG.map((col) => (
               <th
                 key={String(col.key)}
-                className="text-center text-xs font-bold uppercase tracking-wider cursor-pointer"
+                className="group text-center text-xs font-bold uppercase tracking-wider"
                 style={{
                   padding: col.subLabel ? '1rem 0.75rem' : '1rem 1rem',
                   width: col.width,
@@ -210,28 +458,41 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
                   boxSizing: 'border-box',
                   color: isFilterActive(String(col.key)) ? TEXT_ACTIVE : TEXT_MUTED,
                 }}
-                onClick={(e) => handleFilterClick(String(col.key), e)}
               >
                 {col.subLabel ? (
                   <div
-                    className="group flex flex-col items-center justify-center gap-px leading-tight w-full"
-                    style={{ position: 'relative', paddingRight: 20 }}
+                    className="flex flex-col items-center justify-center gap-px leading-tight w-full"
+                    style={{ position: 'relative', paddingRight: 28 }}
                   >
                     <span style={{ fontSize: 9, fontWeight: 600 }}>{col.label}</span>
                     <span style={{ fontSize: 9, fontWeight: 600 }}>{col.subLabel}</span>
-                    {col.sortable && (
-                      <span className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <SortIcon />
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      data-planning-filter-trigger={String(col.key)}
+                      onClick={(e) => handleFilterIconClick(String(col.key), e)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer border-0 bg-transparent p-0"
+                      aria-label={`Filter by ${col.label} ${col.subLabel ?? ''}`}
+                    >
+                      {col.sortable && <SortIcon />}
+                      <FilterIcon active={isFilterActive(String(col.key))} />
+                    </button>
                   </div>
                 ) : (
                   <div
-                    className="group flex items-center justify-center gap-1"
+                    className="flex items-center justify-center gap-1"
                     style={{ color: 'inherit' }}
                   >
                     <span>{col.label}</span>
                     {col.sortable && <SortIcon />}
+                    <button
+                      type="button"
+                      data-planning-filter-trigger={String(col.key)}
+                      onClick={(e) => handleFilterIconClick(String(col.key), e)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center cursor-pointer border-0 bg-transparent p-0"
+                      aria-label={`Filter by ${col.label}`}
+                    >
+                      <FilterIcon active={isFilterActive(String(col.key))} />
+                    </button>
                   </div>
                 )}
               </th>
@@ -252,7 +513,7 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
           </tr>
         </thead>
         <tbody style={{ borderColor: BORDER_COLOR, display: 'table-row-group' }}>
-          {rows.map((row, index) => (
+          {sortedRows.map((row, index) => (
             <React.Fragment key={row.id || `row-${index}`}>
               <tr style={{ height: 1, backgroundColor: ROW_BG }}>
                 <td
@@ -496,6 +757,458 @@ export function PlanningTable({ rows, onRowClick, onStepClick, onMenuClick, onDe
           <p className="text-sm">{emptyMessage ?? 'No shipments to show'}</p>
         </div>
       )}
+      {rows.length > 0 && sortedRows.length === 0 && (
+        <div
+          className="flex items-center justify-center py-16 text-center"
+          style={{ color: TEXT_MUTED, backgroundColor: ROW_BG }}
+        >
+          <p className="text-sm">No shipments match the current filters.</p>
+        </div>
+      )}
+
+      {/* Filter dropdown: same look as Add Products (ProductsFilterDropdown) */}
+      {openFilterColumn &&
+        filterAnchorRect &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          (() => {
+            const theme = FILTER_DROPDOWN_THEME;
+            const col = COLUMN_CONFIG.find((c) => String(c.key) === openFilterColumn);
+            const label = col ? (col.subLabel ? `${col.label} ${col.subLabel}` : col.label) : openFilterColumn;
+            const values = getColumnValues(rows, openFilterColumn as keyof PlanningTableRow);
+            const stringValues = values.map((v) => String(v));
+            const filteredValues = stringValues.filter((v) =>
+              v.toLowerCase().includes(filterSearchTerm.toLowerCase())
+            );
+            const hasSelection = selectedFilterValues.size > 0 && selectedFilterValues.size < stringValues.length;
+
+            // Apply button is enabled only when draft state differs from applied state
+            const appliedSet =
+              appliedColumnFilters[openFilterColumn] != null && appliedColumnFilters[openFilterColumn]!.size > 0
+                ? appliedColumnFilters[openFilterColumn]!
+                : new Set(stringValues);
+            const setsEqual = (a: Set<string>, b: Set<string>) =>
+              a.size === b.size && [...a].every((x) => b.has(x));
+            const hasValueChange = !setsEqual(selectedFilterValues, appliedSet);
+            const appliedCond = appliedConditionByColumn[openFilterColumn];
+            const hasConditionChange =
+              filterConditionType !== (appliedCond?.type ?? '') ||
+              filterConditionValue !== (appliedCond?.value ?? '');
+            const hasChanges = hasValueChange || hasConditionChange;
+
+            const handleToggleValue = (value: string) => {
+              setSelectedFilterValues((prev) => {
+                const next = new Set(prev);
+                if (next.has(value)) next.delete(value);
+                else next.add(value);
+                return next;
+              });
+            };
+            const handleReset = () => {
+              setSelectedFilterValues(new Set(stringValues));
+              setFilterSearchTerm('');
+              setFilterConditionType('');
+              setFilterConditionValue('');
+              setConditionMenuOpen(false);
+              setAppliedColumnFilters((prev) => ({ ...prev, [openFilterColumn]: null }));
+              setAppliedConditionByColumn((prev) => ({ ...prev, [openFilterColumn]: null }));
+              setOpenFilterColumn(null);
+              setFilterAnchorRect(null);
+            };
+            const handleApply = () => {
+              setAppliedColumnFilters((prev) => {
+                const next = { ...prev };
+                if (selectedFilterValues.size === 0 || selectedFilterValues.size >= stringValues.length) {
+                  next[openFilterColumn] = null;
+                } else {
+                  next[openFilterColumn] = new Set(selectedFilterValues);
+                }
+                return next;
+              });
+              setAppliedConditionByColumn((prev) => {
+                const next = { ...prev };
+                if (filterConditionType) {
+                  next[openFilterColumn] = { type: filterConditionType, value: filterConditionValue };
+                } else {
+                  next[openFilterColumn] = null;
+                }
+                return next;
+              });
+              setOpenFilterColumn(null);
+              setFilterAnchorRect(null);
+            };
+
+            let left = filterAnchorRect.left;
+            const dropdownWidth = 204;
+            if (left + dropdownWidth > window.innerWidth) left = window.innerWidth - dropdownWidth - 16;
+            if (left < 16) left = 16;
+
+            const resultCount = filteredValues.length;
+            const handleSelectAll = () => setSelectedFilterValues(new Set(stringValues));
+            const handleClearAll = () => setSelectedFilterValues(new Set());
+
+            const isNumericColumn =
+              stringValues.length > 0 &&
+              stringValues.every((v) => /^-?\d+(\.\d+)?$/.test(String(v).trim()));
+            const sortAscendingLabel = isNumericColumn ? 'Low to High' : 'Sort ascending';
+            const sortDescendingLabel = isNumericColumn ? 'High to Low' : 'Sort descending';
+
+            return (
+              <div
+                ref={filterDropdownRef}
+                data-filter-dropdown={openFilterColumn}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  position: 'fixed',
+                  top: filterAnchorRect.bottom + 8,
+                  left: `${left}px`,
+                  width: dropdownWidth,
+                  maxHeight: '80vh',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  backgroundColor: theme.bg,
+                  borderRadius: 8,
+                  border: `1px solid ${theme.border}`,
+                  boxShadow: theme.shadow,
+                  zIndex: 10000,
+                }}
+              >
+                {/* Sort options - text columns: Sort ascending/descending; numeric columns: Low to High / High to Low */}
+                <div style={{ padding: '8px 12px', borderBottom: `1px solid ${theme.border}` }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSortClick('asc')}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSortClick('asc'); } }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      margin: '0 -12px',
+                      padding: '6px 12px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      color: theme.headerText,
+                      fontSize: 12,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.hoverRow; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <svg style={{ width: 16, height: 16, color: theme.subtleText }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h5m4 0l4-4m0 0l4 4m-4-4v12" />
+                      </svg>
+                      {sortAscendingLabel}
+                    </div>
+                  </div>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSortClick('desc')}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSortClick('desc'); } }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      margin: '0 -12px',
+                      padding: '6px 12px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      color: theme.headerText,
+                      fontSize: 12,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.hoverRow; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <svg style={{ width: 16, height: 16, color: theme.subtleText }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9M3 12h9m4 0l4 4m0 0l4-4m-4 4V4" />
+                      </svg>
+                      {sortDescendingLabel}
+                    </div>
+                  </div>
+                </div>
+
+                {openFilterColumn !== 'status' && (
+                  <>
+                    {/* Filter by condition - collapsible (hidden for Status column) */}
+                    <div style={{ borderBottom: `1px solid ${theme.border}` }}>
+                      <div
+                        onClick={() => { setFilterValuesExpanded(false); setFilterConditionExpanded(!filterConditionExpanded); }}
+                        style={{
+                          padding: '8px 12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: filterConditionType ? '#3B82F6' : theme.subtleText, fontWeight: filterConditionType ? 500 : 400 }}>
+                          Filter by condition: {filterConditionType && <span style={{ color: '#10B981' }}>●</span>}
+                        </span>
+                        <svg width={10} height={10} viewBox="0 0 12 12" fill="none" style={{ transform: filterConditionExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                          <path d="M3 4.5L6 7.5L9 4.5" stroke={theme.subtleText} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      {filterConditionExpanded && (
+                        <div style={{ padding: '0 12px 8px 12px' }}>
+                          <div style={{ position: 'relative', marginBottom: 8 }}>
+                            <button
+                              ref={conditionTriggerRef}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConditionMenuOpen(!conditionMenuOpen);
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                border: `1px solid ${theme.inputBorder}`,
+                                backgroundColor: theme.inputBg,
+                                color: theme.inputText,
+                                fontSize: 12,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {FILTER_CONDITIONS.find((c) => c.value === filterConditionType)?.label ?? 'None'}
+                              </span>
+                              <svg width={12} height={12} viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, transform: conditionMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                                <path d="M3 4.5L6 7.5L9 4.5" stroke={theme.subtleText} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            {conditionMenuOpen &&
+                              conditionMenuPosition &&
+                              typeof document !== 'undefined' &&
+                              createPortal(
+                                <div
+                                  style={{
+                                    position: 'fixed',
+                                    top: conditionMenuPosition.top,
+                                    left: conditionMenuPosition.left,
+                                    width: conditionMenuPosition.width,
+                                    maxHeight: 280,
+                                    overflowY: 'auto',
+                                    backgroundColor: theme.bg,
+                                    borderRadius: 10,
+                                    border: `1px solid ${theme.border}`,
+                                    boxShadow: theme.shadow,
+                                    padding: '4px 0',
+                                    zIndex: 10001,
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {FILTER_CONDITIONS.map((c) => (
+                                    <button
+                                      key={c.value}
+                                      type="button"
+                                      onClick={() => {
+                                        setFilterConditionType(c.value);
+                                        setConditionMenuOpen(false);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        textAlign: 'left',
+                                        padding: '6px 10px',
+                                        backgroundColor: c.value === filterConditionType ? 'rgba(59,130,246,0.15)' : 'transparent',
+                                        color: theme.valueText,
+                                        fontSize: 12,
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      {c.label}
+                                    </button>
+                                  ))}
+                                </div>,
+                                document.body
+                              )}
+                          </div>
+                          {filterConditionType &&
+                            filterConditionType !== 'isEmpty' &&
+                            filterConditionType !== 'isNotEmpty' && (
+                              <div style={{ marginTop: 8 }}>
+                                <input
+                                  type="text"
+                                  value={filterConditionValue}
+                                  onChange={(e) => setFilterConditionValue(e.target.value)}
+                                  placeholder="Enter value..."
+                                  style={{
+                                    width: '100%',
+                                    padding: '6px 8px',
+                                    border: `1px solid ${theme.inputBorder}`,
+                                    borderRadius: 4,
+                                    fontSize: 12,
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    backgroundColor: theme.inputBg,
+                                    color: theme.inputText,
+                                  }}
+                                />
+                              </div>
+                            )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Filter by values - with Select all, Clear all, results count, search, checkboxes */}
+                <div>
+                  <div
+                    onClick={() => { setFilterConditionExpanded(false); setFilterValuesExpanded(!filterValuesExpanded); }}
+                    style={{
+                      padding: '8px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: hasSelection ? '#3B82F6' : theme.subtleText, fontWeight: hasSelection ? 500 : 400 }}>
+                      Filter by values: {hasSelection && <span style={{ color: '#10B981' }}>●</span>}
+                    </span>
+                    <svg width={10} height={10} viewBox="0 0 12 12" fill="none" style={{ transform: filterValuesExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                      <path d="M3 4.5L6 7.5L9 4.5" stroke={theme.subtleText} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  {filterValuesExpanded && (
+                    <div style={{ padding: '0 12px 8px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <button type="button" onClick={handleSelectAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3B82F6', fontSize: 10, padding: 0 }}>
+                          Select all
+                        </button>
+                        <span style={{ color: theme.subtleText, fontSize: 10 }}>|</span>
+                        <button type="button" onClick={handleClearAll} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3B82F6', fontSize: 10, padding: 0 }}>
+                          Clear all
+                        </button>
+                        <span style={{ marginLeft: 'auto', color: theme.subtleText, fontSize: 10 }}>
+                          {resultCount.toLocaleString()} results
+                        </span>
+                      </div>
+                      <div style={{ position: 'relative', marginBottom: 8 }}>
+                        <Search
+                          style={{
+                            position: 'absolute',
+                            left: 8,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: 14,
+                            height: 14,
+                            color: theme.subtleText,
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        <input
+                          type="text"
+                          value={filterSearchTerm}
+                          onChange={(e) => setFilterSearchTerm(e.target.value)}
+                          placeholder="Search..."
+                          style={{
+                            width: '100%',
+                            height: 24,
+                            padding: '6px 8px 6px 28px',
+                            border: '1px solid #334155',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            outline: 'none',
+                            boxSizing: 'border-box',
+                            backgroundColor: theme.inputBg,
+                            color: theme.inputText,
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          width: '100%',
+                          maxWidth: 188,
+                          maxHeight: 132,
+                          overflowY: 'auto',
+                          overflowX: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          minWidth: 0,
+                          borderRadius: 4,
+                          padding: 4,
+                          backgroundColor: '#1E293B',
+                        }}
+                      >
+                        {filteredValues.length === 0 ? (
+                          <div style={{ padding: '4px 0', fontSize: 12, color: theme.subtleText }}>No values</div>
+                        ) : (
+                          filteredValues.map((value) => (
+                            <label key={value} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', minWidth: 0 }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedFilterValues.has(value)}
+                                onChange={() => handleToggleValue(value)}
+                                style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#3B82F6', flexShrink: 0 }}
+                              />
+                              <span style={{ fontSize: 12, color: theme.valueText, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={String(value)}>
+                                {value}
+                              </span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+
+                {/* Footer: Reset / Apply — Reset on Status filter uses class for 57×23, 4px radius, #252F42, #334155 */}
+                <div style={{ padding: '8px 12px', borderTop: `1px solid ${theme.sectionBorder}`, display: 'flex', gap: openFilterColumn === 'status' ? 10 : 8, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    className={openFilterColumn === 'status' ? 'planning-table-status-filter-reset-btn' : undefined}
+                    data-planning-filter-reset
+                    onClick={handleReset}
+                    style={
+                      openFilterColumn === 'status'
+                        ? undefined
+                        : {
+                            padding: '6px 12px',
+                            fontSize: 12,
+                            borderRadius: 6,
+                            border: `1px solid ${theme.inputBorder}`,
+                            backgroundColor: theme.inputBg,
+                            color: theme.inputText,
+                            cursor: 'pointer',
+                          }
+                    }
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={hasChanges ? handleApply : undefined}
+                    disabled={!hasChanges}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: 'none',
+                      backgroundColor: hasChanges ? theme.chipBgActive : '#1F2937',
+                      color: hasChanges ? '#FFFFFF' : '#6B7280',
+                      cursor: hasChanges ? 'pointer' : 'default',
+                      opacity: hasChanges ? 1 : 0.8,
+                    }}
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            );
+          })(),
+          document.body
+        )}
 
       {/* Actions dropdown in portal so it is not cut off by table overflow (e.g. last row) */}
       {openMenuRowId &&

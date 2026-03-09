@@ -6,7 +6,16 @@ import NgoosAPI from '@/services/ngoosApi';
 import { toast } from '@/lib/toast';
 import AddClaimed from './add-claimed';
 import VineDetailsModal from './vine-details-modal';
-import ProductsFilterDropdown from '@/production/new-shipment/components/ProductsFilterDropdown';
+import { StatusFilterDropdown, DEFAULT_FILTER } from '@/components/products/StatusFilterDropdown';
+import {
+  VineDropdownFilter,
+  DEFAULT_VINE_PRODUCTS_FILTER,
+} from './vine-dropdown-filter';
+import { LaunchDateSortDropdown } from './LaunchDateSortDropdown';
+import {
+  ClaimedEnrolledFilterDropdown,
+  DEFAULT_CLAIMED_ENROLLED_FILTER,
+} from './ClaimedEnrolledFilterDropdown';
 
 // Calendar Dropdown Component
 const CalendarDropdown = ({ value, onChange, onClose, inputRef }) => {
@@ -351,9 +360,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const [sortedRowOrder, setSortedRowOrder] = useState(null);
   const [currentFilter, setCurrentFilter] = useState({});
   const [productSearchValue, setProductSearchValue] = useState('');
+  const [productDropdownSearchValue, setProductDropdownSearchValue] = useState('');
+  const productDropdownSearchRef = useRef(null);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [openProductDropdownId, setOpenProductDropdownId] = useState(null);
-  const [productDropdownSearchValue, setProductDropdownSearchValue] = useState('');
   const [planningProducts, setPlanningProducts] = useState([]);
   const [loadingPlanningProducts, setLoadingPlanningProducts] = useState(false);
   const productInputRefs = useRef({});
@@ -375,6 +385,27 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const threeDotsMenuRefs = useRef({});
   const [openStatusDropdownId, setOpenStatusDropdownId] = useState(null);
   const statusDropdownRefs = useRef({});
+  const [vineStatusFilterOpen, setVineStatusFilterOpen] = useState(false);
+  const [vineStatusAnchor, setVineStatusAnchor] = useState(null);
+  const [vineStatusFilter, setVineStatusFilter] = useState(DEFAULT_FILTER);
+  const [appliedVineStatusFilter, setAppliedVineStatusFilter] = useState(DEFAULT_FILTER);
+  const vineStatusHeaderRef = useRef(null);
+
+  const [vineProductsFilterOpen, setVineProductsFilterOpen] = useState(false);
+  const [vineProductsAnchor, setVineProductsAnchor] = useState(null);
+  const [vineProductsFilter, setVineProductsFilter] = useState(DEFAULT_VINE_PRODUCTS_FILTER);
+  const [appliedVineProductsFilter, setAppliedVineProductsFilter] = useState(DEFAULT_VINE_PRODUCTS_FILTER);
+  const vineProductsHeaderRef = useRef(null);
+
+  const [launchDateSortOpen, setLaunchDateSortOpen] = useState(false);
+  const [launchDateAnchor, setLaunchDateAnchor] = useState(null);
+  const [launchDateSortOrder, setLaunchDateSortOrder] = useState(null);
+  const [launchDateSortWorking, setLaunchDateSortWorking] = useState(null);
+  const launchDateHeaderRef = useRef(null);
+
+  const claimedHeaderRef = useRef(null);
+  const enrolledHeaderRef = useRef(null);
+  const [claimEnrolledWorkingFilter, setClaimEnrolledWorkingFilter] = useState(DEFAULT_CLAIMED_ENROLLED_FILTER);
 
   // Handler function to open the vine details modal - used by both plus button and row click
   const handleOpenVineDetailsModal = (row, focusOnClaimEntry = false) => {
@@ -419,6 +450,92 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
     const hasSorting = sortConfig.field === key && sortConfig.order !== '';
     return hasFilter || hasSorting;
   };
+
+  const handleVineStatusHeaderClick = () => {
+    setVineStatusAnchor(vineStatusHeaderRef.current?.getBoundingClientRect() ?? null);
+    setVineStatusFilterOpen((prev) => !prev);
+  };
+
+  const handleVineProductsHeaderClick = () => {
+    setVineProductsAnchor(vineProductsHeaderRef.current?.getBoundingClientRect() ?? null);
+    setVineProductsFilterOpen((prev) => !prev);
+  };
+
+  const handleLaunchDateHeaderClick = () => {
+    setLaunchDateAnchor(launchDateHeaderRef.current?.getBoundingClientRect() ?? null);
+    setLaunchDateSortOpen((prev) => {
+      if (!prev) setLaunchDateSortWorking(launchDateSortOrder);
+      return !prev;
+    });
+  };
+
+  const hasActiveLaunchDateSort = launchDateSortOrder === 'asc' || launchDateSortOrder === 'desc';
+
+  const launchDateSortHasChanges = launchDateSortWorking !== launchDateSortOrder;
+
+  const hasActiveVineStatusFilter = useMemo(
+    () => JSON.stringify(appliedVineStatusFilter) !== JSON.stringify(DEFAULT_FILTER),
+    [appliedVineStatusFilter]
+  );
+
+  const vineStatusFilterHasChanges = useMemo(
+    () => JSON.stringify(vineStatusFilter) !== JSON.stringify(appliedVineStatusFilter),
+    [vineStatusFilter, appliedVineStatusFilter]
+  );
+
+  const vineStatusResultCount = 2;
+
+  const vineProductNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.productName)
+            .filter((name) => typeof name === 'string' && name.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineBrands = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.brand)
+            .filter((brand) => typeof brand === 'string' && brand.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineSizes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => r.size)
+            .filter((size) => typeof size === 'string' && size.trim().length > 0)
+        )
+      ),
+    [rows]
+  );
+
+  const vineProductsFilterHasChanges = useMemo(
+    () => JSON.stringify(vineProductsFilter) !== JSON.stringify(appliedVineProductsFilter),
+    [vineProductsFilter, appliedVineProductsFilter]
+  );
+
+  const hasActiveVineProductsFilter = useMemo(() => {
+    const { sortOrder, condition, selectedValues, selectedBrands, selectedSizes } =
+      appliedVineProductsFilter;
+    const hasSort = sortOrder != null;
+    const hasCondition = condition !== 'None';
+    const hasValues = Array.isArray(selectedValues) && selectedValues.length > 0;
+    const hasBrands = Array.isArray(selectedBrands) && selectedBrands.length > 0;
+    const hasSizes = Array.isArray(selectedSizes) && selectedSizes.length > 0;
+    return hasSort || hasCondition || hasValues || hasBrands || hasSizes;
+  }, [appliedVineProductsFilter]);
 
   // Fetch planning products when dropdown opens
   useEffect(() => {
@@ -526,13 +643,11 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
           
           if (!isClickInsideTrigger && !isClickInsideDropdown) {
             setOpenProductDropdownId(null);
-            setProductDropdownSearchValue('');
           }
         } else if (triggerElement) {
           const isClickInsideTrigger = triggerElement.contains(event.target);
           if (!isClickInsideTrigger) {
             setOpenProductDropdownId(null);
-            setProductDropdownSearchValue('');
           }
         }
       }
@@ -581,7 +696,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       }
     };
 
-    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null || openStatusDropdownId !== null) {
+    if (openFilterColumn !== null || showProductDropdown || openProductDropdownId !== null || openDatePickerId !== null || openThreeDotsMenuId !== null || openStatusDropdownId !== null || launchDateSortOpen) {
       const timeoutId = setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
       }, 0);
@@ -591,15 +706,39 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         document.removeEventListener('click', handleClickOutside);
       };
     }
-  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId, openStatusDropdownId]);
+  }, [openFilterColumn, showProductDropdown, openProductDropdownId, openDatePickerId, openThreeDotsMenuId, openStatusDropdownId, launchDateSortOpen]);
 
-  // Handle filter icon click
+  // Focus search input when product dropdown opens; reset search when it closes
+  useEffect(() => {
+    if (openProductDropdownId !== null) {
+      setProductDropdownSearchValue('');
+      const timer = setTimeout(() => {
+        productDropdownSearchRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      setProductDropdownSearchValue('');
+    }
+  }, [openProductDropdownId]);
+
+  // Sync selectedVineRow with table data so modal always matches the table
+  useEffect(() => {
+    if (selectedVineRow && rows?.length > 0) {
+      const match = rows.find((r) => (r.productId ?? r.id) === (selectedVineRow.productId ?? selectedVineRow.id));
+      if (match) {
+        setSelectedVineRow(match);
+        setClaimHistory(match.claimHistory || []);
+      }
+    }
+  }, [rows]);
+
+  // Handle filter icon click (for Claimed/Enrolled columns)
   const handleFilterClick = (columnKey, e) => {
     e.stopPropagation();
     const isOpening = openFilterColumn !== columnKey;
     setOpenFilterColumn(isOpening ? columnKey : null);
-    
-    // Initialize currentFilter when opening
+
+    // Initialize filter when opening
     if (isOpening) {
       const existingFilter = filters[columnKey] || {};
       setCurrentFilter({
@@ -607,6 +746,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         conditionType: existingFilter.condition || '',
         conditionValue: existingFilter.conditionValue || '',
       });
+      if (columnKey === 'claimed' || columnKey === 'enrolled') {
+        setClaimEnrolledWorkingFilter({
+          sortOrder: sortConfig.field === columnKey ? sortConfig.order : null,
+          conditionType: existingFilter.condition || '',
+          conditionValue: existingFilter.conditionValue || '',
+        });
+      }
     }
   };
 
@@ -765,7 +911,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       setSortedRowOrder(sortedIds);
     }
 
-    // Handle value filtering
+    // Handle value filtering (not used by claimed/enrolled)
     if (filterData.selectedValues && filterData.selectedValues.size > 0) {
       const selectedValuesArray = Array.from(filterData.selectedValues);
       newFilters[columnKey] = {
@@ -776,12 +922,15 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       delete newFilters[columnKey];
     }
 
-    // Handle condition filtering
-    if (filterData.conditionType && filterData.conditionValue) {
+    // Handle condition filtering (claimed/enrolled)
+    const condType = (filterData.conditionType || '').trim();
+    const condValRaw = filterData.conditionValue;
+    const condVal = condValRaw != null ? String(condValRaw).trim() : '';
+    if (condType && condVal !== '') {
       newFilters[columnKey] = {
         ...newFilters[columnKey],
-        condition: filterData.conditionType,
-        conditionValue: filterData.conditionValue,
+        condition: condType,
+        conditionValue: condVal,
       };
     }
 
@@ -872,8 +1021,99 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       });
     });
 
-    // Apply sorting
-    if (sortedRowOrder) {
+    // Apply vine status filter (Awaiting Reviews / Concluded)
+    const { activeChecked, inactiveChecked, sortOrder: vineSortOrder } = appliedVineStatusFilter;
+    const vineStatusActive = activeChecked || inactiveChecked;
+    if (!activeChecked && !inactiveChecked) {
+      filteredRows = [];
+    } else if (vineStatusActive) {
+      filteredRows = filteredRows.filter((row) => {
+        const s = (row.status || 'Awaiting Reviews').trim();
+        const isAwaiting = s === 'Awaiting Reviews';
+        const isConcluded = s === 'Concluded';
+        if (isAwaiting && activeChecked) return true;
+        if (isConcluded && inactiveChecked) return true;
+        return false;
+      });
+    }
+
+    // Apply vine products filter (product name / brand / size)
+    const {
+      selectedValues: vineSelectedValues,
+      selectedBrands: vineSelectedBrands,
+      selectedSizes: vineSelectedSizes,
+      sortOrder: vineProductsSortOrder,
+    } = appliedVineProductsFilter;
+
+    if (
+      (vineSelectedValues && vineSelectedValues.length > 0) ||
+      (vineSelectedBrands && vineSelectedBrands.length > 0) ||
+      (vineSelectedSizes && vineSelectedSizes.length > 0)
+    ) {
+      const valuesSet = vineSelectedValues ? new Set(vineSelectedValues) : null;
+      const brandsSet = vineSelectedBrands ? new Set(vineSelectedBrands) : null;
+      const sizesSet = vineSelectedSizes ? new Set(vineSelectedSizes) : null;
+
+      filteredRows = filteredRows.filter((row) => {
+        const name = row.productName || '';
+        const brand = row.brand || '';
+        const size = row.size || '';
+
+        const matchesValue = valuesSet ? valuesSet.has(name) : true;
+        const matchesBrand = brandsSet ? brandsSet.has(brand) : true;
+        const matchesSize = sizesSet ? sizesSet.has(size) : true;
+
+        return matchesValue && matchesBrand && matchesSize;
+      });
+    }
+
+    // Determine sorting: vine products sort (name) has priority, then vine status, then manual column sort
+    if (vineProductsSortOrder) {
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const aName = (a.productName || '').toLowerCase();
+        const bName = (b.productName || '').toLowerCase();
+        if (aName === bName) return 0;
+        const cmp = aName < bName ? -1 : 1;
+        return vineProductsSortOrder === 'asc' ? cmp : -cmp;
+      });
+    } else if (vineSortOrder === 'asc' || vineSortOrder === 'desc') {
+      const order = vineSortOrder === 'asc' ? 1 : -1;
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const aStatus = (a.status || 'Awaiting Reviews').trim();
+        const bStatus = (b.status || 'Awaiting Reviews').trim();
+        const aVal = aStatus === 'Awaiting Reviews' ? 0 : 1;
+        const bVal = bStatus === 'Awaiting Reviews' ? 0 : 1;
+        return (aVal - bVal) * order;
+      });
+    } else if (launchDateSortOrder === 'asc' || launchDateSortOrder === 'desc') {
+      const order = launchDateSortOrder === 'asc' ? 1 : -1;
+      filteredRows = [...filteredRows].sort((a, b) => {
+        const parseLaunchDate = (str) => {
+          if (!str || !str.trim()) return 0;
+          const s = String(str).trim();
+          if (s.includes('/')) {
+            const parts = s.split('/');
+            if (parts.length === 3) {
+              const m = parseInt(parts[0], 10) - 1;
+              const d = parseInt(parts[1], 10);
+              const y = parseInt(parts[2], 10);
+              const date = new Date(y, m, d);
+              return isNaN(date.getTime()) ? 0 : date.getTime();
+            }
+          }
+          if (s.includes('-')) {
+            const date = new Date(s);
+            return isNaN(date.getTime()) ? 0 : date.getTime();
+          }
+          const date = new Date(s);
+          return isNaN(date.getTime()) ? 0 : date.getTime();
+        };
+        const aTs = parseLaunchDate(a.launchDate);
+        const bTs = parseLaunchDate(b.launchDate);
+        return (aTs - bTs) * order;
+      });
+    } else if (sortedRowOrder) {
+      // Apply manual column sort when no filter-based sort is active
       const sortedMap = new Map(sortedRowOrder.map((id, index) => [id, index]));
       filteredRows.sort((a, b) => {
         const aIndex = sortedMap.get(a.id) ?? Infinity;
@@ -893,12 +1133,12 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
   const BORDER_COLOR = isDarkMode ? '#374151' : '#E5E7EB';
 
   const columns = [
-    { key: 'status', label: 'STATUS', width: '12%', align: 'left' },
+    { key: 'status', label: 'STATUS', width: '12%', minWidth: '90px', align: 'left' },
     { key: 'productName', label: 'PRODUCT NAME', width: '35%', align: 'left' },
-    { key: 'launchDate', label: 'LAUNCH DATE', width: '12%', align: 'left' },
-    { key: 'claimed', label: 'CLAIMED', width: '12%', align: 'center' },
-    { key: 'enrolled', label: 'ENROLLED', width: '12%', align: 'center' },
-    { key: 'action', label: 'ACTIONS', width: '12%', align: 'center' },
+    { key: 'launchDate', label: 'LAUNCH DATE', width: '12%', minWidth: '140px', align: 'left' },
+    { key: 'claimed', label: 'CLAIMED', width: '12%', minWidth: '80px', align: 'center' },
+    { key: 'enrolled', label: 'ENROLLED', width: '12%', minWidth: '80px', align: 'center' },
+    { key: 'action', label: 'ACTIONS', width: '12%', minWidth: '100px', align: 'center' },
   ];
 
   return (
@@ -927,6 +1167,39 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
             {columns.map((col) => (
               <th
                 key={col.key}
+                ref={
+                  col.key === 'status'
+                    ? vineStatusHeaderRef
+                    : col.key === 'productName'
+                    ? vineProductsHeaderRef
+                    : col.key === 'launchDate'
+                    ? launchDateHeaderRef
+                    : col.key === 'claimed'
+                    ? claimedHeaderRef
+                    : col.key === 'enrolled'
+                    ? enrolledHeaderRef
+                    : undefined
+                }
+                {...(col.key === 'status'
+                  ? { 'data-vine-status-filter-trigger': true }
+                  : col.key === 'productName'
+                  ? { 'data-vine-products-filter-trigger': true }
+                  : col.key === 'launchDate'
+                  ? { 'data-launch-date-sort-trigger': true }
+                  : col.key === 'claimed' || col.key === 'enrolled'
+                  ? { 'data-claimed-enrolled-filter-trigger': true }
+                  : {})}
+                onClick={
+                  col.key === 'status'
+                    ? handleVineStatusHeaderClick
+                    : col.key === 'productName'
+                    ? handleVineProductsHeaderClick
+                    : col.key === 'launchDate'
+                    ? handleLaunchDateHeaderClick
+                    : col.key === 'claimed' || col.key === 'enrolled'
+                    ? (e) => handleFilterClick(col.key, e)
+                    : undefined
+                }
                 className={`${
                   col.align === 'right'
                     ? 'text-right'
@@ -937,7 +1210,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                 style={{
                   padding: '1rem 1.25rem 1.25rem 1.25rem',
                   width: col.width,
-                  ...(col.key === 'action' ? { minWidth: '100px' } : {}),
+                  ...(col.minWidth ? { minWidth: col.minWidth } : {}),
                   height: 'auto',
                   backgroundColor: HEADER_BG,
                   color: '#9CA3AF',
@@ -959,10 +1232,62 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                 >
                   <span
                     style={{
-                      color: (isFilterActive(col.key) || openFilterColumn === col.key) ? '#007AFF' : '#9CA3AF',
+                      color:
+                        col.key === 'status'
+                          ? vineStatusFilterOpen || hasActiveVineStatusFilter
+                            ? '#3B82F6'
+                            : '#9CA3AF'
+                          : col.key === 'productName'
+                          ? vineProductsFilterOpen || hasActiveVineProductsFilter
+                            ? '#3B82F6'
+                            : '#9CA3AF'
+                          : col.key === 'launchDate'
+                          ? launchDateSortOpen || hasActiveLaunchDateSort
+                            ? '#3B82F6'
+                            : '#9CA3AF'
+                          : isFilterActive(col.key) || openFilterColumn === col.key
+                          ? '#007AFF'
+                          : '#9CA3AF',
                     }}
+                    className="inline-flex items-center gap-1.5"
                   >
                     {col.label}
+                    {col.key === 'status' && hasActiveVineStatusFilter && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {col.key === 'productName' && hasActiveVineProductsFilter && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {col.key === 'launchDate' && hasActiveLaunchDateSort && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
+                    {(col.key === 'claimed' || col.key === 'enrolled') && isFilterActive(col.key) && (
+                      <img
+                        src="/assets/Vector (1).png"
+                        alt=""
+                        width={14}
+                        height={14}
+                        style={{ filter: 'brightness(0) saturate(100%) invert(39%) sepia(93%) saturate(2000%) hue-rotate(206deg) brightness(98%) contrast(101%)', display: 'inline-block' }}
+                      />
+                    )}
                   </span>
                 </div>
               </th>
@@ -1009,6 +1334,12 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       position: 'relative',
                       display: 'table-row',
                       cursor: !row.isNew && row.productName ? 'pointer' : 'default',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = isDarkMode ? '#1A2636' : '#E5E7EB';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = ROW_BG;
                     }}
                   onClick={(e) => {
                     // DEBUG: Log all clicks to see what's happening
@@ -1263,134 +1594,175 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       {isNewRow ? (
                         // Input field with dropdown for new rows
                         <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'pointer', width: '100%', minWidth: 0 }}>
-                          <div style={{ position: 'relative', width: '100%' }}>
-                            <div
-                              ref={(el) => { if (el) productInputRefs.current[row.id] = el; }}
-                              onClick={() => setOpenProductDropdownId(row.id)}
-                              onFocus={() => setOpenProductDropdownId(row.id)}
-                              tabIndex={0}
-                              title={row.productName || 'Select Product'}
-                              style={{
-                                width: '100%',
-                                minWidth: 0,
-                                maxWidth: '100%',
-                                height: '28px',
-                                paddingTop: '6px',
-                                paddingRight: '32px',
-                                paddingBottom: '6px',
-                                paddingLeft: '12px',
-                                borderRadius: '4px',
-                                borderWidth: '1px',
-                                borderStyle: 'solid',
-                                borderColor: '#374151',
-                                backgroundColor: '#374151',
-                                color: row.productName ? '#FFFFFF' : '#9CA3AF',
-                                fontSize: '0.875rem',
-                                outline: 'none',
-                                boxSizing: 'border-box',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                lineHeight: '1.4',
-                                gap: 0,
-                              }}
-                            >
-                              {row.productName ? (
-                                <>
-                                  <span style={{ 
-                                    overflow: 'hidden', 
-                                    textOverflow: 'ellipsis', 
-                                    whiteSpace: 'nowrap',
-                                    flex: '0 1 auto',
-                                    minWidth: 0,
-                                    maxWidth: '100%',
-                                  }}>
-                                    {row.productName}
-                                  </span>
-                                  {row.size && (
-                                    <span style={{ 
-                                      flexShrink: 0,
-                                      whiteSpace: 'nowrap',
-                                      marginLeft: '4px',
-                                    }}>
-                                      {' • ' + row.size}
+                          <div
+                            ref={(el) => { if (el) productInputRefs.current[row.id] = el; }}
+                            style={{ position: 'relative', width: '100%' }}
+                          >
+                            {openProductDropdownId === row.id ? (
+                              /* Bar as search input when dropdown is open */
+                              <div style={{ position: 'relative', width: '100%' }}>
+                                <img
+                                  src="/assets/magnifying.png"
+                                  alt=""
+                                  style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: '16px',
+                                    height: '16px',
+                                    pointerEvents: 'none',
+                                    opacity: 0.9,
+                                    zIndex: 1,
+                                  }}
+                                />
+                                <input
+                                  ref={productDropdownSearchRef}
+                                  type="text"
+                                  value={productDropdownSearchValue}
+                                  onChange={(e) => setProductDropdownSearchValue(e.target.value)}
+                                  placeholder="Search..."
+                                  style={{
+                                    width: '100%',
+                                    height: '28px',
+                                    padding: '6px 32px 6px 36px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #3B82F6',
+                                    backgroundColor: '#374151',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.875rem',
+                                    outline: 'none',
+                                    boxSizing: 'border-box',
+                                    boxShadow: '0 0 0 1px #3B82F6',
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                                <svg
+                                  style={{
+                                    position: 'absolute',
+                                    right: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: '0.85rem',
+                                    height: '0.85rem',
+                                    pointerEvents: 'none',
+                                  }}
+                                  fill="none"
+                                  stroke="#FFFFFF"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            ) : (
+                              /* Bar as display when dropdown is closed */
+                              <div
+                                onClick={() => setOpenProductDropdownId(row.id)}
+                                onFocus={() => setOpenProductDropdownId(row.id)}
+                                tabIndex={0}
+                                title={row.productName || 'Select Product'}
+                                style={{
+                                  width: '100%',
+                                  minWidth: 0,
+                                  maxWidth: '100%',
+                                  height: '28px',
+                                  paddingTop: '6px',
+                                  paddingRight: '32px',
+                                  paddingBottom: '6px',
+                                  paddingLeft: '36px',
+                                  borderRadius: '8px',
+                                  borderWidth: '1px',
+                                  borderStyle: 'solid',
+                                  borderColor: '#374151',
+                                  backgroundColor: '#374151',
+                                  color: row.productName ? '#FFFFFF' : '#9CA3AF',
+                                  fontSize: '0.875rem',
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  lineHeight: '1.4',
+                                  gap: 0,
+                                }}
+                              >
+                                <img
+                                  src="/assets/magnifying.png"
+                                  alt=""
+                                  style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: '16px',
+                                    height: '16px',
+                                    pointerEvents: 'none',
+                                    opacity: 0.9,
+                                  }}
+                                />
+                                {row.productName ? (
+                                  <>
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: '0 1 auto', minWidth: 0, maxWidth: '100%' }}>
+                                      {row.productName}
                                     </span>
-                                  )}
-                                  {row.asin && (
-                                    <span style={{ 
-                                      flexShrink: 0,
-                                      whiteSpace: 'nowrap',
-                                      marginLeft: '4px',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '4px',
-                                    }}>
-                                      {' • '}
-                                      <span>{row.asin}</span>
-                                      <Copy
-                                        className="w-3.5 h-3.5 cursor-pointer text-muted-foreground hover:text-foreground flex-shrink-0"
-                                        aria-label="Copy ASIN"
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          try {
-                                            if (navigator.clipboard?.writeText) {
-                                              await navigator.clipboard.writeText(row.asin);
-                                            } else {
-                                              const textArea = document.createElement('textarea');
-                                              textArea.value = row.asin;
-                                              textArea.style.position = 'fixed';
-                                              textArea.style.left = '-999999px';
-                                              document.body.appendChild(textArea);
-                                              textArea.focus();
-                                              textArea.select();
-                                              try {
-                                                document.execCommand('copy');
-                                              } finally {
-                                                document.body.removeChild(textArea);
+                                    {row.asin && (
+                                      <span style={{ flexShrink: 0, whiteSpace: 'nowrap', marginLeft: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        {' • '}
+                                        <span>{row.asin}</span>
+                                        <Copy
+                                          className="w-3.5 h-3.5 cursor-pointer text-muted-foreground hover:text-foreground flex-shrink-0"
+                                          aria-label="Copy ASIN"
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            try {
+                                              if (navigator.clipboard?.writeText) {
+                                                await navigator.clipboard.writeText(row.asin);
+                                              } else {
+                                                const textArea = document.createElement('textarea');
+                                                textArea.value = row.asin;
+                                                textArea.style.position = 'fixed';
+                                                textArea.style.left = '-999999px';
+                                                document.body.appendChild(textArea);
+                                                textArea.focus();
+                                                textArea.select();
+                                                try { document.execCommand('copy'); } finally { document.body.removeChild(textArea); }
                                               }
+                                              toast.success('ASIN copied to clipboard', { description: row.asin, duration: 2000 });
+                                            } catch (err) {
+                                              toast.error('Failed to copy ASIN', { description: 'Please try again', duration: 2000 });
                                             }
-                                            toast.success('ASIN copied to clipboard', {
-                                              description: row.asin,
-                                              duration: 2000,
-                                            });
-                                          } catch (err) {
-                                            toast.error('Failed to copy ASIN', {
-                                              description: 'Please try again',
-                                              duration: 2000,
-                                            });
-                                          }
-                                        }}
-                                      />
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                'Select Product'
-                              )}
-                            </div>
-                            <svg
-                              style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                width: '0.85rem',
-                                height: '0.85rem',
-                                pointerEvents: 'none',
-                              }}
-                              fill="none"
-                              stroke="#FFFFFF"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 9l-7 7-7-7"
-                              />
-                            </svg>
+                                          }}
+                                        />
+                                      </span>
+                                    )}
+                                    {row.brand && <span style={{ flexShrink: 0, whiteSpace: 'nowrap', marginLeft: '4px' }}>{' • ' + row.brand}</span>}
+                                    {row.size && <span style={{ flexShrink: 0, whiteSpace: 'nowrap', marginLeft: '4px' }}>{' • ' + row.size}</span>}
+                                  </>
+                                ) : (
+                                  'Select Product'
+                                )}
+                              </div>
+                            )}
+                            {openProductDropdownId !== row.id && (
+                              <svg
+                                style={{
+                                  position: 'absolute',
+                                  right: '12px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  width: '0.85rem',
+                                  height: '0.85rem',
+                                  pointerEvents: 'none',
+                                }}
+                                fill="none"
+                                stroke="#FFFFFF"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            )}
                           </div>
                           
                           {/* Product Dropdown */}
@@ -1405,7 +1777,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                                 height: '392px',
                                 backgroundColor: rowBackgroundColor,
                                 border: '1px solid #374151',
-                                borderRadius: '4px',
+                                borderRadius: '8px',
                                 borderWidth: '1px',
                                 overflow: 'hidden',
                                 display: 'flex',
@@ -1415,62 +1787,6 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                               }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {/* Search Input */}
-                              <div style={{ 
-                                padding: '12px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                backgroundColor: '#1F2937',
-                                borderBottom: '1px solid #374151',
-                                flexShrink: 0,
-                              }}>
-                                <div style={{ position: 'relative', width: (productInputRefs.current[row.id] ? (productInputRefs.current[row.id].getBoundingClientRect().width - 24) + 'px' : '549px'), height: '28px', margin: '0 auto' }}>
-                                  <svg
-                                    style={{
-                                      position: 'absolute',
-                                      left: '12px',
-                                      top: '50%',
-                                      transform: 'translateY(-50%)',
-                                      width: '16px',
-                                      height: '16px',
-                                      pointerEvents: 'none',
-                                    }}
-                                    fill="none"
-                                    stroke="#9CA3AF"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                    />
-                                  </svg>
-                                  <input
-                                    type="text"
-                                    value={productDropdownSearchValue}
-                                    onChange={(e) => setProductDropdownSearchValue(e.target.value)}
-                                    placeholder="Search..."
-                                    style={{
-                                      width: '100%',
-                                      height: '100%',
-                                      padding: '6px 12px',
-                                      paddingLeft: '38px',
-                                      borderRadius: '4px',
-                                      border: '1px solid #374151',
-                                      borderWidth: '1px',
-                                      backgroundColor: '#374151',
-                                      color: '#FFFFFF',
-                                      fontSize: '0.875rem',
-                                      outline: 'none',
-                                      boxSizing: 'border-box',
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </div>
-                              
                               {/* Product Options */}
                               <div style={{ 
                                 backgroundColor: rowBackgroundColor,
@@ -1660,15 +1976,12 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                                               const brand = product.brand || product.brand_name || '';
                                               const size = product.size || '';
                                               const asin = product.asin || product.child_asin || '';
-                                              const parts = [brand, size].filter(Boolean);
                                               
                                               return (
                                                 <>
-                                                  {parts.length > 0 && parts.join(' • ')}
                                                   {asin && (
                                                     <>
-                                                      {parts.length > 0 && ' • '}
-                                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                                                         <span>{asin}</span>
                                                         <Copy
                                                           className="w-3.5 h-3.5 cursor-pointer text-muted-foreground hover:text-foreground flex-shrink-0"
@@ -1706,9 +2019,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                                                           }}
                                                         />
                                                       </div>
+                                                      {(brand || size) && <span> • </span>}
                                                     </>
                                                   )}
-                                                  {parts.length === 0 && !asin && 'N/A'}
+                                                  {brand && <span>{brand}</span>}
+                                                  {brand && size && <span> • </span>}
+                                                  {size && <span>{size}</span>}
+                                                  {!asin && !brand && !size && 'N/A'}
                                                 </>
                                               );
                                             })()}
@@ -1747,10 +2064,8 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                             {row.productName || 'N/A'}
                           </span>
                           <span style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                            {[row.brand, row.size].filter(Boolean).join(' • ') || 'N/A'}
-                            {row.asin && (
+                            {row.asin ? (
                               <>
-                                {row.brand || row.size ? ' • ' : ''}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                   <span>{row.asin}</span>
                                   <Copy
@@ -1788,9 +2103,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                                     }}
                                   />
                                 </div>
+                                {row.brand && <span>• {row.brand}</span>}
+                                {row.size && <span>• {row.size}</span>}
                               </>
-                            )}
-                            {!row.brand && !row.size && !row.asin && 'N/A'}
+                            ) : ([row.brand, row.size].filter(Boolean).length > 0 ? [row.brand, row.size].filter(Boolean).join(' • ') : 'N/A')}
                           </span>
                         </div>
                       )}
@@ -1807,8 +2123,10 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       borderTop: 'none',
                       height: 'auto',
                       minHeight: '40px',
+                      minWidth: '140px',
                       display: 'table-cell',
                       position: 'relative',
+                      boxSizing: 'border-box',
                     }}
                     onClick={(e) => {
                       // Don't trigger row expansion when clicking on date picker
@@ -1939,7 +2257,7 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                     )}
                   </td>
 
-                  {/* CLAIMED */}
+                  {/* CLAIMED - no content when creating new vine; only show count after vine exists */}
                   <td
                     style={{
                       padding: '0.75rem 1.25rem',
@@ -1949,6 +2267,28 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       borderTop: 'none',
                       height: 'auto',
                       minHeight: '40px',
+                      minWidth: '80px',
+                      display: 'table-cell',
+                    }}
+                  >
+                    {!isNewRow && row.claimed > 0 ? (
+                      <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>
+                        {row.claimed}
+                      </span>
+                    ) : null}
+                  </td>
+
+                  {/* ENROLLED - editable only when creating new vine; read-only after vine is added */}
+                  <td
+                    style={{
+                      padding: '0.75rem 1.25rem',
+                      verticalAlign: 'middle',
+                      textAlign: 'center',
+                      backgroundColor: 'inherit',
+                      borderTop: 'none',
+                      height: 'auto',
+                      minHeight: '40px',
+                      minWidth: '80px',
                       display: 'table-cell',
                     }}
                   >
@@ -1956,15 +2296,23 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         <input
                           type="number"
-                          value={row.claimed || 0}
+                          min="0"
+                          max="30"
+                          value={row.enrolled ?? 0}
                           onChange={(e) => {
-                            if (onUpdateRow) {
-                              onUpdateRow({ ...row, claimed: parseInt(e.target.value) || 0 });
+                            if (!onUpdateRow) return;
+                            const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
+                            const capped = Math.min(30, Math.max(0, inputValue));
+                            onUpdateRow({ ...row, enrolled: capped });
+                          }}
+                          onBlur={() => {
+                            const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
+                            if (onUpdateEnrolled && productId != null) {
+                              const capped = Math.min(30, Math.max(0, row.enrolled ?? 0));
+                              onUpdateEnrolled(productId, capped);
                             }
                           }}
                           className="no-spinner"
-                          disabled
-                          readOnly
                           style={{
                             width: '72px',
                             height: '27px',
@@ -1979,67 +2327,13 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
                             outline: 'none',
                             boxSizing: 'border-box',
                             textAlign: 'center',
-                            cursor: 'not-allowed',
-                            opacity: 0.7,
                           }}
                           onWheel={(e) => e.target.blur()}
                         />
                       </div>
                     ) : (
-                      <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>
-                        {row.claimed || 0}
-                      </span>
+                      <span style={{ fontSize: '0.875rem', color: '#FFFFFF' }}>{row.enrolled ?? 0}</span>
                     )}
-                  </td>
-
-                  {/* ENROLLED */}
-                  <td
-                    style={{
-                      padding: '0.75rem 1.25rem',
-                      verticalAlign: 'middle',
-                      textAlign: 'center',
-                      backgroundColor: 'inherit',
-                      borderTop: 'none',
-                      height: 'auto',
-                      minHeight: '40px',
-                      display: 'table-cell',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                      <input
-                        type="number"
-                        min="0"
-                        value={row.enrolled ?? 0}
-                        onChange={(e) => {
-                          if (!onUpdateRow) return;
-                          const inputValue = e.target.value === '' ? 0 : parseInt(e.target.value, 10) || 0;
-                          onUpdateRow({ ...row, enrolled: Math.max(0, inputValue) });
-                        }}
-                        onBlur={() => {
-                          const productId = row.productId ?? (typeof row.id === 'number' ? row.id : null);
-                          if (onUpdateEnrolled && productId != null) {
-                            onUpdateEnrolled(productId, row.enrolled ?? 0);
-                          }
-                        }}
-                        className="no-spinner"
-                        style={{
-                          width: '72px',
-                          height: '27px',
-                          padding: '6px',
-                          borderRadius: '4px',
-                          borderWidth: '1px',
-                          borderStyle: 'solid',
-                          borderColor: '#374151',
-                          backgroundColor: '#374151',
-                          color: '#FFFFFF',
-                          fontSize: '0.875rem',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          textAlign: 'center',
-                        }}
-                        onWheel={(e) => e.target.blur()}
-                      />
-                    </div>
                   </td>
 
                   {/* ACTIONS */}
@@ -2206,19 +2500,113 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       </table>
       </div>
       
-      {/* Filter Dropdown */}
-      {openFilterColumn && (
-        <ProductsFilterDropdown
-          ref={filterDropdownRef}
-          columnKey={openFilterColumn}
-          filterIconRef={filterIconRefs.current[openFilterColumn]}
-          availableValues={getAvailableValues(openFilterColumn)}
-          currentFilter={currentFilter}
-          currentSort={sortConfig.field === openFilterColumn ? sortConfig.order : ''}
-          onApply={handleApplyFilter}
+      {/* Claimed/Enrolled Filter Dropdown */}
+      {(openFilterColumn === 'claimed' || openFilterColumn === 'enrolled') && (
+        <ClaimedEnrolledFilterDropdown
+          anchorRect={
+            openFilterColumn === 'claimed'
+              ? claimedHeaderRef.current?.getBoundingClientRect() ?? null
+              : enrolledHeaderRef.current?.getBoundingClientRect() ?? null
+          }
+          isOpen={true}
           onClose={() => setOpenFilterColumn(null)}
+          columnKey={openFilterColumn}
+          filter={claimEnrolledWorkingFilter}
+          onFilterChange={setClaimEnrolledWorkingFilter}
+          onApply={() => {
+            const cv = claimEnrolledWorkingFilter.conditionValue;
+            handleApplyFilter({
+              sortOrder: claimEnrolledWorkingFilter.sortOrder || undefined,
+              conditionType: claimEnrolledWorkingFilter.conditionType || undefined,
+              conditionValue: cv !== '' && cv != null ? String(cv) : undefined,
+              __fromSortClick: !!claimEnrolledWorkingFilter.sortOrder,
+            });
+          }}
+          onReset={() => {
+            handleApplyFilter(null);
+          }}
+          hasChanges={
+            claimEnrolledWorkingFilter.sortOrder !== (sortConfig.field === openFilterColumn ? sortConfig.order : null) ||
+            claimEnrolledWorkingFilter.conditionType !== (filters[openFilterColumn]?.condition || '') ||
+            claimEnrolledWorkingFilter.conditionValue !== (filters[openFilterColumn]?.conditionValue || '')
+          }
+          triggerDataAttribute="data-claimed-enrolled-filter-trigger"
         />
       )}
+
+      <VineDropdownFilter
+        anchorRect={vineProductsAnchor}
+        isOpen={vineProductsFilterOpen}
+        onClose={() => {
+          setVineProductsFilterOpen(false);
+          setVineProductsAnchor(null);
+        }}
+        filter={vineProductsFilter}
+        onFilterChange={setVineProductsFilter}
+        onApply={() => {
+          setAppliedVineProductsFilter(vineProductsFilter);
+          setVineProductsFilterOpen(false);
+          setVineProductsAnchor(null);
+        }}
+        onReset={() => {
+          setVineProductsFilter(DEFAULT_VINE_PRODUCTS_FILTER);
+          setAppliedVineProductsFilter(DEFAULT_VINE_PRODUCTS_FILTER);
+        }}
+        hasChanges={vineProductsFilterHasChanges}
+        availableValues={vineProductNames}
+        availableBrands={vineBrands}
+        availableSizes={vineSizes}
+      />
+
+      <StatusFilterDropdown
+        anchorRect={vineStatusAnchor}
+        isOpen={vineStatusFilterOpen}
+        onClose={() => {
+          setVineStatusFilterOpen(false);
+          setVineStatusAnchor(null);
+        }}
+        filter={vineStatusFilter}
+        onFilterChange={setVineStatusFilter}
+        onApply={() => {
+          setAppliedVineStatusFilter(vineStatusFilter);
+          setVineStatusFilterOpen(false);
+          setVineStatusAnchor(null);
+        }}
+        onReset={() => {
+          setVineStatusFilter(DEFAULT_FILTER);
+          setAppliedVineStatusFilter(DEFAULT_FILTER);
+        }}
+        resultCount={vineStatusResultCount}
+        hasChanges={vineStatusFilterHasChanges}
+        label="Filter by values:"
+        activeLabel="Awaiting Reviews"
+        inactiveLabel="Concluded"
+        triggerDataAttribute="data-vine-status-filter-trigger"
+      />
+
+      <LaunchDateSortDropdown
+        anchorRect={launchDateAnchor}
+        isOpen={launchDateSortOpen}
+        onClose={() => {
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        sortOrder={launchDateSortWorking}
+        onSortChange={setLaunchDateSortWorking}
+        onApply={() => {
+          setLaunchDateSortOrder(launchDateSortWorking);
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        onReset={() => {
+          setLaunchDateSortOrder(null);
+          setLaunchDateSortWorking(null);
+          setLaunchDateSortOpen(false);
+          setLaunchDateAnchor(null);
+        }}
+        hasChanges={launchDateSortHasChanges}
+        triggerDataAttribute="data-launch-date-sort-trigger"
+      />
 
       {/* CSS to hide number input spinners */}
       <style>{`
@@ -2357,14 +2745,16 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
         onUpdateClaim={onUpdateClaim}
         onUpdateLaunchDate={onUpdateLaunchDate}
         onAddClaim={(newClaim) => {
-          // Update the row's claimed count
+          // Update the row's claimed count (sum of all claim entries)
           if (onUpdateRow && selectedVineRow) {
             const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
+            const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+            const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
             const updatedRow = {
               ...selectedVineRow,
               productId,
-              claimed: (selectedVineRow.claimed || 0) + (newClaim.units || 0),
-              claimHistory: [...(selectedVineRow.claimHistory || []), newClaim],
+              claimed: claimedTotal,
+              claimHistory: updatedHistory,
             };
             // Update the local state so the modal reflects the changes immediately
             setSelectedVineRow(updatedRow);
@@ -2578,16 +2968,17 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
               </button>
               <button
                 onClick={() => {
-                    if (claimDate && claimUnits && parseInt(claimUnits) > 0) {
-                    const units = parseInt(claimUnits);
+                    if (claimDate && claimUnits && parseInt(claimUnits, 10) > 0) {
+                    const units = parseInt(claimUnits, 10);
                     const newClaim = { id: Date.now(), date: claimDate, units };
                     const updatedHistory = [...(selectedVineRow.claimHistory || []), newClaim];
+                    const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
                     const productId = selectedVineRow.productId ?? (typeof selectedVineRow.id === 'number' ? selectedVineRow.id : undefined);
                     if (onUpdateRow) {
                       const updatedRow = {
                         ...selectedVineRow,
                         productId,
-                        claimed: (selectedVineRow.claimed || 0) + units,
+                        claimed: claimedTotal,
                         claimHistory: updatedHistory,
                       };
                       onUpdateRow(updatedRow);

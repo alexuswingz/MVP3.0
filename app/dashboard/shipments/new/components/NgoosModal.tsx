@@ -93,9 +93,11 @@ interface NgoosModalProps {
   currentQty?: number;
   onAddUnits?: (product: any, units: number) => void;
   onSeasonalityUploaded?: (productId: string) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the modal mounts. */
+  openSettingsOnMount?: boolean;
 }
 
-export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits, onSeasonalityUploaded }: NgoosModalProps) {
+export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, onAddUnits, onSeasonalityUploaded, openSettingsOnMount = false }: NgoosModalProps) {
   const [activeTab, setActiveTab] = useState<'inventory' | 'sales' | 'ads'>('inventory');
   const [displayUnits, setDisplayUnits] = useState(selectedProduct?.unitsToMake || 0);
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -114,6 +116,37 @@ export function NgoosModal({ isOpen, onClose, selectedProduct, currentQty = 0, o
   const [showCustomSettingsTooltip, setShowCustomSettingsTooltip] = useState(false);
   const [showGearDropdown, setShowGearDropdown] = useState(false);
   const [showSeasonalityModal, setShowSeasonalityModal] = useState(false);
+
+  // Open forecast settings modal automatically when triggered by the pencil icon
+  React.useEffect(() => {
+    if (isOpen && openSettingsOnMount) {
+      setShowForecastSettingsModal(true);
+    }
+    if (!isOpen) {
+      setShowForecastSettingsModal(false);
+    }
+  }, [isOpen, openSettingsOnMount]);
+
+  // Stable needsSeasonality: once true for a product, stays true until product changes or modal closes.
+  // Prevents the gear dropdown from disappearing right after the user uploads seasonality.
+  const [stableNeedsSeasonality, setStableNeedsSeasonality] = useState(false);
+  const prevProductIdForSeasonalityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const productId = selectedProduct?.id != null ? String(selectedProduct.id) : null;
+    if (!isOpen) {
+      setStableNeedsSeasonality(false);
+      prevProductIdForSeasonalityRef.current = null;
+      return;
+    }
+    if (productId !== prevProductIdForSeasonalityRef.current) {
+      prevProductIdForSeasonalityRef.current = productId;
+      setStableNeedsSeasonality(
+        selectedProduct?.needsSeasonality === true || selectedProduct?.seasonalityUploaded === true
+      );
+    } else if (selectedProduct?.needsSeasonality === true || selectedProduct?.seasonalityUploaded === true) {
+      setStableNeedsSeasonality(true);
+    }
+  }, [isOpen, selectedProduct?.id, selectedProduct?.needsSeasonality, selectedProduct?.seasonalityUploaded]);
   const [chartTimeRange, setChartTimeRange] = useState<string>('2 Years');
   const [chartTimeRangeOpen, setChartTimeRangeOpen] = useState(false);
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
@@ -1655,7 +1688,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (selectedProduct?.needsSeasonality) {
+                          if (stableNeedsSeasonality) {
                             setShowGearDropdown((prev) => !prev);
                           } else {
                             setShowForecastSettingsModal(true);
@@ -1678,7 +1711,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
                         <img src="/assets/Icon%20Button.png" alt="Forecast Settings" width={20} height={20} style={{ display: 'block' }} />
                       </button>
                       {/* Gear dropdown menu - only shown when product needs seasonality */}
-                      {selectedProduct?.needsSeasonality && (
+                      {stableNeedsSeasonality && (
                         <ForecastSettingsDropdown
                           isOpen={showGearDropdown}
                           onClose={() => setShowGearDropdown(false)}
@@ -3136,6 +3169,7 @@ const [actionItemsData, setActionItemsData] = useState<Record<string, ActionItem
         onClose={() => setShowSeasonalityModal(false)}
         productId={selectedProduct?.id ? String(selectedProduct.id) : null}
         isDarkMode
+        initialShowPreview={selectedProduct?.seasonalityUploaded === true}
         onUploadSuccess={() => {
           if (selectedProduct?.id && onSeasonalityUploaded) {
             onSeasonalityUploaded(String(selectedProduct.id));

@@ -16,6 +16,7 @@ import ExportTemplateModal from './components/ExportTemplateModal';
 import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import { api, type ForecastTableResponse, type ShipmentDetail } from '@/lib/api';
 import { calculateUnitsToMake } from '@/lib/calculations';
+import { toast } from '@/lib/toast';
 
 const STORAGE_KEY = 'mvp_new_shipment_data';
 const SHIPMENT_DETAILS_STORAGE_KEY = 'mvp_shipment_details';
@@ -123,8 +124,8 @@ function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]
     childAsin: apiRow.product.asin,
     in: inv.total,
     inventory: inv.total,
-    totalDoi: apiRow.daysOfInventory,
-    fbaAvailableDoi: apiRow.doiFba,
+    totalDoi: apiRow.daysOfInventory ?? undefined,
+    fbaAvailableDoi: apiRow.doiFba ?? undefined,
     velocityTrend: 'Up',
     boxInventory: Math.floor(inv.total / 24),
     unitsOrdered7: Math.round(apiRow.avgWeeklySales),
@@ -133,7 +134,7 @@ function transformApiRowToAddProductRow(apiRow: ForecastTableResponse['rows'][0]
     fbaTotal: inv.fbaTotal,
     fbaAvailable: inv.fbaAvailable,
     awdTotal: inv.awdTotal,
-    unitsToMake: apiRow.unitsToMake,
+    unitsToMake: apiRow.unitsToMake ?? undefined,
     needsSeasonality: apiRow.needsSeasonality,
   };
 }
@@ -148,9 +149,9 @@ function transformApiRowToNonTableRow(apiRow: ForecastTableResponse['rows'][0]):
     asin: apiRow.product.asin,
     size: apiRow.product.size || '',
     inventory: inv.total,
-    unitsToMake: apiRow.unitsToMake,
-    daysOfInventory: apiRow.daysOfInventory,
-    fbaAvailableDoi: apiRow.doiFba,
+    unitsToMake: apiRow.unitsToMake ?? 0,
+    daysOfInventory: apiRow.daysOfInventory ?? 0,
+    fbaAvailableDoi: apiRow.doiFba ?? undefined,
     needsSeasonality: apiRow.needsSeasonality,
   };
 }
@@ -201,6 +202,7 @@ export default function NewShipmentAddProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showNgoosModal, setShowNgoosModal] = useState(false);
+  const [ngoosOpenWithSettings, setNgoosOpenWithSettings] = useState(false);
   const [showExportTemplateModal, setShowExportTemplateModal] = useState(false);
   const [showShipmentBookedModal, setShowShipmentBookedModal] = useState(false);
   const [showCustomizeColumnsModal, setShowCustomizeColumnsModal] = useState(false);
@@ -383,7 +385,64 @@ export default function NewShipmentAddProductsPage() {
     }
     return rows;
   }, [filteredApiRows, recalculatedUnitsByProductId, loadedShipmentQuantities, uploadedSeasonalityProductIds]);
-  
+
+  const handleExportCsv = useCallback(() => {
+    const escapeCsv = (val: string | number | null | undefined) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const headers = ['Product Name', 'Brand', 'ASIN', 'Size', 'Inventory', 'Units to Make', 'Days of Inventory', 'FBA DOI'];
+    const dateStr = new Date().toISOString().slice(0, 10);
+    if (tableMode) {
+      const rows = tableRows.map((r) =>
+        [
+          escapeCsv(r.product ?? ''),
+          escapeCsv(r.brand ?? ''),
+          escapeCsv(r.asin ?? r.childAsin ?? ''),
+          escapeCsv(r.variation1 ?? ''),
+          escapeCsv(r.inventory ?? r.in ?? ''),
+          escapeCsv(r.unitsToMake ?? ''),
+          escapeCsv(r.totalDoi ?? ''),
+          escapeCsv(r.fbaAvailableDoi ?? ''),
+        ].join(',')
+      );
+      const csv = [headers.join(','), ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shipment_products_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const rows = nonTableRows.map((r) =>
+        [
+          escapeCsv(r.product ?? ''),
+          escapeCsv(r.brand ?? ''),
+          escapeCsv(r.asin ?? ''),
+          escapeCsv(r.size ?? ''),
+          escapeCsv(r.inventory ?? ''),
+          escapeCsv(r.unitsToMake ?? ''),
+          escapeCsv(r.daysOfInventory ?? ''),
+          escapeCsv(r.fbaAvailableDoi ?? ''),
+        ].join(',')
+      );
+      const csv = [headers.join(','), ...rows].join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shipment_products_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setShowSettingsDropdown(false);
+    toast.vineCreated('Table exported as CSV');
+  }, [tableMode, tableRows, nonTableRows]);
+
   // Use summary data from API or calculate from rows
   const totalProducts = apiData?.summary?.totalProducts ?? filteredApiRows.length;
   const totalPalettes = apiData?.summary?.totalPallets ?? (totalProducts * 0.5);
@@ -455,11 +514,25 @@ export default function NewShipmentAddProductsPage() {
     [draftShipmentId, createDraftShipment, router]
   );
 
+  const updateWorkflowTabInUrl = useCallback((tab: 'add-products' | 'book-shipment') => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    router.replace(`/dashboard/shipments/new?${params.toString()}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const handleAddProductsTabClick = useCallback(() => {
+    setActiveWorkflowTab('add-products');
+    updateWorkflowTabInUrl('add-products');
+  }, [updateWorkflowTabInUrl]);
+
   const handleBookShipmentTabClick = useCallback(async () => {
     if (addedProductIds.size === 0) return;
     if (draftShipmentId == null) {
       const ok = await createDraftShipment(true);
-      if (ok) setActiveWorkflowTab('book-shipment');
+      if (ok) {
+        setActiveWorkflowTab('book-shipment');
+        updateWorkflowTabInUrl('book-shipment');
+      }
     } else {
       // Update existing shipment status to 'ready' (Add Products completed, Book Shipment in progress)
       try {
@@ -468,8 +541,9 @@ export default function NewShipmentAddProductsPage() {
         console.error('Failed to update shipment status:', err);
       }
       setActiveWorkflowTab('book-shipment');
+      updateWorkflowTabInUrl('book-shipment');
     }
-  }, [addedProductIds.size, draftShipmentId, createDraftShipment]);
+  }, [addedProductIds.size, draftShipmentId, createDraftShipment, updateWorkflowTabInUrl]);
 
   return (
     <div className="flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden" style={{ backgroundColor: PAGE_BG }}>
@@ -704,6 +778,28 @@ export default function NewShipmentAddProductsPage() {
                     />
                   </button>
                 </div>
+                <div style={{ height: 1, backgroundColor: BORDER, margin: '10px 0' }} />
+                <div style={{ display: 'flex', alignItems: 'center', height: 20 }}>
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    style={{
+                      width: '100%',
+                      padding: 0,
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#E5E7EB',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = '#3B82F6'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = '#E5E7EB'; }}
+                  >
+                    Export as CSV
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -763,6 +859,8 @@ export default function NewShipmentAddProductsPage() {
 
       {/* Workflow tabs — Add Products / Book Shipment (circle indicator + animated fill bar) */}
       <div
+        role="tablist"
+        aria-label="Add Products and Book Shipment"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -777,7 +875,9 @@ export default function NewShipmentAddProductsPage() {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            onClick={() => setActiveWorkflowTab('add-products')}
+            onClick={handleAddProductsTabClick}
+            aria-selected={activeWorkflowTab === 'add-products'}
+            role="tab"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -825,9 +925,11 @@ export default function NewShipmentAddProductsPage() {
         <div style={{ position: 'relative' }}>
           <button
             type="button"
-            onClick={() => addedProductIds.size > 0 && handleBookShipmentTabClick()}
+            onClick={() => addedProductIds.size > 0 && void handleBookShipmentTabClick()}
             title={addedProductIds.size === 0 ? 'Add at least one product first' : undefined}
             disabled={addedProductIds.size === 0}
+            aria-selected={activeWorkflowTab === 'book-shipment'}
+            role="tab"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1343,6 +1445,10 @@ export default function NewShipmentAddProductsPage() {
                 initialAddedIds={Array.from(addedProductIds)}
                 onAddedIdsChange={handleAddedIdsChange}
                 onUnitsOverride={handleUnitsOverride}
+                onUploadSeasonality={(productId) => {
+                  setSeasonalityProductId(productId);
+                  setShowSeasonalityModal(true);
+                }}
                 totalProducts={totalProducts}
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
@@ -1354,6 +1460,12 @@ export default function NewShipmentAddProductsPage() {
                 requiredDoi={requiredDoiNum}
                 onProductClick={(row) => {
                   setSelectedProduct(row);
+                  setNgoosOpenWithSettings(false);
+                  setShowNgoosModal(true);
+                }}
+                onEditProduct={(row) => {
+                  setSelectedProduct(row);
+                  setNgoosOpenWithSettings(true);
                   setShowNgoosModal(true);
                 }}
                 onClear={() => {}}
@@ -1369,6 +1481,7 @@ export default function NewShipmentAddProductsPage() {
                 totalPalettes={totalPalettes}
                 totalBoxes={totalBoxes}
                 totalWeightLbs={totalWeightLbs}
+                account={shipmentData?.account ?? undefined}
               />
             )
           ) : urlShipmentId && loadedShipmentError ? (
@@ -1431,14 +1544,16 @@ export default function NewShipmentAddProductsPage() {
         onClose={() => {
           setShowNgoosModal(false);
           setSelectedProduct(null);
+          setNgoosOpenWithSettings(false);
         }}
         selectedProduct={selectedProduct}
+        openSettingsOnMount={ngoosOpenWithSettings}
         currentQty={0}
         onAddUnits={(product, units) => {
           console.log(`Adding ${units} units of ${product.name || product.product}`);
         }}
         onSeasonalityUploaded={(productId) => {
-          setUploadedSeasonalityProductIds((prev) => new Set([...prev, productId]));
+          setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(productId)));
         }}
       />
 
@@ -1452,7 +1567,7 @@ export default function NewShipmentAddProductsPage() {
         onUploadSuccess={() => {
           // Mark this product as having seasonality uploaded
           if (seasonalityProductId) {
-            setUploadedSeasonalityProductIds((prev) => new Set([...prev, seasonalityProductId]));
+            setUploadedSeasonalityProductIds((prev) => new Set(Array.from(prev).concat(seasonalityProductId)));
           }
           setShowSeasonalityModal(false);
           setSeasonalityProductId(null);
@@ -1604,6 +1719,7 @@ export default function NewShipmentAddProductsPage() {
             await handleBookShipmentTabClick();
           } else {
             setActiveWorkflowTab('book-shipment');
+            updateWorkflowTabInUrl('book-shipment');
           }
         }}
         preSelectedType={

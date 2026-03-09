@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Settings } from 'lucide-react';
 import ForecastSettingsModal from '@/components/forecast/forecast-settings-modal';
+import { UploadSeasonalityModal } from '@/components/forecast/upload-seasonality-modal';
 import {
   ComposedChart,
   Area,
@@ -140,6 +140,16 @@ interface ForecastUnitProps {
   inventoryOnly?: boolean;
   isDarkMode?: boolean;
   showMetricCards?: boolean;
+  /** When true, show the gear icon and Forecast Settings / Seasonality Curve dropdown. Only set for products that have upload seasonality. */
+  showSettingsDropdown?: boolean;
+  /** Product id for seasonality upload callback (e.g. to refresh table after upload). */
+  productId?: string | null;
+  /** Called when seasonality is successfully uploaded; use to refresh units/bar. */
+  onSeasonalityUploaded?: (productId: string | null) => void;
+  /** When true, clicking Seasonality Curve opens the chart preview directly (data already uploaded). */
+  seasonalityUploaded?: boolean;
+  /** When true, automatically open the Forecast Settings modal on mount. */
+  openSettingsOnMount?: boolean;
 }
 
 export default function ForecastUnit({
@@ -150,6 +160,11 @@ export default function ForecastUnit({
   inventoryOnly = true,
   isDarkMode = true,
   showMetricCards = true,
+  showSettingsDropdown = false,
+  productId = null,
+  onSeasonalityUploaded,
+  seasonalityUploaded = false,
+  openSettingsOnMount = false,
 }: ForecastUnitProps) {
   const [hoveredSegment, setHoveredSegment] = useState<'fba' | 'total' | 'forecast' | null>(null);
   const [zoomToolActive, setZoomToolActive] = useState(false);
@@ -166,7 +181,10 @@ export default function ForecastUnit({
   // Range selection (click-drag when zoom is NOT active)
   const [chartRangeSelection, setChartRangeSelection] = useState<{ startTimestamp: number | null; endTimestamp: number | null }>({ startTimestamp: null, endTimestamp: null });
   const rangeSelectingRef = useRef(false);
-  const [forecastSettingsModalOpen, setForecastSettingsModalOpen] = useState(false);
+  const [forecastSettingsModalOpen, setForecastSettingsModalOpen] = useState(openSettingsOnMount);
+  const [seasonalityModalOpen, setSeasonalityModalOpen] = useState(false);
+  const [forecastSettingsMenuOpen, setForecastSettingsMenuOpen] = useState(false);
+  const forecastSettingsMenuRef = useRef<HTMLDivElement>(null);
   const [selectedTimeRangeView, setSelectedTimeRangeView] = useState('All Time');
   const [timeRangeSelectFocused, setTimeRangeSelectFocused] = useState(false);
 
@@ -520,6 +538,24 @@ export default function ForecastUnit({
     return () => window.removeEventListener('mouseup', onUp);
   }, []);
 
+  useEffect(() => {
+    if (!forecastSettingsMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (forecastSettingsMenuRef.current && !forecastSettingsMenuRef.current.contains(e.target as Node)) {
+        setForecastSettingsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [forecastSettingsMenuOpen]);
+
+  // Close dropdown when product doesn't have upload seasonality tab (e.g. after switching product)
+  useEffect(() => {
+    if (!showSettingsDropdown) {
+      setForecastSettingsMenuOpen(false);
+    }
+  }, [showSettingsDropdown]);
+
   const chartContainerCursor =
     zoomToolActive || zoomBox.startTimestamp != null ? 'zoom-in' : 'crosshair';
 
@@ -768,25 +804,115 @@ export default function ForecastUnit({
                 Reset
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setForecastSettingsModalOpen(true)}
-              aria-label="Forecast Settings"
-              title="Forecast Settings"
-              style={{
-                padding: '0.5rem',
-                color: '#94a3b8',
-                backgroundColor: 'transparent',
-                border: 'none',
-                borderRadius: '0.375rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Settings className="w-5 h-5" strokeWidth={1.5} />
-            </button>
+            <div ref={forecastSettingsMenuRef} style={{ position: 'relative', display: 'inline-flex' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (showSettingsDropdown === true) {
+                    setForecastSettingsMenuOpen((o) => !o);
+                  } else {
+                    setForecastSettingsMenuOpen(false);
+                    setForecastSettingsModalOpen(true);
+                  }
+                }}
+                aria-label="Forecast Settings"
+                title="Forecast Settings"
+                aria-expanded={showSettingsDropdown === true ? forecastSettingsMenuOpen : false}
+                style={{
+                  padding: '0.5rem',
+                  color: '#94a3b8',
+                  backgroundColor: showSettingsDropdown === true && forecastSettingsMenuOpen ? 'rgba(55, 65, 81, 0.5)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <img
+                  src="/assets/Icon%20Button.png"
+                  alt="Forecast Settings"
+                  style={{ width: '20px', height: '20px', display: 'block' }}
+                />
+              </button>
+              {showSettingsDropdown === true && forecastSettingsMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Forecast Settings"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '4px',
+                    minWidth: '180px',
+                    padding: '8px 0',
+                    backgroundColor: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
+                    zIndex: 50,
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setForecastSettingsMenuOpen(false);
+                      setForecastSettingsModalOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 6px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#94a3b8',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#1e293b';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    Forecast Settings
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setForecastSettingsMenuOpen(false);
+                      setSeasonalityModalOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      textAlign: 'left',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                      color: '#e2e8f0',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#1e293b';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    Seasonality Curve
+                  </button>
+                </div>
+              )}
+            </div>
             {/* Time range dropdown - right after settings */}
             <select
               value={selectedTimeRangeView}
@@ -1223,6 +1349,14 @@ export default function ForecastUnit({
         onClose={() => setForecastSettingsModalOpen(false)}
         isDarkMode={isDarkMode}
         overlayZIndex={2200}
+      />
+      <UploadSeasonalityModal
+        isOpen={seasonalityModalOpen}
+        onClose={() => setSeasonalityModalOpen(false)}
+        productId={productId}
+        isDarkMode={isDarkMode}
+        onSeasonalityUploaded={onSeasonalityUploaded}
+        initialShowPreview={seasonalityUploaded}
       />
     </div>
   );

@@ -255,9 +255,11 @@ function transformForecastData(data: ProductForecastResponse) {
   const inv = data.inventory;
   const activeAlgo = data.active_algorithm as '0-6m' | '6-18m' | '18m+';
   const algoResult = data.algorithms[activeAlgo];
-  
-  // Check if this algorithm needs seasonality data but doesn't have it
-  const needsSeasonality = algoResult?.needs_seasonality ?? false;
+  const hasSeasonalityData = data.data_availability?.has_seasonality === true;
+
+  // Show "upload seasonality" tab/dropdown only when algorithm requires seasonality AND product doesn't have it yet
+  const needsSeasonality =
+    algoResult?.requires_seasonality === true && !hasSeasonalityData;
   
   return {
     inventoryData: {
@@ -542,7 +544,15 @@ interface NgoosContentProps {
   salesHistory?: Array<{ week_end: string; units_sold: number; revenue: number }>;
   isLoading?: boolean;
   needsSeasonality?: boolean;
+  /** When true, clicking Seasonality Curve opens the chart preview directly (data already uploaded). */
+  seasonalityUploaded?: boolean;
   onUploadSeasonality?: () => void;
+  /** Product id for seasonality upload callback. */
+  productId?: string | null;
+  /** Called when seasonality is successfully uploaded; parent should refetch so units/bar come back. */
+  onSeasonalityUploaded?: (productId: string | null) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the content mounts. */
+  openSettingsOnMount?: boolean;
 }
 
 function ActionItemCard({ title, tagBgColor = '#10b981', tagText = 'INV', onCardClick, isCompleted }: { title: string; tagBgColor?: string; tagText?: string; onCardClick?: () => void; isCompleted?: boolean }) {
@@ -613,7 +623,11 @@ function NgoosContent({
   salesHistory = [],
   isLoading = false,
   needsSeasonality = false,
+  seasonalityUploaded = false,
   onUploadSeasonality,
+  productId = null,
+  onSeasonalityUploaded,
+  openSettingsOnMount = false,
 }: NgoosContentProps) {
   const [activeTab, setActiveTab] = useState('forecast');
   const [hoveredUnitsContainer, setHoveredUnitsContainer] = useState(false);
@@ -990,6 +1004,11 @@ function NgoosContent({
                 inventoryOnly
                 isDarkMode={isDarkMode}
                 showMetricCards
+                showSettingsDropdown={needsSeasonality === true}
+                productId={productId}
+                onSeasonalityUploaded={onSeasonalityUploaded}
+                seasonalityUploaded={seasonalityUploaded}
+                openSettingsOnMount={openSettingsOnMount}
               />
             </div>
           )}
@@ -1816,12 +1835,18 @@ interface NGOOSmodalProps {
     unitsToMake?: number;
     product?: string;
     product_name?: string;
+    /** When true, show gear dropdown (Forecast Settings + Seasonality Curve); when false, gear opens Forecast Settings modal only. Same as add-products NgoosModal. */
+    needsSeasonality?: boolean;
     [key: string]: unknown;
   } | null;
   isDarkMode?: boolean;
   allProducts?: { id: string }[];
   onNavigate?: ((dir: 'prev' | 'next') => void) | null;
   showActionItems?: boolean;
+  /** Called when seasonality is uploaded for the current product; use to refresh table so units-to-make container and DOI bar show again. */
+  onSeasonalityUploaded?: (productId: string) => void;
+  /** When true, automatically open the Forecast Settings modal as soon as the modal content mounts. */
+  openSettingsOnMount?: boolean;
 }
 
 export default function NGOOSmodal({
@@ -1833,6 +1858,8 @@ export default function NGOOSmodal({
   allProducts = [],
   onNavigate = null,
   showActionItems = false,
+  onSeasonalityUploaded,
+  openSettingsOnMount = false,
 }: NGOOSmodalProps) {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAddUnits, setPendingAddUnits] = useState<number | null>(null);
@@ -1842,6 +1869,29 @@ export default function NGOOSmodal({
   const [isLoading, setIsLoading] = useState(false);
   const [forecastData, setForecastData] = useState<ReturnType<typeof transformForecastData> | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Stable needsSeasonality: once true for a product, stays true until product changes or modal closes.
+  // This prevents the gear dropdown from disappearing right after the user uploads seasonality.
+  const [stableNeedsSeasonality, setStableNeedsSeasonality] = useState(false);
+  const prevProductIdForSeasonalityRef = useRef<string | null>(null);
+  useEffect(() => {
+    const productId = selectedRow?.id != null ? String(selectedRow.id) : null;
+    if (!isOpen) {
+      setStableNeedsSeasonality(false);
+      prevProductIdForSeasonalityRef.current = null;
+      return;
+    }
+    if (productId !== prevProductIdForSeasonalityRef.current) {
+      // Product changed — capture the fresh value
+      prevProductIdForSeasonalityRef.current = productId;
+      setStableNeedsSeasonality(
+        selectedRow?.needsSeasonality === true || selectedRow?.seasonalityUploaded === true
+      );
+    } else if (selectedRow?.needsSeasonality === true || selectedRow?.seasonalityUploaded === true) {
+      // Allow latching to true (e.g. API response updated), but never flip back to false
+      setStableNeedsSeasonality(true);
+    }
+  }, [isOpen, selectedRow?.id, selectedRow?.needsSeasonality, selectedRow?.seasonalityUploaded]);
 
   const themeClasses = {
     cardBg: isDarkMode ? 'bg-dark-bg-secondary' : 'bg-white',
@@ -2179,11 +2229,16 @@ export default function NGOOSmodal({
               forecasts={forecastData?.forecasts ?? []}
               salesHistory={forecastData?.salesHistory ?? []}
               isLoading={isLoading}
-              needsSeasonality={forecastData?.needsSeasonality ?? false}
-              onUploadSeasonality={() => {
-                // TODO: Implement seasonality upload modal
-                console.log('Upload seasonality for product:', selectedRow?.id);
+              needsSeasonality={stableNeedsSeasonality}
+              seasonalityUploaded={selectedRow?.seasonalityUploaded === true}
+              productId={selectedRow?.id != null ? String(selectedRow.id) : null}
+              onSeasonalityUploaded={(id) => {
+                if (id) {
+                  onSeasonalityUploaded?.(id);
+                  fetchForecastData(id);
+                }
               }}
+              openSettingsOnMount={openSettingsOnMount}
             />
           )}
         </div>
