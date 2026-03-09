@@ -1272,37 +1272,47 @@ export function ActionItems() {
     [productsFilter, appliedProductsFilter]
   );
 
-  const handleExportCsv = useCallback(() => {
-    const escapeCsv = (val: string) => {
-      const s = String(val ?? '');
-      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-        return `"${s.replace(/"/g, '""')}"`;
+  const handleExportCsv = useCallback(async () => {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
+      const token =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('access_token')
+          : null;
+
+      const response = await fetch(`${baseUrl}/action-items/export/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ items: filteredTableItems }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Export failed with status ${response.status}`);
       }
-      return s;
-    };
-    const headers = ['Status', 'Product Name', 'Product ID', 'Category', 'Subject', 'Assignee', 'Due Date'];
-    const rows = filteredTableItems.map((row) =>
-      [
-        escapeCsv(row.status ?? ''),
-        escapeCsv(row.productName ?? ''),
-        escapeCsv(row.productId ?? ''),
-        escapeCsv(row.category ?? ''),
-        escapeCsv(row.subject ?? ''),
-        escapeCsv(row.assignee ?? ''),
-        escapeCsv(row.dueDate ?? ''),
-      ].join(',')
-    );
-    const csv = [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `action_items_export_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSettingsDropdownOpen(false);
-    toast.vineCreated('Action items exported as CSV');
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `action_items_export_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      toast.vineCreated('Action items exported as CSV');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to export action items CSV';
+      toast.error('Failed to export action items CSV', { description: message });
+    } finally {
+      setSettingsDropdownOpen(false);
+    }
   }, [filteredTableItems]);
 
   return (

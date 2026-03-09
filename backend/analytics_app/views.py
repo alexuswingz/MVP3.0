@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.http import HttpResponse
@@ -131,6 +132,48 @@ class VineClaimViewSet(viewsets.ModelViewSet):
 
         buffer.seek(0)
         filename = f'vine_export_{date.today().isoformat()}.csv'
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class ActionItemsExportView(APIView):
+    """
+    Lightweight CSV export for action items.
+
+    This does not assume server-side persistence of action items; instead, the
+    client POSTs the rows it wants to export and the API returns a CSV file.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        items = request.data.get('items') or []
+
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+
+        # Match the columns used by the Action Items UI export
+        writer.writerow(
+            ['Status', 'Product Name', 'Product ID', 'Category', 'Subject', 'Assignee', 'Due Date']
+        )
+
+        for item in items:
+            item = item or {}
+            writer.writerow(
+                [
+                    item.get('status', '') or '',
+                    item.get('productName', '') or '',
+                    str(item.get('productId', '') or ''),
+                    item.get('category', '') or '',
+                    item.get('subject', '') or '',
+                    item.get('assignee', '') or '',
+                    item.get('dueDate', '') or '',
+                ]
+            )
+
+        buffer.seek(0)
+        filename = f'action_items_export_{date.today().isoformat()}.csv'
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
