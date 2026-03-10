@@ -123,6 +123,57 @@ class VineClaim(models.Model):
         return f"{self.product.name} - {self.claim_date}"
 
 
+class ActionItem(models.Model):
+    """
+    Action item / ticket attached to a product.
+
+    Scoped to a tenant via the product's user. Stores the lightweight fields
+    used by the Action Items UI plus a rich-text description payload.
+    """
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='action_items',
+    )
+
+    # Core ticket fields
+    subject = models.CharField(max_length=500)
+    category = models.CharField(max_length=200, blank=True)
+    status = models.CharField(max_length=50, default='To Do')
+    assignee = models.CharField(max_length=200, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+
+    # Rich detail panel content
+    description_html = models.TextField(blank=True)
+    instructions = models.TextField(blank=True)
+    bullets = models.JSONField(default=list, blank=True)
+
+    # Audit
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_action_items',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'action_items'
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['category']),
+            models.Index(fields=['assignee']),
+            models.Index(fields=['due_date']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.subject} ({self.status})"
+
+
 class SeasonalityCurve(models.Model):
     """Seasonality data for forecasting"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='seasonality_curves')
