@@ -361,23 +361,55 @@ export default function ClosureOrderNewPage() {
         </div>
       </div>
 
-      {/* Main table */}
+      {/* Main table — scroll container must wrap table directly for sticky header */}
       <div
-        className="flex-1 min-h-0 overflow-auto"
-        style={{ padding: '0 24px 16px' }}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          padding: '0 24px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
       >
         <div
           style={{
+            flex: 1,
+            minHeight: 0,
             borderRadius: 12,
             border: `1px solid ${BORDER_COLOR}`,
             backgroundColor: ROW_BG,
-            overflow: 'hidden',
+            overflow: 'auto',
+            padding: '0 20px',
           }}
         >
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '3%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '35%' }} />
+            </colgroup>
             <thead>
-              <tr style={{ backgroundColor: ROW_BG }}>
-                <th style={{ width: 40, padding: '12px 8px 12px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
+              <tr
+                style={{
+                  backgroundColor: ROW_BG,
+                  height: 73,
+                }}
+              >
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 8px 12px 16px',
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                  }}
+                >
                   <input
                     ref={selectAllCheckboxRef}
                     type="checkbox"
@@ -388,6 +420,11 @@ export default function ClosureOrderNewPage() {
                 </th>
                 <th
                   style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
                     padding: '12px 16px',
                     textAlign: 'left',
                     fontSize: 11,
@@ -401,6 +438,29 @@ export default function ClosureOrderNewPage() {
                 </th>
                 <th
                   style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    color: '#9CA3AF',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Supplier Inv.
+                </th>
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
                     padding: '12px 16px',
                     textAlign: 'left',
                     fontSize: 11,
@@ -414,6 +474,11 @@ export default function ClosureOrderNewPage() {
                 </th>
                 <th
                   style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
                     padding: '12px 16px',
                     textAlign: 'left',
                     fontSize: 11,
@@ -427,6 +492,11 @@ export default function ClosureOrderNewPage() {
                 </th>
                 <th
                   style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
                     padding: '12px 16px',
                     textAlign: 'left',
                     fontSize: 11,
@@ -436,7 +506,7 @@ export default function ClosureOrderNewPage() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  Storage Capacity
+                  <div style={{ marginLeft: 130 }}>Storage Capacity</div>
                 </th>
               </tr>
             </thead>
@@ -449,6 +519,7 @@ export default function ClosureOrderNewPage() {
                     style={{
                       backgroundColor: ROW_BG,
                       borderTop: `1px solid ${BORDER_COLOR}`,
+                      height: 73,
                     }}
                   >
                     <td style={{ width: 40, padding: '12px 8px 12px 16px', verticalAlign: 'middle' }}>
@@ -466,31 +537,37 @@ export default function ClosureOrderNewPage() {
                           fontSize: 14,
                           fontWeight: 500,
                           color: '#3B82F6',
-                          textDecoration: 'underline',
+                          textDecoration: 'none',
                           cursor: 'pointer',
                         }}
                       >
                         {row.name}
                       </Link>
                     </td>
+                    <td style={{ padding: '12px 16px', fontSize: 14, color: '#F9FAFB', verticalAlign: 'middle' }}>
+                      <span style={{ fontWeight: 600, color: '#F9FAFB' }}>Auto-rep.</span>
+                    </td>
                     <td style={{ padding: '12px 16px', fontSize: 14, color: '#FFFFFF', verticalAlign: 'middle' }}>
                       {row.inventory.toLocaleString()}
                     </td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <input
                           type="text"
                           value={quantities[row.id] ?? ''}
                           onChange={(e) => setQuantity(row.id, e.target.value)}
                           style={{
-                            width: 80,
-                            padding: '8px 10px',
+                            width: 115,
+                            height: 34,
+                            padding: '8px 6px',
                             fontSize: 14,
-                            color: '#FFFFFF',
-                            backgroundColor: isDarkMode ? '#374151' : '#F3F4F6',
-                            border: `1px solid ${BORDER_COLOR}`,
-                            borderRadius: 6,
+                            color: '#F9FAFB',
+                            backgroundColor: '#2C3544',
+                            border: '1px solid #334155',
+                            borderRadius: 8,
                             outline: 'none',
+                            textAlign: 'center',
+                            boxSizing: 'border-box',
                           }}
                         />
                         <button
@@ -499,32 +576,37 @@ export default function ClosureOrderNewPage() {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
+                            justifyContent: 'center',
                             gap: 4,
-                            padding: '8px 12px',
-                            fontSize: 14,
-                            fontWeight: 500,
+                            width: 64,
+                            height: 24,
+                            padding: 0,
+                            fontSize: 13,
+                            fontWeight: 600,
                             color: '#FFFFFF',
                             backgroundColor: '#3B82F6',
                             border: 'none',
                             borderRadius: 6,
                             cursor: 'pointer',
+                            boxSizing: 'border-box',
                           }}
                         >
-                          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-                          Add
+                          <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
+                          <span>Add</span>
                         </button>
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, transform: 'translateX(-20px)' }}>
                         <div
                           style={{
                             flex: 1,
                             minWidth: 120,
-                            height: 24,
+                            height: 19,
                             borderRadius: 4,
                             overflow: 'hidden',
                             display: 'flex',
+                            flexDirection: 'row',
                             backgroundColor: '#1F2937',
                           }}
                         >
@@ -575,78 +657,100 @@ export default function ClosureOrderNewPage() {
       {/* Legend + Footer bar */}
       <div
         style={{
-          borderTop: `1px solid ${HEADER_BORDER}`,
-          backgroundColor: isDarkMode ? '#1E293B' : '#F9FAFB',
-          padding: '12px 24px 16px',
+          padding: '12px 24px 31px',
         }}
       >
-        {/* Legend */}
+        {/* Legend aligned to the right (separate from footer bar) */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            flexWrap: 'wrap',
-            marginBottom: 12,
-            fontSize: 12,
-            color: '#9CA3AF',
+            justifyContent: 'flex-end',
+            marginBottom: 22,
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 2,
-                backgroundColor: '#4B5563',
-              }}
-            />
-            Available
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 2,
-                backgroundImage: 'repeating-linear-gradient(45deg, #EA580C, #EA580C 2px, transparent 2px, transparent 4px)',
-                backgroundColor: '#EA580C',
-              }}
-            />
-            Allocated
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 2,
-                backgroundColor: '#3B82F6',
-              }}
-            />
-            Inbound
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              style={{
-                width: 14,
-                height: 14,
-                borderRadius: 2,
-                backgroundColor: '#93C5FD',
-              }}
-            />
-            Added
-          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 24,
+              flexWrap: 'wrap',
+              fontSize: 12,
+              color: '#9CA3AF',
+              padding: '12px 16px',
+              borderRadius: 8,
+              border: `1px solid ${BORDER_COLOR}`,
+              backgroundColor: '#0F172A',
+              boxShadow: '0 4px 4px 2px rgba(0, 0, 0, 0.2)',
+              opacity: 0.9,
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 2,
+                  backgroundColor: '#4B5563',
+                }}
+              />
+              Available
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 2,
+                  backgroundImage:
+                    'repeating-linear-gradient(45deg, #EA580C, #EA580C 2px, transparent 2px, transparent 4px)',
+                  backgroundColor: '#EA580C',
+                }}
+              />
+              Allocated
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 2,
+                  backgroundColor: '#3B82F6',
+                }}
+              />
+              Inbound
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 2,
+                  backgroundColor: '#93C5FD',
+                }}
+              />
+              Added
+            </span>
+          </div>
         </div>
 
-        {/* Summary + actions */}
-        <div
+        {/* Footer: horizontal, 16px radius, 1px border #334155, bg #1A2235, 8px padding, 64px gap */}
+        <footer
           style={{
             display: 'flex',
+            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 64,
             flexWrap: 'wrap',
+            width: '100%',
+            maxWidth: 741,
+            minHeight: 59,
+            padding: 8,
+            borderRadius: 16,
+            border: '1px solid #334155',
+            backgroundColor: '#1A2235',
+            margin: '0 auto',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.35)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -764,7 +868,7 @@ export default function ClosureOrderNewPage() {
               )}
             </div>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );
