@@ -598,7 +598,7 @@ export function AddBottlesOrderTable({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 64,
+            gap: 20,
             opacity: 1,
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             boxSizing: 'border-box',
