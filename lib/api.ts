@@ -58,7 +58,7 @@ export class ApiClient {
     }
   }
 
-  private async request<T>(
+  protected async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
@@ -556,6 +556,48 @@ class ExtendedApiClient extends ApiClient {
   async getAmazonSyncStatus(id: number): Promise<SyncStatusResponse> {
     return this.request<SyncStatusResponse>(`/amazon/accounts/${id}/sync_status/`);
   }
+
+  // Action Items API methods
+  async getActionItems(params?: {
+    search?: string;
+    status?: string;
+    category?: string;
+    assignee_name?: string;
+    ordering?: string;
+  }): Promise<ActionItem[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.assignee_name) searchParams.set('assignee_name', params.assignee_name);
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+
+    const query = searchParams.toString();
+    const response = await this.request<ActionItem[] | { results: ActionItem[] }>(
+      `/action-items/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async createActionItem(data: ActionItemCreateInput): Promise<ActionItem> {
+    return this.request<ActionItem>('/action-items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateActionItem(id: number, data: ActionItemUpdateInput): Promise<ActionItem> {
+    return this.request<ActionItem>(`/action-items/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteActionItem(id: number): Promise<void> {
+    return this.request(`/action-items/${id}/`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 interface SyncStatusResponse {
@@ -905,6 +947,42 @@ interface SyncTriggerResponse {
   sync_log_id: number;
 }
 
+// Action Item types
+interface ActionItem {
+  id: number;
+  product: number | null;
+  product_name: string;
+  product_asin: string;
+  product_brand: string;
+  product_size: string;
+  status: 'To Do' | 'In progress' | 'In review' | 'Completed';
+  category: 'Ads' | 'Inventory' | 'PDP' | 'Price' | string;
+  subject: string;
+  description_html: string;
+  assignee_name: string;
+  assignee_initials: string;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ActionItemCreateInput {
+  product_id?: number | null;
+  product_name?: string;
+  product_asin?: string;
+  product_brand?: string;
+  product_size?: string;
+  status?: ActionItem['status'];
+  category?: ActionItem['category'];
+  subject: string;
+  description_html?: string;
+  assignee_name?: string;
+  assignee_initials?: string;
+  due_date?: string | null;
+}
+
+interface ActionItemUpdateInput extends Partial<ActionItemCreateInput> {}
+
 export const api = new ExtendedApiClient();
 export type {
   UserResponse,
@@ -937,4 +1015,7 @@ export type {
   Marketplace,
   SyncLog,
   SyncTriggerResponse,
+  ActionItem,
+  ActionItemCreateInput,
+  ActionItemUpdateInput,
 };

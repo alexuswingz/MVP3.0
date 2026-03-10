@@ -149,36 +149,7 @@ function ticketDetailFromRow(
   };
 }
 
-const ACTION_ITEMS_STORAGE_KEY = 'action-items-persisted';
-
-function loadActionItemsFromStorage(): { tableItems: TableRow[]; ticketDetails: Record<number, TicketDetail> } | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(ACTION_ITEMS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { tableItems: TableRow[]; ticketDetails: Record<string, TicketDetail> };
-    if (!parsed?.tableItems || !Array.isArray(parsed.tableItems)) return null;
-    const ticketDetails: Record<number, TicketDetail> = {};
-    if (parsed.ticketDetails && typeof parsed.ticketDetails === 'object') {
-      for (const [k, v] of Object.entries(parsed.ticketDetails)) {
-        const id = Number(k);
-        if (!isNaN(id) && v && typeof v === 'object') ticketDetails[id] = v as TicketDetail;
-      }
-    }
-    return { tableItems: parsed.tableItems, ticketDetails };
-  } catch {
-    return null;
-  }
-}
-
-function saveActionItemsToStorage(tableItems: TableRow[], ticketDetails: Record<number, TicketDetail>) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(ACTION_ITEMS_STORAGE_KEY, JSON.stringify({ tableItems, ticketDetails }));
-  } catch {
-    // ignore quota or other errors
-  }
-}
+// Action items are now persisted via backend API (no localStorage).
 
 function getInitials(name: string): string {
   if (!name || !name.trim()) return '—';
@@ -424,7 +395,7 @@ function DetailModal({
   setDescriptionFocused: (v: boolean) => void;
   onDescriptionCancel: () => void;
   onDescriptionSave: (html: string) => void;
-  onStatusChange: (status: string) => void;
+  onStatusChange: (status: 'To Do' | 'In progress' | 'In review' | 'Completed') => void;
   onAttachmentsChange: (attachments: { name: string; url: string; type?: string; uploadedAt: string }[]) => void;
 }) {
   const descriptionEditorRef = useRef<RichTextEditorHandle | null>(null);
@@ -760,14 +731,8 @@ export function ActionItems() {
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
   const [showActionCreatedToast, setShowActionCreatedToast] = useState(false);
-  const [tableItems, setTableItems] = useState<TableRow[]>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.tableItems?.length ? loaded.tableItems : DEFAULT_TABLE_ITEMS;
-  });
-  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.ticketDetails ?? {};
-  });
+  const [tableItems, setTableItems] = useState<TableRow[]>([]);
+  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>({});
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
@@ -883,9 +848,65 @@ export function ActionItems() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProductDropdownOpen, isAssigneeDropdownOpen, rowMenuOpenId]);
 
+  // Initial load from backend
   useEffect(() => {
-    saveActionItemsToStorage(tableItems, ticketDetails);
-  }, [tableItems, ticketDetails]);
+    let mounted = true;
+    (async () => {
+      try {
+        const items = await api.getActionItems({ ordering: '-created_at' });
+        if (!mounted) return;
+        const rows: TableRow[] = items.map((item) => {
+          const dueDateStr = item.due_date ? formatDueDateTable(new Date(item.due_date)) : '—';
+          return {
+            id: item.id,
+            status: item.status,
+            productName: item.product_name || '—',
+            productId: item.product_asin || '—',
+            productBrand: item.product_brand || undefined,
+            productSize: item.product_size || undefined,
+            category: item.category || 'Inventory',
+            subject: item.subject || '—',
+            assignee: item.assignee_name || '—',
+            assigneeInitials: item.assignee_initials || '—',
+            dueDate: dueDateStr,
+          };
+        });
+        const details: Record<number, TicketDetail> = {};
+        for (const item of items) {
+          const id = item.id;
+          const dateCreated = item.created_at ? formatDueDateTable(new Date(item.created_at)) : '—';
+          details[id] = {
+            ticketId: `I-${id}`,
+            productName: item.product_name || '—',
+            productId: item.product_asin || '—',
+            brand: item.product_brand || '—',
+            unit: item.product_size || '—',
+            subject: item.subject || '—',
+            description: '',
+            descriptionHtml: item.description_html || '',
+            instructions: '',
+            bullets: [],
+            status: item.status,
+            category: item.category || 'Inventory',
+            assignee: item.assignee_name || '—',
+            assigneeInitials: item.assignee_initials || '—',
+            dueDate: item.due_date ? formatDueDateTable(new Date(item.due_date)) : '—',
+            createdBy: createdByDisplay,
+            createdByInitials: createdByInitialsDisplay,
+            dateCreated,
+            attachments: [],
+          };
+        }
+        setTableItems(rows);
+        setTicketDetails(details);
+      } catch (e) {
+        console.error('[ActionItems] Failed to load from backend', e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [createdByDisplay, createdByInitialsDisplay]);
 
   useEffect(() => {
     if (!showDueDateCalendar) return;
@@ -914,7 +935,7 @@ export function ActionItems() {
     setDescriptionFocused(false);
   };
 
-  const handleDescriptionSave = (html: string) => {
+  const handleDescriptionSave = async (html: string) => {
     const htmlToSave = (html?.trim() || descriptionHtml?.trim()) || '';
     if (process.env.NODE_ENV === 'development') {
       console.log('[ActionItems] handleDescriptionSave: selectedDetailId=', selectedDetailId, 'receivedLength=', html?.length, 'htmlToSaveLength=', htmlToSave.length, 'preview=', htmlToSave.slice(0, 80));
@@ -925,25 +946,47 @@ export function ActionItems() {
     }
     const id = selectedDetailId;
     justSavedDescriptionRef.current = { id, html: htmlToSave };
-    flushSync(() => {
-      setTicketDetails((prev) => {
-        const existing = prev[id];
-        const row = tableItems.find((r) => r.id === id);
-        const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
-        if (process.env.NODE_ENV === 'development' && !base) {
-          console.warn('[ActionItems] handleDescriptionSave: no detail or row for id=', id, 'keys=', Object.keys(prev));
-        }
-        if (!base) return prev;
-        return {
-          ...prev,
-          [id]: { ...base, descriptionHtml: htmlToSave },
-        };
+    try {
+      await api.updateActionItem(id, { description_html: htmlToSave });
+      flushSync(() => {
+        setTicketDetails((prev) => {
+          const existing = prev[id];
+          const row = tableItems.find((r) => r.id === id);
+          const base =
+            existing ??
+            (row
+              ? ticketDetailFromRow(row, {
+                  createdBy: createdByDisplay,
+                  createdByInitials: createdByInitialsDisplay,
+                })
+              : null);
+          if (process.env.NODE_ENV === 'development' && !base) {
+            console.warn(
+              '[ActionItems] handleDescriptionSave: no detail or row for id=',
+              id,
+              'keys=',
+              Object.keys(prev)
+            );
+          }
+          if (!base) return prev;
+          return {
+            ...prev,
+            [id]: { ...base, descriptionHtml: htmlToSave },
+          };
+        });
+        setDescriptionHtml(htmlToSave);
+        setDescriptionFocused(false);
       });
-      setDescriptionHtml(htmlToSave);
-      setDescriptionFocused(false);
-    });
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ActionItems] handleDescriptionSave: committed id=', id, 'htmlToSaveLength=', htmlToSave.length);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          '[ActionItems] handleDescriptionSave: committed id=',
+          id,
+          'htmlToSaveLength=',
+          htmlToSave.length
+        );
+      }
+    } catch (e) {
+      console.error('[ActionItems] Failed to save description', e);
     }
   };
 
@@ -2040,16 +2083,22 @@ export function ActionItems() {
                             <button
                               type="button"
                               role="menuitem"
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
-                                setTableItems((prev) => prev.filter((r) => r.id !== row.id));
-                                setTicketDetails((prev) => {
-                                  const next = { ...prev };
-                                  delete next[row.id];
-                                  return next;
-                                });
-                                if (selectedDetailId === row.id) setSelectedDetailId(null);
-                                setRowMenuOpenId(null);
+                                try {
+                                  await api.deleteActionItem(row.id);
+                                  setTableItems((prev) => prev.filter((r) => r.id !== row.id));
+                                  setTicketDetails((prev) => {
+                                    const next = { ...prev };
+                                    delete next[row.id];
+                                    return next;
+                                  });
+                                  if (selectedDetailId === row.id) setSelectedDetailId(null);
+                                } catch (err) {
+                                  console.error('[ActionItems] Failed to delete', err);
+                                } finally {
+                                  setRowMenuOpenId(null);
+                                }
                               }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-white/10 transition-colors"
                             >
@@ -2084,7 +2133,6 @@ export function ActionItems() {
         <DetailModal
           item={selectedDetailItem}
           onClose={() => {
-            saveActionItemsToStorage(tableItems, ticketDetails);
             setSelectedDetailId(null);
           }}
           descriptionHtml={descriptionHtml}
@@ -2093,16 +2141,29 @@ export function ActionItems() {
           setDescriptionFocused={setDescriptionFocused}
           onDescriptionCancel={handleDescriptionCancel}
           onDescriptionSave={handleDescriptionSave}
-          onStatusChange={(status) => {
+          onStatusChange={async (status: 'To Do' | 'In progress' | 'In review' | 'Completed') => {
             if (selectedDetailId == null) return;
-            setTableItems((prev) => prev.map((r) => (r.id === selectedDetailId ? { ...r, status } : r)));
-            setTicketDetails((prev) => {
-              const existing = prev[selectedDetailId];
-              const row = tableItems.find((r) => r.id === selectedDetailId);
-              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
-              if (!base) return prev;
-              return { ...prev, [selectedDetailId]: { ...base, status } };
-            });
+            const id = selectedDetailId;
+            try {
+              await api.updateActionItem(id, { status });
+              setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+              setTicketDetails((prev) => {
+                const existing = prev[id];
+                const row = tableItems.find((r) => r.id === id);
+                const base =
+                  existing ??
+                  (row
+                    ? ticketDetailFromRow(row, {
+                        createdBy: createdByDisplay,
+                        createdByInitials: createdByInitialsDisplay,
+                      })
+                    : null);
+                if (!base) return prev;
+                return { ...prev, [id]: { ...base, status } };
+              });
+            } catch (e) {
+              console.error('[ActionItems] Failed to update status', e);
+            }
           }}
           onAttachmentsChange={(attachments) => {
             if (selectedDetailId == null) return;
@@ -2118,7 +2179,7 @@ export function ActionItems() {
                 return next;
               });
             });
-            if (nextTicketDetails) saveActionItemsToStorage(tableItems, nextTicketDetails);
+            // Attachments are still local-only for now (no backend field).
           }}
         />
       )}
@@ -2583,13 +2644,12 @@ export function ActionItems() {
               <button
                 type="button"
                 disabled={!(newItem.product.trim() || productSearch.trim()) || !newItem.subject.trim() || !newItem.category}
-                onClick={() => {
+                onClick={async () => {
                   const hasProduct = !!(newItem.product.trim() || productSearch.trim());
                   const hasSubject = !!newItem.subject.trim();
                   const hasCategory = !!newItem.category;
                   if (!hasProduct || !hasSubject || !hasCategory) return;
 
-                  const nextId = Math.max(0, ...tableItems.map((r) => r.id)) + 1;
                   const catLabel = CATEGORIES.find((c) => c.id === newItem.category)?.label ?? newItem.category;
                   const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '—';
                   const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '—';
@@ -2598,66 +2658,88 @@ export function ActionItems() {
                   const productName = newItem.product.trim() || productSearch.trim();
                   const now = new Date();
                   const dateCreatedStr = formatDueDateTable(now);
-
-                  setTableItems((prev) => [
-                    {
-                      id: nextId,
-                      status: 'To Do',
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      productBrand: newItem.productBrand.trim() || undefined,
-                      productSize: newItem.productUnit.trim() || undefined,
-                      category: catLabel,
-                      subject: newItem.subject.trim() || '—',
-                      assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                    },
-                    ...prev,
-                  ]);
-
-                  setTicketDetails((prev) => ({
-                    ...prev,
-                    [nextId]: {
-                      ticketId: `I-${nextId}`,
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      brand: newItem.productBrand.trim() || '—',
-                      unit: newItem.productUnit.trim() || '—',
-                      subject: newItem.subject.trim() || '—',
-                      description: newItem.description.trim() || '',
-                      instructions: '',
-                      bullets: [],
+                  try {
+                    const created = await api.createActionItem({
+                      product_id: undefined,
+                      product_name: productName,
+                      product_asin: newItem.productId.trim() || '—',
+                      product_brand: newItem.productBrand.trim() || '',
+                      product_size: newItem.productUnit.trim() || '',
                       status: 'To Do',
                       category: catLabel,
-                      assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                      createdBy: createdByDisplay,
-                      createdByInitials: createdByInitialsDisplay,
-                      dateCreated: dateCreatedStr,
-                    },
-                  }));
+                      subject: newItem.subject.trim() || '—',
+                      description_html: newItem.description.trim() || '',
+                      assignee_name: assigneeStr === '—' ? '' : assigneeStr,
+                      assignee_initials: assigneeInitialsStr === '—' ? '' : assigneeInitialsStr,
+                      due_date: dueDateParsed ? dueDateParsed.toISOString().slice(0, 10) : null,
+                    });
 
-                  setShowNewActionModal(false);
-                  setShowActionCreatedToast(true);
-                  setNewItem({
-                    product: '',
-                    productId: '',
-                    productBrand: '',
-                    productUnit: '',
-                    category: 'inventory',
-                    subject: '',
-                    description: '',
-                    assignee: '',
-                    dueDate: '',
-                  });
-                  setProductSearch('');
-                  setIsProductDropdownOpen(false);
-                  setAssigneeSearch('');
-                  setIsAssigneeDropdownOpen(false);
-                  setSelectedAssignees([]);
-                  setShowDueDateCalendar(false);
+                    const createdDueTable = created.due_date ? formatDueDateTable(new Date(created.due_date)) : '—';
+
+                    setTableItems((prev) => [
+                      {
+                        id: created.id,
+                        status: created.status,
+                        productName: created.product_name || productName,
+                        productId: created.product_asin || newItem.productId.trim() || '—',
+                        productBrand: created.product_brand || newItem.productBrand.trim() || undefined,
+                        productSize: created.product_size || newItem.productUnit.trim() || undefined,
+                        category: created.category || catLabel,
+                        subject: created.subject || newItem.subject.trim() || '—',
+                        assignee: created.assignee_name || assigneeStr,
+                        assigneeInitials: created.assignee_initials || assigneeInitialsStr,
+                        dueDate: createdDueTable,
+                      },
+                      ...prev,
+                    ]);
+
+                    setTicketDetails((prev) => ({
+                      ...prev,
+                      [created.id]: {
+                        ticketId: `I-${created.id}`,
+                        productName: created.product_name || productName,
+                        productId: created.product_asin || newItem.productId.trim() || '—',
+                        brand: created.product_brand || newItem.productBrand.trim() || '—',
+                        unit: created.product_size || newItem.productUnit.trim() || '—',
+                        subject: created.subject || newItem.subject.trim() || '—',
+                        description: '',
+                        descriptionHtml: created.description_html || newItem.description.trim() || '',
+                        instructions: '',
+                        bullets: [],
+                        status: created.status,
+                        category: created.category || catLabel,
+                        assignee: created.assignee_name || assigneeStr,
+                        assigneeInitials: created.assignee_initials || assigneeInitialsStr,
+                        dueDate: createdDueTable,
+                        createdBy: createdByDisplay,
+                        createdByInitials: createdByInitialsDisplay,
+                        dateCreated: created.created_at ? formatDueDateTable(new Date(created.created_at)) : dateCreatedStr,
+                        attachments: [],
+                      },
+                    }));
+
+                    setShowNewActionModal(false);
+                    setShowActionCreatedToast(true);
+                    setNewItem({
+                      product: '',
+                      productId: '',
+                      productBrand: '',
+                      productUnit: '',
+                      category: 'inventory',
+                      subject: '',
+                      description: '',
+                      assignee: '',
+                      dueDate: '',
+                    });
+                    setProductSearch('');
+                    setIsProductDropdownOpen(false);
+                    setAssigneeSearch('');
+                    setIsAssigneeDropdownOpen(false);
+                    setSelectedAssignees([]);
+                    setShowDueDateCalendar(false);
+                  } catch (err) {
+                    console.error('[ActionItems] Failed to create action item', err);
+                  }
                 }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 hover:opacity-90"
                 style={{ background: '#3b82f6' }}

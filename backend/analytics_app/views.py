@@ -10,8 +10,8 @@ from datetime import date
 from io import StringIO
 import csv
 
-from .models import VineClaim
-from .serializers import VineClaimSerializer
+from .models import VineClaim, ActionItem
+from .serializers import VineClaimSerializer, ActionItemSerializer
 
 
 class VineClaimViewSet(viewsets.ModelViewSet):
@@ -177,3 +177,59 @@ class ActionItemsExportView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+class ActionItemViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for persisted Action Items.
+
+    Scoped to the authenticated user and aligned with the frontend Action Items UI.
+    """
+
+    serializer_class = ActionItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ['status', 'category', 'assignee_name']
+    ordering_fields = ['created_at', 'updated_at', 'due_date', 'status']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        return (
+            ActionItem.objects.filter(user=self.request.user)
+            .select_related('product')
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx['request'] = self.request
+        return ctx
+
+    def list(self, request, *args, **kwargs):
+        """
+        Support search across subject, product fields, category, assignee and status.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(subject__icontains=search)
+                | Q(product_name__icontains=search)
+                | Q(product_asin__icontains=search)
+                | Q(product_brand__icontains=search)
+                | Q(product_size__icontains=search)
+                | Q(category__icontains=search)
+                | Q(assignee_name__icontains=search)
+                | Q(status__icontains=search)
+            )
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)

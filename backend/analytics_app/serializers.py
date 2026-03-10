@@ -1,6 +1,6 @@
 from django.db.models import Sum
 from rest_framework import serializers
-from .models import VineClaim
+from .models import VineClaim, ActionItem
 from forecast_app.models import Product
 
 
@@ -103,3 +103,79 @@ class VineClaimSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class ActionItemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for ActionItem CRUD.
+
+    Mirrors the fields used by the frontend Action Items table and detail views.
+    """
+
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.none(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = ActionItem
+        fields = [
+            'id',
+            'product',
+            'product_id',
+            'product_name',
+            'product_asin',
+            'product_brand',
+            'product_size',
+            'status',
+            'category',
+            'subject',
+            'description_html',
+            'assignee_name',
+            'assignee_initials',
+            'due_date',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'product', 'created_at', 'updated_at']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            self.fields['product_id'].queryset = Product.objects.filter(user=request.user)
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+
+        product = validated_data.pop('product_id', None)
+        if product is not None:
+            validated_data['product'] = product
+            # Denormalise product fields
+            validated_data.setdefault('product_name', product.name or '')
+            validated_data.setdefault('product_asin', product.asin or '')
+            validated_data.setdefault('product_brand', getattr(getattr(product, 'brand', None), 'name', '') or '')
+            validated_data.setdefault('product_size', product.size or '')
+
+        if user is not None and not validated_data.get('user'):
+            validated_data['user'] = user
+
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        product = validated_data.pop('product_id', None)
+        if product is not None:
+            instance.product = product
+            instance.product_name = product.name or ''
+            instance.product_asin = product.asin or ''
+            instance.product_brand = getattr(getattr(product, 'brand', None), 'name', '') or ''
+            instance.product_size = product.size or ''
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+        return instance
