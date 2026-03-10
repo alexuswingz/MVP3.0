@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/ui-store';
 import {
   ClosuresHeader,
@@ -10,10 +11,7 @@ import {
   ClosuresTable,
   type ClosureRow,
 } from '../components/ClosuresTable';
-import {
-  BottlesSummaryCards,
-  type BottlesSummaryStats,
-} from '@/components/bottles';
+import { NewClosureOrderModal, type NewClosureOrderForm } from '../components/NewClosureOrderModal';
 
 // Mock data – replace with API when available
 const MOCK_CLOSURES: ClosureRow[] = [
@@ -27,18 +25,12 @@ const MOCK_CLOSURES: ClosureRow[] = [
   { id: '8', name: '16oz Sprayer Trigger No-Foam', warehouseInventory: 16700, supplierInventory: 44200 },
 ];
 
-const MOCK_STATS: BottlesSummaryStats = {
-  totalDoi: 107,
-  unitsToMake: 107699,
-  palletsToMake: 849,
-  productsAtRisk: 343,
-  productsAtRiskDetail: '1 critical, 36 low',
-};
-
 export default function SupplyChainClosuresPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ClosureTabId>('Inventory');
   const [searchQuery, setSearchQuery] = useState('');
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const [newOrderModalOpen, setNewOrderModalOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
   const settingsDropdownRef = useRef<HTMLDivElement | null>(null);
 
@@ -46,7 +38,19 @@ export default function SupplyChainClosuresPage() {
   const isDarkMode = theme !== 'light';
 
   const closures = useMemo(() => MOCK_CLOSURES, []);
-  const stats = useMemo(() => MOCK_STATS, []);
+
+  const handleNewOrder = () => setNewOrderModalOpen(true);
+
+  const handleCreateClosureOrder = (data: NewClosureOrderForm) => {
+    setNewOrderModalOpen(false);
+    // Optional: persist order context for the next page
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem('closure_order_created', JSON.stringify(data));
+      } catch (_) {}
+    }
+    router.push('/dashboard/supply-chain/closures/orders/new');
+  };
 
   useEffect(() => {
     if (!settingsDropdownOpen) return;
@@ -63,10 +67,9 @@ export default function SupplyChainClosuresPage() {
   }, [settingsDropdownOpen]);
 
   const handleCycleCounts = () => {};
-  const handleNewOrder = () => {};
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 p-4 pb-0 lg:-m-6 lg:p-6 lg:pb-0">
+    <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 pt-9 px-4 pb-0 lg:-m-6 lg:pt-11 lg:px-6 lg:pb-0">
       <ClosuresHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -97,13 +100,20 @@ export default function SupplyChainClosuresPage() {
         }
       />
 
-      <BottlesSummaryCards stats={stats} isDarkMode={isDarkMode} />
+      <div className="mt-[60px]">
+        <ClosuresTable
+          closures={closures}
+          searchQuery={searchQuery}
+          isDarkMode={isDarkMode}
+          isLoading={false}
+        />
+      </div>
 
-      <ClosuresTable
-        closures={closures}
-        searchQuery={searchQuery}
+      <NewClosureOrderModal
+        isOpen={newOrderModalOpen}
+        onClose={() => setNewOrderModalOpen(false)}
         isDarkMode={isDarkMode}
-        isLoading={false}
+        onCreate={handleCreateClosureOrder}
       />
     </div>
   );

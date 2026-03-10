@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/ui-store';
 import {
   BottlesHeader,
   BottlesSummaryCards,
   BottlesTable,
+  NewBottleOrderModal,
   type BottleTabId,
   type BottlesSummaryStats,
   type BottleRow,
@@ -33,8 +35,10 @@ const MOCK_STATS: BottlesSummaryStats = {
 };
 
 export default function BottlesPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<BottleTabId>('Inventory');
   const [searchQuery, setSearchQuery] = useState('');
+  const [newOrderModalOpen, setNewOrderModalOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
@@ -64,7 +68,14 @@ export default function BottlesPage() {
   };
 
   const handleNewOrder = () => {
-    // Placeholder – e.g. router.push('/dashboard/bottles/orders/new') when ready
+    setNewOrderModalOpen(true);
+  };
+
+  const handleNewOrderSubmit = (data: { bottleOrderNumber: string; supplier: string }) => {
+    setNewOrderModalOpen(false);
+    router.push(
+      `/dashboard/bottles/orders/new?order=${encodeURIComponent(data.bottleOrderNumber)}&supplier=${encodeURIComponent(data.supplier)}`
+    );
   };
 
   return (
@@ -106,6 +117,12 @@ export default function BottlesPage() {
         searchQuery={searchQuery}
         isDarkMode={isDarkMode}
         isLoading={false}
+      />
+
+      <NewBottleOrderModal
+        isOpen={newOrderModalOpen}
+        onClose={() => setNewOrderModalOpen(false)}
+        onSubmit={handleNewOrderSubmit}
       />
     </div>
   );

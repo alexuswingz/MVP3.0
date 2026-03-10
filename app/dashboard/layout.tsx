@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { DashboardShell } from '@/components/layout/dashboard-shell';
 import { useAuthStore } from '@/stores/auth-store';
 import { setAuthFailureHandler } from '@/lib/api';
+import { prefetchForecastTable, getForecastCache } from '@/lib/forecast-cache';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -22,6 +23,11 @@ export default function DashboardLayout({
     });
     return () => setAuthFailureHandler(null);
   }, [setSessionExpired]);
+
+  // Prefetch forecast immediately so Forecast page loads instantly when navigated to
+  useEffect(() => {
+    if (!getForecastCache()) prefetchForecastTable();
+  }, []);
 
   useEffect(() => {
     // Only redirect after hydration is complete

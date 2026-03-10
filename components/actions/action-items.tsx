@@ -33,8 +33,6 @@ import {
   type ActionItemsDueDateSortState,
 } from '@/components/actions/action-items-due-date-sort';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
-import { api, type ActionItemResponse } from '@/lib/api';
-import { useAuthStore } from '@/stores/auth-store';
 
 type TicketDetail = {
   ticketId: string;
@@ -102,6 +100,14 @@ type TableRow = {
   assigneeInitials: string;
   dueDate: string;
 };
+
+const SHORT_PRODUCT_NAME_MAX = 40;
+
+function getShortProductName(name: string): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= SHORT_PRODUCT_NAME_MAX) return trimmed;
+  return `${trimmed.slice(0, SHORT_PRODUCT_NAME_MAX - 1)}…`;
+}
 
 const DEFAULT_TABLE_ITEMS: TableRow[] = [
   { id: 1, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
@@ -534,7 +540,7 @@ function DetailModal({
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <p style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.productName}>{shortenProductName(item.productName)}</p>
+                <p style={{ fontSize: 14, fontWeight: 500, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.productName}</p>
                 <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {item.productId}
                   <span
@@ -886,50 +892,6 @@ export function ActionItems() {
   const justSavedDescriptionRef = useRef<{ id: number; html: string } | null>(null);
 
   useEffect(() => {
-    setProductsLoading(true);
-    setProductsError(null);
-    api
-      .getProducts({ ordering: '-created_at' })
-      .then((res) => {
-        setProductsList(
-          res.results.map((p) => ({
-            asin: p.asin,
-            name: p.name,
-            brand: p.brand_name ?? '',
-            unit: p.size ?? '',
-          }))
-        );
-      })
-      .catch((e) => setProductsError(e instanceof Error ? e.message : 'Failed to load products'))
-      .finally(() => setProductsLoading(false));
-  }, []);
-
-  const fetchActionItems = useCallback(async () => {
-    setItemsLoading(true);
-    setItemsError(null);
-    try {
-      const list = await api.getActionItems({ ordering: '-created_at' });
-      const rows = list.map(actionItemToTableRow);
-      const details: Record<number, TicketDetail> = {};
-      list.forEach((item) => {
-        details[item.id] = actionItemToTicketDetail(item);
-      });
-      setTableItems(rows);
-      setTicketDetails(details);
-    } catch (e) {
-      setItemsError(e instanceof Error ? e.message : 'Failed to load action items');
-      setTableItems([]);
-      setTicketDetails({});
-    } finally {
-      setItemsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchActionItems();
-  }, [fetchActionItems]);
-
-  useEffect(() => {
     if (!isProductDropdownOpen && !isAssigneeDropdownOpen && rowMenuOpenId === null) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -986,7 +948,10 @@ export function ActionItems() {
       setTicketDetails((prev) => {
         const existing = prev[id];
         const row = tableItems.find((r) => r.id === id);
-        const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+        const base = existing ?? (row ? ticketDetailFromRow(row) : null);
+        if (process.env.NODE_ENV === 'development' && !base) {
+          console.warn('[ActionItems] handleDescriptionSave: no detail or row for id=', id, 'keys=', Object.keys(prev));
+        }
         if (!base) return prev;
         return { ...prev, [id]: { ...base, descriptionHtml: htmlToSave } };
       });
@@ -1874,7 +1839,7 @@ export function ActionItems() {
                           </svg>
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate" title={row.productName}>{shortenProductName(row.productName)}</p>
+                          <p className="text-sm font-medium text-white truncate">{row.productName}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span
                               role="button"
@@ -2686,35 +2651,33 @@ export function ActionItems() {
                       subject: newItem.subject.trim(),
                       status: 'To Do',
                       assignee: assigneeStr,
-                      assignee_initials: assigneeInitialsStr,
-                      due_date: dueDateParsed ? dueDateParsed.toISOString().slice(0, 10) : null,
-                      description: newItem.description.trim() || '',
-                      created_by: createdByDisplay,
-                      created_by_initials: createdByInitialsDisplay,
-                    });
-                    await fetchActionItems();
-                    setShowNewActionModal(false);
-                    setShowActionCreatedToast(true);
-                    setNewItem({
-                      product: '',
-                      productId: '',
-                      productBrand: '',
-                      productUnit: '',
-                      category: 'inventory',
-                      subject: '',
-                      description: '',
-                      assignee: '',
-                      dueDate: '',
-                    });
-                    setProductSearch('');
-                    setIsProductDropdownOpen(false);
-                    setAssigneeSearch('');
-                    setIsAssigneeDropdownOpen(false);
-                    setSelectedAssignees([]);
-                    setShowDueDateCalendar(false);
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : 'Failed to create action item');
-                  }
+                      assigneeInitials: assigneeInitialsStr,
+                      dueDate: dueDateTableStr,
+                      createdBy: 'Christian R.',
+                      createdByInitials: 'CR',
+                      dateCreated: dateCreatedStr,
+                    },
+                  }));
+
+                  setShowNewActionModal(false);
+                  setShowActionCreatedToast(true);
+                  setNewItem({
+                    product: '',
+                    productId: '',
+                    productBrand: '',
+                    productUnit: '',
+                    category: 'inventory',
+                    subject: '',
+                    description: '',
+                    assignee: '',
+                    dueDate: '',
+                  });
+                  setProductSearch('');
+                  setIsProductDropdownOpen(false);
+                  setAssigneeSearch('');
+                  setIsAssigneeDropdownOpen(false);
+                  setSelectedAssignees([]);
+                  setShowDueDateCalendar(false);
                 }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 hover:opacity-90"
                 style={{ background: '#3b82f6' }}
