@@ -287,10 +287,6 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
   const [editModalClaimId, setEditModalClaimId] = useState(null);
   const [showEditClaimDatePicker, setShowEditClaimDatePicker] = useState(false);
   const editClaimDateInputRef = useRef(null);
-  const inlineEditDateInputRef = useRef(null);
-  const [showInlineEditDatePicker, setShowInlineEditDatePicker] = useState(false);
-  const isCalendarInteractingRef = useRef(false);
-  const preventOverlayCloseRef = useRef(false);
   const [editModalPosition, setEditModalPosition] = useState({ top: 0, left: 0 });
   const [showAddClaimModal, setShowAddClaimModal] = useState(false);
   const [claimDate, setClaimDate] = useState('');
@@ -327,15 +323,16 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     }
   }, [isOpen, productData]);
 
-  // Handle click outside to close action menu and add-claim modal (edit is now inline, no modal)
+  // Handle click outside to close action menu and edit modal
   useEffect(() => {
-    if (!actionMenuId && !showAddClaimModal) return;
+    if (!actionMenuId && !editModalClaimId && !showAddClaimModal) return;
 
     const handleClickOutside = (event) => {
       if (actionMenuId && !event.target.closest('[data-action-menu]') && !event.target.closest('[data-action-button]')) {
         setActionMenuId(null);
       }
-      if (showAddClaimModal && !event.target.closest('[data-edit-modal]') && !event.target.closest('[data-action-button]')) {
+      if ((editModalClaimId || showAddClaimModal) && !event.target.closest('[data-edit-modal]') && !event.target.closest('[data-action-button]')) {
+        setEditModalClaimId(null);
         setShowAddClaimModal(false);
         setEditClaimDate('');
         setEditClaimUnits('');
@@ -351,14 +348,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [actionMenuId, showAddClaimModal]);
-
-  // Focus date input when entering inline edit mode
-  useEffect(() => {
-    if (editingClaimId && inlineEditDateInputRef.current) {
-      inlineEditDateInputRef.current.focus();
-    }
-  }, [editingClaimId]);
+  }, [actionMenuId, editModalClaimId, showAddClaimModal]);
 
   if (!isOpen || !productData) return null;
 
@@ -532,25 +522,6 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     return raw;
   };
 
-  // Convert claim date to YYYY-MM-DD for inline edit input
-  const claimDateToEditableFormat = (dateInput) => {
-    if (!dateInput) return '';
-    const date = new Date(dateInput);
-    if (!isNaN(date.getTime())) {
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    }
-    if (typeof dateInput === 'string' && dateInput.includes('-') && dateInput.length >= 10) {
-      return dateInput.slice(0, 10);
-    }
-    if (typeof dateInput === 'string' && dateInput.includes('/')) {
-      const parts = dateInput.split('/');
-      if (parts.length === 3) {
-        return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-      }
-    }
-    return '';
-  };
-
   const handleDeleteClaim = (claimId) => {
     const claim = claimHistory.find(c => c.id === claimId);
     if (claim) {
@@ -575,13 +546,56 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     e.stopPropagation();
     
     if (isPlusButton) {
-      // Enter inline edit mode for this claim (same as Edit from menu)
+      // Show popup modal for editing this claim
       const claim = claimHistory.find(c => c.id === claimId);
       if (claim) {
-        setEditClaimDate(claimDateToEditableFormat(claim.date));
-        setEditClaimUnits(claim.units != null ? String(claim.units) : '0');
-        setEditingClaimId(claimId);
-        setShowInlineEditDatePicker(false);
+        // Convert date to YYYY-MM-DD format for date input
+        let dateValue = '';
+        if (claim.date) {
+          // Try parsing the date
+          const date = new Date(claim.date);
+          if (!isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            dateValue = `${year}-${month}-${day}`;
+          } else if (claim.date.includes('-') && claim.date.length === 10) {
+            // Already in YYYY-MM-DD format
+            dateValue = claim.date;
+          } else {
+            // Try to parse MM/DD/YYYY format
+            const parts = claim.date.split('/');
+            if (parts.length === 3) {
+              const month = parts[0].padStart(2, '0');
+              const day = parts[1].padStart(2, '0');
+              const year = parts[2];
+              dateValue = `${year}-${month}-${day}`;
+            } else {
+              dateValue = claim.date;
+            }
+          }
+        }
+        setEditClaimDate(dateValue);
+        setEditClaimUnits(claim.units ? claim.units.toString() : '0');
+        
+        // Calculate modal position
+        const buttonRect = e.currentTarget.getBoundingClientRect();
+        const modalWidth = 400;
+        const modalHeight = 250;
+        
+        let top = buttonRect.bottom + 8;
+        let left = buttonRect.left;
+        
+        // Adjust if modal would go off screen
+        if (top + modalHeight > window.innerHeight) {
+          top = buttonRect.top - modalHeight - 8;
+        }
+        if (left + modalWidth > window.innerWidth) {
+          left = window.innerWidth - modalWidth - 16;
+        }
+        
+        setEditModalPosition({ top, left });
+        setEditModalClaimId(claimId);
       }
       setActionMenuId(null);
     } else {
@@ -620,40 +634,24 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     return dateStr;
   };
 
-  const handleSaveEdit = async (claimId, dateOverride, unitsOverride) => {
-    const dateToUse = dateOverride ?? editClaimDate;
-    const unitsToUse = unitsOverride ?? editClaimUnits;
-    if (!dateToUse || !unitsToUse || parseInt(unitsToUse, 10) <= 0) {
+  const handleSaveEdit = async (claimId) => {
+    if (!editClaimDate || !editClaimUnits || parseInt(editClaimUnits, 10) <= 0) {
       setEditingClaimId(null);
       setEditModalClaimId(null);
       setShowAddClaimModal(false);
       setEditClaimDate('');
       setEditClaimUnits('');
       setShowEditClaimDatePicker(false);
-      setShowInlineEditDatePicker(false);
       return;
     }
     const claim = claimHistory.find(c => c.id === claimId);
     if (!claim) {
       setEditModalClaimId(null);
       setShowEditClaimDatePicker(false);
-      setShowInlineEditDatePicker(false);
       return;
     }
     const oldUnits = claim.units;
-    const units = parseInt(unitsToUse, 10);
-    const oldDateNormalized = claimDateToApiFormat(claim.date);
-    const newDateNormalized = claimDateToApiFormat(dateToUse);
-    const dateChanged = oldDateNormalized !== newDateNormalized;
-    const unitsChanged = oldUnits !== units;
-
-    if (!dateChanged && !unitsChanged) {
-      setEditingClaimId(null);
-      setEditClaimDate('');
-      setEditClaimUnits('');
-      setShowInlineEditDatePicker(false);
-      return;
-    }
+    const units = parseInt(editClaimUnits, 10);
 
     // Validation: claimed must not exceed enrolled
     const enrolled = productData.enrolled ?? 0;
@@ -681,7 +679,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
 
     // Persist edit to API when this is an existing claim (numeric id)
     if (typeof claimId === 'number' && onUpdateClaim) {
-      const claimDate = claimDateToApiFormat(dateToUse);
+      const claimDate = claimDateToApiFormat(editClaimDate);
       if (!claimDate) {
         toast.error('Invalid claim date. Use MM/DD/YYYY or YYYY-MM-DD.');
         return;
@@ -696,7 +694,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
 
     // Update local state
     const updatedHistory = claimHistory.map(c =>
-      c.id === claimId ? { ...c, date: dateToUse, units } : c
+      c.id === claimId ? { ...c, date: editClaimDate, units } : c
     );
     const claimedTotal = updatedHistory.reduce((sum, c) => sum + Number(c.units || 0), 0);
     setClaimHistory(updatedHistory);
@@ -714,15 +712,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
     setEditClaimDate('');
     setEditClaimUnits('');
     setShowEditClaimDatePicker(false);
-    setShowInlineEditDatePicker(false);
     setClaimValidationError(null);
-  };
-
-  const handleCancelInlineEdit = () => {
-    setEditingClaimId(null);
-    setEditClaimDate('');
-    setEditClaimUnits('');
-    setShowInlineEditDatePicker(false);
   };
 
   const handleSaveAddClaim = () => {
@@ -916,7 +906,6 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          if (preventOverlayCloseRef.current) return;
           onClose();
         }
       }}
@@ -1571,101 +1560,7 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                           backgroundColor: '#111827',
                         }}
                       >
-                        {editingClaimId === claim.id ? (
-                          <div style={{ position: 'relative' }}>
-                            <input
-                              ref={inlineEditDateInputRef}
-                              type="text"
-                              placeholder="MM/DD/YYYY"
-                              value={editClaimDate}
-                              onChange={(e) => setEditClaimDate(e.target.value)}
-                              onBlur={() => {
-                                preventOverlayCloseRef.current = true;
-                                setTimeout(() => {
-                                  preventOverlayCloseRef.current = false;
-                                }, 400);
-                                setTimeout(() => {
-                                  if (!isCalendarInteractingRef.current && !showInlineEditDatePicker) {
-                                    handleSaveEdit(claim.id);
-                                  }
-                                  isCalendarInteractingRef.current = false;
-                                }, 200);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleSaveEdit(claim.id);
-                                } else if (e.key === 'Escape') {
-                                  e.preventDefault();
-                                  handleCancelInlineEdit();
-                                }
-                              }}
-                              style={{
-                                width: '129px',
-                                height: '28px',
-                                padding: '6px 12px 6px 32px',
-                                borderRadius: '4px',
-                                border: '1px solid #3B82F6',
-                                backgroundColor: '#4B5563',
-                                color: '#FFFFFF',
-                                fontSize: '14px',
-                                boxSizing: 'border-box',
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                isCalendarInteractingRef.current = true;
-                              }}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setShowInlineEditDatePicker(prev => !prev);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                left: '8px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                padding: '4px',
-                                cursor: 'pointer',
-                                color: '#9CA3AF',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.color = '#9CA3AF'; }}
-                              aria-label="Open calendar"
-                            >
-                              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                                <rect x="4" y="7" width="12" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.7"/>
-                                <rect x="5" y="3" width="2.5" height="4" rx="0.5" fill="currentColor" opacity="0.7"/>
-                                <rect x="12.5" y="3" width="2.5" height="4" rx="0.5" fill="currentColor" opacity="0.7"/>
-                              </svg>
-                            </button>
-                            {showInlineEditDatePicker && inlineEditDateInputRef.current && editingClaimId === claim.id && (
-                              <CalendarDropdown
-                                value={editClaimDate}
-                                onChange={(date) => {
-                                  isCalendarInteractingRef.current = true;
-                                  setShowInlineEditDatePicker(false);
-                                  handleSaveEdit(claim.id, date, editClaimUnits);
-                                  isCalendarInteractingRef.current = false;
-                                }}
-                                onClose={() => {
-                                  setShowInlineEditDatePicker(false);
-                                  setTimeout(() => { isCalendarInteractingRef.current = false; }, 300);
-                                }}
-                                inputRef={inlineEditDateInputRef.current}
-                              />
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ cursor: 'text', userSelect: 'none' }}>{formatDisplayDate(claim.date)}</span>
-                        )}
+                            {formatDisplayDate(claim.date)}
                       </td>
                       <td
                         style={{ 
@@ -1678,47 +1573,9 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                           backgroundColor: '#111827',
                         }}
                       >
-                        {editingClaimId === claim.id ? (
-                          <input
-                            type="number"
-                            min={1}
-                            value={editClaimUnits}
-                            onChange={(e) => setEditClaimUnits(e.target.value)}
-                            onBlur={() => {
-                              preventOverlayCloseRef.current = true;
-                              setTimeout(() => {
-                                preventOverlayCloseRef.current = false;
-                              }, 400);
-                              handleSaveEdit(claim.id);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSaveEdit(claim.id);
-                              } else if (e.key === 'Escape') {
-                                e.preventDefault();
-                                handleCancelInlineEdit();
-                              }
-                            }}
-                            className="no-spinner"
-                            style={{
-                              width: '60px',
-                              height: '28px',
-                              padding: '6px',
-                              borderRadius: '4px',
-                              border: '1px solid #3B82F6',
-                              backgroundColor: '#4B5563',
-                              color: '#FFFFFF',
-                              fontSize: '14px',
-                              textAlign: 'center',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                        ) : (
-                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-                            {claim.units}
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+                          {claim.units}
+                        </div>
                       </td>
                           <td
                             style={{ 
@@ -1823,10 +1680,24 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
             onClick={() => {
               const claim = claimHistory.find(c => c.id === actionMenuId);
               if (claim) {
-                setEditClaimDate(claimDateToEditableFormat(claim.date));
+                let dateValue = '';
+                if (claim.date) {
+                  const date = new Date(claim.date);
+                  if (!isNaN(date.getTime())) {
+                    dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                  } else if (claim.date.includes('-') && claim.date.length === 10) {
+                    dateValue = claim.date;
+                  } else {
+                    const parts = claim.date.split('/');
+                    if (parts.length === 3) {
+                      dateValue = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+                    }
+                  }
+                }
+                setEditClaimDate(dateValue);
                 setEditClaimUnits(claim.units != null ? String(claim.units) : '0');
-                setEditingClaimId(actionMenuId);
-                setShowInlineEditDatePicker(false);
+                setEditModalPosition({ top: Math.min(120, window.innerHeight - 280), left: Math.max(16, (window.innerWidth - 400) / 2) });
+                setEditModalClaimId(actionMenuId);
               }
               setActionMenuId(null);
             }}
@@ -1886,8 +1757,8 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
         document.body
       )}
 
-      {/* Add Claim Modal Popup - Show only when adding (via + Add Claim Entry). Edit is now inline. */}
-      {showAddClaimModal && createPortal(
+      {/* Add/Edit Claim Modal Popup - Show when adding (via + button) or editing an existing claim */}
+      {(editModalClaimId || showAddClaimModal) && createPortal(
         <>
         <div
           data-edit-modal
@@ -2166,7 +2037,13 @@ const VineDetailsModal = ({ isOpen, onClose, productData, onUpdateProduct, onUpd
                 Cancel
               </button>
               <button
-              onClick={handleSaveAddClaim}
+              onClick={() => {
+                if (showAddClaimModal) {
+                  handleSaveAddClaim();
+                } else {
+                  handleSaveEdit(editModalClaimId);
+                }
+              }}
                 style={{
                 padding: '10px 20px',
                   border: 'none',

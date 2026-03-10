@@ -323,6 +323,7 @@ const VineTracker = () => {
         setError(null);
         await api.updateVineClaim(claimId, data);
         await fetchVineClaims();
+        toast.success('Vine claim updated.');
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Failed to update claim';
         setError(msg);

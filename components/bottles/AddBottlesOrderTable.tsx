@@ -2,8 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { MoreVertical, Calendar } from 'lucide-react';
+import { MoreVertical, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SegmentedInventoryBar } from './SegmentedInventoryBar';
 import { InventoryLegend } from './InventoryLegend';
@@ -52,7 +51,6 @@ export function AddBottlesOrderTable({
   searchQuery = '',
 }: AddBottlesOrderTableProps) {
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
-  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [qtyValues, setQtyValues] = useState<Record<string, string>>({});
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -62,10 +60,6 @@ export function AddBottlesOrderTable({
     targetAdded: number;
   } | null>(null);
   const [barFillPhase, setBarFillPhase] = useState<'start' | 'go'>('start');
-  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const [removePhase, setRemovePhase] = useState<Record<string, 'start' | 'go'>>({});
-  const [cardOrder, setCardOrder] = useState([0, 1, 2]);
-  const dragCardIdx = useRef<number | null>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
   const filteredBottles = React.useMemo(() => {
@@ -108,9 +102,12 @@ export function AddBottlesOrderTable({
     const id = bottle.id;
     const isAdded = addedIds.has(id);
     if (isAdded) {
-      // Kick off reverse fill animation; actual removal happens after it completes
-      setRemovingIds((prev) => new Set(prev).add(id));
-      setRemovePhase((prev) => ({ ...prev, [id]: 'start' }));
+      setAddedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setBarFillAnimation(null);
     } else {
       const qty =
         parseInt(String(qtyValues[id] ?? '0').replace(/,/g, ''), 10) || 0;
@@ -142,44 +139,6 @@ export function AddBottlesOrderTable({
     }, 1200);
     return () => clearTimeout(id);
   }, [barFillPhase, barFillAnimation]);
-
-  // Removal animation: 'start' → 'go' after one frame (triggers CSS transition)
-  useEffect(() => {
-    const ids = Array.from(removingIds).filter((id) => removePhase[id] === 'start');
-    if (ids.length === 0) return;
-    const timer = setTimeout(() => {
-      setRemovePhase((prev) => {
-        const next = { ...prev };
-        ids.forEach((id) => { next[id] = 'go'; });
-        return next;
-      });
-    }, 16);
-    return () => clearTimeout(timer);
-  }, [removingIds, removePhase]);
-
-  // Removal animation: after transition completes, purge the IDs
-  useEffect(() => {
-    const ids = Array.from(removingIds).filter((id) => removePhase[id] === 'go');
-    if (ids.length === 0) return;
-    const timer = setTimeout(() => {
-      setAddedIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
-      setRemovingIds((prev) => {
-        const next = new Set(prev);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
-      setRemovePhase((prev) => {
-        const next = { ...prev };
-        ids.forEach((id) => delete next[id]);
-        return next;
-      });
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [removingIds, removePhase]);
 
   const addedEntries = filteredBottles.filter((b) => addedIds.has(b.id));
   const totalProducts = addedEntries.length;
@@ -242,7 +201,7 @@ export function AddBottlesOrderTable({
               <tr style={{ height: 40 }}>
                 <th
                   style={{
-                    padding: '22px 12px 22px 16px',
+                    padding: '8px 12px 8px 16px',
                     width: 40,
                     minWidth: 40,
                     boxSizing: 'border-box',
@@ -261,31 +220,25 @@ export function AddBottlesOrderTable({
                 </th>
                 <th
                   className="text-left text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 210, maxWidth: 210 }}
+                  style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box' }}
                 >
                   PACKAGING NAME
                 </th>
                 <th
                   className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box' }}
-                >
-                  SUPPLIER INV.
-                </th>
-                <th
-                  className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box' }}
+                  style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box' }}
                 >
                   INVENTORY
                 </th>
                 <th
-                  className="text-right text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 180, maxWidth: 180 }}
+                  className="text-center text-xs font-semibold uppercase tracking-wider"
+                  style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box' }}
                 >
                   QUANTITY
                 </th>
                 <th
                   className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', minWidth: 419 }}
+                  style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', minWidth: 474 }}
                 >
                   STORAGE CAPACITY
                 </th>
@@ -293,14 +246,14 @@ export function AddBottlesOrderTable({
                   style={{
                     width: 80,
                     minWidth: 80,
-                    padding: '22px 16px 22px 8px',
+                    padding: '8px 16px 8px 8px',
                     boxSizing: 'border-box',
                     textAlign: 'right',
                   }}
                 />
               </tr>
               <tr style={{ height: 1, backgroundColor: ROW_BG }}>
-                <td colSpan={7} style={{ padding: 0, border: 'none', backgroundColor: 'inherit', verticalAlign: 'top' }}>
+                <td colSpan={6} style={{ padding: 0, border: 'none', backgroundColor: 'inherit', verticalAlign: 'top' }}>
                   <div
                     style={{
                       marginLeft: 16,
@@ -316,7 +269,7 @@ export function AddBottlesOrderTable({
               {filteredBottles.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     style={{
                       padding: 64,
                       textAlign: 'center',
@@ -331,10 +284,12 @@ export function AddBottlesOrderTable({
               ) : (
                 filteredBottles.map((bottle, index) => {
                   const isAdded = addedIds.has(bottle.id);
-                  const isRemoving = removingIds.has(bottle.id);
                   const totalInventory = bottle.warehouseInventory + bottle.supplierInventory;
                   const defaultDisplayQty = Math.max(500, Math.floor(totalInventory * 0.15));
                   const qtyDisplay = qtyValues[bottle.id] ?? (isAdded ? '0' : String(defaultDisplayQty));
+                  const available = bottle.warehouseInventory;
+                  const inbound = bottle.supplierInventory;
+                  const allocated = 0;
                   const addedRaw = isAdded
                     ? parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0
                     : 0;
@@ -344,19 +299,12 @@ export function AddBottlesOrderTable({
                       ? barFillAnimation.targetAdded
                       : barFillAnimation.startAdded
                     : addedRaw;
-                  // fillPercent: 0→100 on add, 100→0 on remove (both CSS-transitioned)
-                  const fillPercent = isRemoving
-                    ? removePhase[bottle.id] === 'go' ? 0 : 100
-                    : isAnimating
-                      ? barFillPhase === 'go' ? 100 : 0
-                      : isAdded ? 100 : 0;
-                  const showAsAdded = isAdded || isRemoving;
 
                   return (
                     <React.Fragment key={bottle.id}>
                       {index > 0 && (
                         <tr style={{ height: 1, backgroundColor: ROW_BG }}>
-                          <td colSpan={7} style={{ padding: 0, backgroundColor: ROW_BG, border: 'none' }}>
+                          <td colSpan={6} style={{ padding: 0, backgroundColor: ROW_BG, border: 'none' }}>
                             <div
                               style={{
                                 marginLeft: 16,
@@ -378,11 +326,9 @@ export function AddBottlesOrderTable({
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.backgroundColor = '#1A2636';
-                          setHoveredRowId(bottle.id);
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = ROW_BG;
-                          setHoveredRowId(null);
                         }}
                         onClick={() => toggleSelect(index)}
                       >
@@ -414,9 +360,6 @@ export function AddBottlesOrderTable({
                             verticalAlign: 'middle',
                             backgroundColor: 'inherit',
                             borderTop: 'none',
-                            width: 250,
-                            maxWidth: 250,
-                            overflow: 'hidden',
                           }}
                         >
                           <Link
@@ -447,7 +390,7 @@ export function AddBottlesOrderTable({
                             color: '#FFFFFF',
                           }}
                         >
-                          Auto-rep.
+                          {(bottle.warehouseInventory + bottle.supplierInventory).toLocaleString()}
                         </td>
                         <td
                           style={{
@@ -456,22 +399,6 @@ export function AddBottlesOrderTable({
                             textAlign: 'center',
                             backgroundColor: 'inherit',
                             borderTop: 'none',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            color: '#FFFFFF',
-                          }}
-                        >
-                          {(bottle.warehouseInventory + bottle.supplierInventory).toLocaleString()}
-                        </td>
-                        <td
-                          style={{
-                            padding: '8px 12px',
-                            verticalAlign: 'middle',
-                            textAlign: 'right',
-                            backgroundColor: 'inherit',
-                            borderTop: 'none',
-                            width: 180,
-                            maxWidth: 180,
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -479,8 +406,8 @@ export function AddBottlesOrderTable({
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: 4,
+                              justifyContent: 'center',
+                              gap: 8,
                             }}
                           >
                             <input
@@ -493,19 +420,17 @@ export function AddBottlesOrderTable({
                               }}
                               onClick={(e) => e.stopPropagation()}
                               style={{
-                                width: 115,
-                                height: 34,
-                                padding: '8px 6px',
-                                gap: 4,
+                                width: 80,
+                                height: 26,
+                                padding: '0 8px',
                                 fontSize: 12,
                                 color: '#E5E7EB',
                                 backgroundColor: '#2C3544',
                                 border: 'none',
-                                borderRadius: 8,
+                                borderRadius: 6,
                                 outline: 'none',
                                 boxSizing: 'border-box',
                                 textAlign: 'center',
-                                opacity: 1,
                               }}
                             />
                             <button
@@ -519,7 +444,7 @@ export function AddBottlesOrderTable({
                                 padding: '0 10px',
                                 borderRadius: 6,
                                 border: 'none',
-                                backgroundColor: showAsAdded ? '#10B981' : '#2563EB',
+                                backgroundColor: isAdded ? '#10B981' : '#2563EB',
                                 color: '#FFFFFF',
                                 fontSize: 12,
                                 fontWeight: 500,
@@ -530,8 +455,8 @@ export function AddBottlesOrderTable({
                                 gap: 4,
                               }}
                             >
-                              {!showAsAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
-                              {showAsAdded ? 'Added' : 'Add'}
+                              {!isAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
+                              {isAdded ? 'Added' : 'Add'}
                             </button>
                           </div>
                         </td>
@@ -542,13 +467,16 @@ export function AddBottlesOrderTable({
                             textAlign: 'center',
                             backgroundColor: 'inherit',
                             borderTop: 'none',
-                            minWidth: 419,
+                            minWidth: 474,
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 19 }}>
                             <SegmentedInventoryBar
-                              fillPercent={fillPercent}
-                              width={395}
+                              available={available}
+                              allocated={allocated}
+                              inbound={inbound}
+                              added={displayAdded}
+                              width={454}
                               height={19}
                             />
                           </div>
@@ -568,20 +496,21 @@ export function AddBottlesOrderTable({
                               type="button"
                               className="flex items-center gap-1.5 justify-end"
                               style={{
-                                padding: 0,
-                                border: 'none',
-                                background: 'transparent',
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #334155',
+                                backgroundColor: '#1E293B',
                                 color: '#9CA3AF',
+                                fontSize: 12,
                                 cursor: 'pointer',
-                                visibility: hoveredRowId === bottle.id || actionMenuOpenId === bottle.id ? 'visible' : 'hidden',
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActionMenuOpenId((prev) => (prev === bottle.id ? null : bottle.id));
                               }}
                             >
-                              <Calendar size={14} />
-                              <MoreVertical size={14} />
+                              <FileText size={14} />
+                              Timeline
                             </button>
                             {actionMenuOpenId === bottle.id && (
                               <div
@@ -676,51 +605,68 @@ export function AddBottlesOrderTable({
           }}
         >
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {cardOrder.map((cardId, orderIdx) => {
-            const cards = [
-              { label: 'Products', value: String(totalProducts) },
-              { label: 'Pallets',  value: totalPalettes.toFixed(1) },
-              { label: 'Boxes',    value: String(totalBoxes) },
-            ];
-            const card = cards[cardId];
-            return (
-              <div
-                key={cardId}
-                draggable
-                onDragStart={() => { dragCardIdx.current = orderIdx; }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  const from = dragCardIdx.current;
-                  if (from === null || from === orderIdx) return;
-                  setCardOrder((prev) => {
-                    const next = [...prev];
-                    [next[from], next[orderIdx]] = [next[orderIdx], next[from]];
-                    return next;
-                  });
-                  dragCardIdx.current = null;
-                }}
-                style={{
-                  width: 149.33,
-                  height: 43,
-                  padding: '6px 8px',
-                  borderRadius: 8,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 2,
-                  justifyContent: 'center',
-                  boxSizing: 'border-box',
-                  backgroundColor: '#24323c',
-                  cursor: 'grab',
-                  userSelect: 'none',
-                }}
-              >
-                <span style={{ fontSize: 10, fontWeight: 500, color: '#6B7280', textTransform: 'uppercase' }}>
-                  {card.label}
-                </span>
-                <span style={{ fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}>{card.value}</span>
-              </div>
-            );
-          })}
+          <div
+            style={{
+              width: 149.33,
+              height: 43,
+              padding: '6px 8px',
+              borderRadius: 8,
+              opacity: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+              backgroundColor: '#24323c',
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 500, color: '#6B7280', textTransform: 'uppercase' }}>
+              Products
+            </span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}>{totalProducts}</span>
+          </div>
+          <div
+            style={{
+              width: 149.33,
+              height: 43,
+              padding: '6px 8px',
+              borderRadius: 8,
+              opacity: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+              backgroundColor: '#24323c',
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 500, color: '#6B7280', textTransform: 'uppercase' }}>
+              Pallets
+            </span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}>
+              {totalPalettes.toFixed(1)}
+            </span>
+          </div>
+          <div
+            style={{
+              width: 149.33,
+              height: 43,
+              padding: '6px 8px',
+              borderRadius: 8,
+              opacity: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+              backgroundColor: '#24323c',
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 500, color: '#6B7280', textTransform: 'uppercase' }}>
+              Boxes
+            </span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}>{totalBoxes}</span>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
@@ -744,17 +690,13 @@ export function AddBottlesOrderTable({
               height: 28,
               padding: '0 12px',
               fontSize: 13,
-              fontWeight: 600,
-              color: '#007AFF',
+              fontWeight: 500,
+              color: '#9CA3AF',
               backgroundColor: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
             }}
           >
-            <Image src="/assets/Vector.png" alt="export" width={12} height={12} />
             Export
           </button>
           <button

@@ -16,7 +16,7 @@ const MODAL_BG = '#1A2235';
 const BORDER_COLOR = '#334155';
 const TEXT_WHITE = '#FFFFFF';
 const TEXT_MUTED = '#9CA3AF';
-const INPUT_BG = '#4B5563';
+const INPUT_BG = '#0F172A';
 const CARD_BG = '#1E293B';
 
 export function NewBottleOrderModal({
@@ -56,6 +56,7 @@ export function NewBottleOrderModal({
           position: 'fixed',
           inset: 0,
           backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(4px)',
           zIndex: 9998,
         }}
         onClick={onClose}
@@ -78,7 +79,7 @@ export function NewBottleOrderModal({
           zIndex: 9999,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'visible',
+          overflow: 'hidden',
         }}
         onClick={(e) => e.stopPropagation()}
       >

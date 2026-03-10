@@ -2717,28 +2717,22 @@ const VineTrackerTable = ({ rows, searchValue, onUpdateRow, onConfirmNewVine, on
       {/* Vine Details Modal */}
       <VineDetailsModal
         isOpen={showVineDetailsModal}
-        onClose={() => {
+        onClose={async () => {
           const productId = selectedVineRow?.productId ?? (typeof selectedVineRow?.id === 'number' ? selectedVineRow?.id : null);
           const launchDateRaw = (selectedVineRow?.launchDate || '').trim();
-
-          // Close the modal immediately for a snappy UI
+          if (onUpdateLaunchDate && productId != null && launchDateRaw) {
+            try {
+              await onUpdateLaunchDate(productId, launchDateRaw);
+            } catch (_) {
+              /* toast already shown by parent */
+            }
+          }
           setShowVineDetailsModal(false);
           setSelectedVineRow(null);
           setClaimDate('');
           setClaimUnits('0');
           setShowClaimDatePicker(false);
           setIsOpenedFromPlusButton(false);
-
-          // Persist launch date in the background without blocking close
-          if (onUpdateLaunchDate && productId != null && launchDateRaw) {
-            void (async () => {
-              try {
-                await onUpdateLaunchDate(productId, launchDateRaw);
-              } catch (_) {
-                /* toast already shown by parent */
-              }
-            })();
-          }
         }}
         productData={selectedVineRow}
         onUpdateProduct={(updatedProduct) => {

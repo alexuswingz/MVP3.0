@@ -110,6 +110,8 @@ export default function BottlesPage() {
         }
       />
 
+      <BottlesSummaryCards stats={stats} isDarkMode={isDarkMode} />
+
       <BottlesTable
         bottles={bottles}
         searchQuery={searchQuery}
