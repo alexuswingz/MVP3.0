@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { AddBottlesOrderTable } from '@/components/bottles/AddBottlesOrderTable';
+import { AddBottlesOrderTable, ReceivePOTable, type ReceivePOItem } from '@/components/bottles/AddBottlesOrderTable';
 import type { BottleRow } from '@/components/bottles/bottles-table';
 
 const PAGE_BG = '#0B111E';
@@ -30,8 +30,36 @@ export default function NewBottleOrderPage() {
   const searchParams = useSearchParams();
   const orderName = searchParams.get('order') ?? '';
   const supplier = searchParams.get('supplier') ?? '';
-  const [activeTab, setActiveTab] = useState<(typeof WORKFLOW_TABS)[number]>('Add Products');
+
+  // If navigating from Orders tab, start directly on Receive PO
+  const urlTab = searchParams.get('tab') as (typeof WORKFLOW_TABS)[number] | null;
+  const validTab = urlTab && WORKFLOW_TABS.includes(urlTab as (typeof WORKFLOW_TABS)[number]) ? urlTab as (typeof WORKFLOW_TABS)[number] : 'Add Products';
+
+  const [activeTab, setActiveTab] = useState<(typeof WORKFLOW_TABS)[number]>(validTab);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Steps that are already completed (used when entering Receive PO from Orders tab)
+  const completedSteps = useMemo<Set<string>>(() => {
+    if (validTab === 'Receive PO') return new Set(['Add Products', 'Submit PO']);
+    if (validTab === 'Submit PO') return new Set(['Add Products']);
+    return new Set();
+  }, [validTab]);
+
+  // Load order items from sessionStorage when coming from Orders tab
+  const receiveItems = useMemo<ReceivePOItem[]>(() => {
+    if (validTab !== 'Receive PO') return [];
+    try {
+      const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
+        orderName: string;
+        items: ReceivePOItem[];
+      }[];
+      // Find the most-recent order matching this orderName
+      const match = [...orders].reverse().find((o) => o.orderName === orderName);
+      return match?.items ?? [];
+    } catch (_) {
+      return [];
+    }
+  }, [validTab, orderName]);
 
   // Date/ID display: use order name or formatted date (match shipments)
   const dateStr = orderName || (() => {
@@ -183,6 +211,11 @@ export default function NewBottleOrderPage() {
       >
         {WORKFLOW_TABS.map((tab) => {
           const isActive = activeTab === tab;
+          const isDone = completedSteps.has(tab);
+          // Colour: green if done, blue if active, gray if pending
+          const dotColor = isDone ? '#10B981' : isActive ? '#3B82F6' : '#9CA3AF';
+          const labelColor = isActive ? '#3B82F6' : '#9CA3AF';
+
           return (
             <div key={tab} style={{ position: 'relative' }}>
               <button
@@ -197,7 +230,7 @@ export default function NewBottleOrderPage() {
                   padding: '12px 16px',
                   fontSize: 14,
                   fontWeight: 500,
-                  color: isActive ? '#3B82F6' : '#9CA3AF',
+                  color: labelColor,
                   backgroundColor: 'transparent',
                   border: 'none',
                   marginBottom: -1,
@@ -206,7 +239,12 @@ export default function NewBottleOrderPage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {isActive ? (
+                {isDone ? (
+                  // Filled green circle for completed steps
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill={dotColor} aria-hidden>
+                    <circle cx="12" cy="12" r="6" />
+                  </svg>
+                ) : isActive ? (
                   <svg width={16} height={16} viewBox="0 0 24 24" fill="#3B82F6" aria-hidden>
                     <circle cx="12" cy="12" r="6" />
                   </svg>
@@ -224,7 +262,7 @@ export default function NewBottleOrderPage() {
                   right: 0,
                   bottom: 0,
                   height: 2,
-                  backgroundColor: '#3B82F6',
+                  backgroundColor: isDone ? '#10B981' : '#3B82F6',
                   width: isActive ? '100%' : '0%',
                   transition: 'width 0.3s ease-out',
                 }}
@@ -286,7 +324,7 @@ export default function NewBottleOrderPage() {
         </div>
       </div>
 
-      {/* Add Bottles Order Table */}
+      {/* Table area — switches between Add Products and Receive PO */}
       <main
         style={{
           flex: 1,
@@ -297,13 +335,29 @@ export default function NewBottleOrderPage() {
           overflow: 'hidden',
         }}
       >
-        <AddBottlesOrderTable
-          bottles={MOCK_BOTTLES}
-          orderName={orderName}
-          supplier={supplier}
-          isDarkMode={true}
-          searchQuery={searchQuery}
-        />
+        {activeTab === 'Receive PO' ? (
+          <ReceivePOTable items={receiveItems} orderName={orderName || undefined} />
+        ) : (
+          <AddBottlesOrderTable
+            bottles={MOCK_BOTTLES}
+            orderName={orderName}
+            supplier={supplier}
+            isDarkMode={true}
+            searchQuery={searchQuery}
+            onOrderComplete={(items) => {
+              try {
+                const existing = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]');
+                const newOrder = {
+                  orderName: orderName || `Order ${new Date().toLocaleDateString()}`,
+                  completedAt: new Date().toISOString(),
+                  items,
+                };
+                sessionStorage.setItem('completedOrders', JSON.stringify([...existing, newOrder]));
+              } catch (_) {}
+              router.push('/dashboard/bottles?tab=Orders');
+            }}
+          />
+        )}
       </main>
     </div>
   );

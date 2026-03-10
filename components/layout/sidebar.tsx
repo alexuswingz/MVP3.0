@@ -66,7 +66,7 @@ export function Sidebar() {
     if (!getForecastCache()) prefetchForecastTable();
   }, []);
 
-  // Prefetch forecast as soon as Production section is expanded (user likely heading to Forecast/Shipments/Bottles)
+  // Prefetch forecast as soon as Production section is expanded (user likely heading to Forecast/Shipments)
   useEffect(() => {
     if (expandedItems['production'] && !getForecastCache()) prefetchForecastTable();
   }, [expandedItems['production']]);

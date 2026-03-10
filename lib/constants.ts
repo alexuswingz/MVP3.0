@@ -24,7 +24,6 @@ export const NAV_ITEMS = [
     children: [
       { id: 'forecast', label: 'Forecast', path: '/dashboard/forecast' },
       { id: 'shipments', label: 'Shipments', path: '/dashboard/shipments' },
-      { id: 'bottles', label: 'Bottles', path: '/dashboard/bottles' },
     ]
   },
   {
@@ -34,6 +33,7 @@ export const NAV_ITEMS = [
     path: '/dashboard/supply-chain',
     children: [
       { id: 'closures', label: 'Closures', path: '/dashboard/supply-chain/closures' },
+      { id: 'bottles', label: 'Bottles', path: '/dashboard/bottles' },
     ]
   },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useUIStore } from '@/stores/ui-store';
 import {
   BottlesHeader,
@@ -12,6 +12,7 @@ import {
   type BottlesSummaryStats,
   type BottleRow,
 } from '@/components/bottles';
+import { BottlesOrdersTable, type CompletedOrderItem } from '@/components/bottles/BottlesOrdersTable';
 
 // Mock data – replace with API/store when available
 const MOCK_BOTTLES: BottleRow[] = [
@@ -36,8 +37,36 @@ const MOCK_STATS: BottlesSummaryStats = {
 
 export default function BottlesPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<BottleTabId>('Inventory');
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as BottleTabId | null) ?? 'Inventory';
+  const [activeTab, setActiveTab] = useState<BottleTabId>(initialTab);
   const [searchQuery, setSearchQuery] = useState('');
+  const loadCompletedOrders = (): CompletedOrderItem[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
+        orderName: string; completedAt: string;
+        items: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }[];
+      }[];
+      return raw.flatMap((order) =>
+        order.items.map((item) => ({
+          ...item,
+          orderName: order.orderName,
+          completedAt: order.completedAt,
+        }))
+      );
+    } catch (_) { return []; }
+  };
+
+  const [completedOrderItems, setCompletedOrderItems] = useState<CompletedOrderItem[]>(loadCompletedOrders);
+
+  // Re-read sessionStorage whenever the Orders tab becomes active (e.g. after Receive PO confirm)
+  useEffect(() => {
+    if (activeTab === 'Orders') {
+      setCompletedOrderItems(loadCompletedOrders());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
   const [newOrderModalOpen, setNewOrderModalOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -110,12 +139,18 @@ export default function BottlesPage() {
         }
       />
 
-      <BottlesTable
-        bottles={bottles}
-        searchQuery={searchQuery}
-        isDarkMode={isDarkMode}
-        isLoading={false}
-      />
+      {activeTab === 'Inventory' && (
+        <BottlesTable
+          bottles={bottles}
+          searchQuery={searchQuery}
+          isDarkMode={isDarkMode}
+          isLoading={false}
+        />
+      )}
+
+      {activeTab === 'Orders' && (
+        <BottlesOrdersTable items={completedOrderItems} />
+      )}
 
       <NewBottleOrderModal
         isOpen={newOrderModalOpen}

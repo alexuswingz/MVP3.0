@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Link2, Package } from 'lucide-react';
+import { Link2, Package, FlaskConical } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 
 const PAGE_BG = '#0B111E';
@@ -74,6 +74,39 @@ export default function SupplyChainPage() {
               </div>
               <div className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
                 Manage closure inventory and orders
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard/bottles')}
+          className="text-left rounded-lg border transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          style={{
+            backgroundColor: CARD_BG,
+            borderColor: CARD_BORDER,
+            borderTopWidth: 3,
+            borderTopColor: '#10B981',
+            padding: 20,
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center w-10 h-10 rounded-lg"
+              style={{ backgroundColor: '#374151' }}
+            >
+              <FlaskConical className="w-5 h-5" style={{ color: '#9CA3AF' }} />
+            </div>
+            <div>
+              <div
+                className="font-semibold text-base"
+                style={{ color: isDarkMode ? '#F9FAFB' : '#111827' }}
+              >
+                Bottles
+              </div>
+              <div className="text-sm mt-0.5" style={{ color: '#9CA3AF' }}>
+                Manage bottle inventory and orders
               </div>
             </div>
           </div>
