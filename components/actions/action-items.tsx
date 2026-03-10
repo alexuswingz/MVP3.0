@@ -33,7 +33,7 @@ import {
   type ActionItemsDueDateSortState,
 } from '@/components/actions/action-items-due-date-sort';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
-import { api, type ActionItemResponse } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 type TicketDetail = {
@@ -111,7 +111,15 @@ function getShortProductName(name: string): string {
   return `${trimmed.slice(0, SHORT_PRODUCT_NAME_MAX - 1)}…`;
 }
 
-const DEFAULT_TABLE_ITEMS: TableRow[] = [];
+const DEFAULT_TABLE_ITEMS: TableRow[] = [
+  { id: 1, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 2, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 3, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 4, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 5, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 6, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+  { id: 7, status: 'To Do', productName: 'Arborvitae Tree Fertilizer for All...', productId: 'B0C73TDZCQ', productBrand: 'TPS Nutrients', productSize: 'Quart', category: 'Inventory', subject: 'Low FBA Available', assignee: 'Jeff D.', assigneeInitials: 'JB', dueDate: 'Feb. 24, 2025' },
+];
 
 /** Build a minimal TicketDetail from a table row (e.g. when saving description for a row that has no ticketDetails yet). */
 function ticketDetailFromRow(
@@ -141,57 +149,35 @@ function ticketDetailFromRow(
   };
 }
 
-function mapActionItemToTableRow(item: ActionItemResponse): TableRow {
-  const dueDateStr = item.due_date ? formatDueDateTable(new Date(item.due_date)) : '';
-  const productName = item.product_name ?? '';
-  const productId = item.product_asin ?? '';
-  const productBrand = item.product_brand ?? '';
-  const productSize = item.product_size ?? '';
-  const assignee = item.assignee ?? '';
-  return {
-    id: item.id,
-    status: item.status || 'To Do',
-    productName,
-    productId,
-    productBrand,
-    productSize,
-    category: item.category || '',
-    subject: item.subject || '',
-    assignee,
-    assigneeInitials: getInitials(assignee),
-    dueDate: dueDateStr,
-  };
+const ACTION_ITEMS_STORAGE_KEY = 'action-items-persisted';
+
+function loadActionItemsFromStorage(): { tableItems: TableRow[]; ticketDetails: Record<number, TicketDetail> } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(ACTION_ITEMS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { tableItems: TableRow[]; ticketDetails: Record<string, TicketDetail> };
+    if (!parsed?.tableItems || !Array.isArray(parsed.tableItems)) return null;
+    const ticketDetails: Record<number, TicketDetail> = {};
+    if (parsed.ticketDetails && typeof parsed.ticketDetails === 'object') {
+      for (const [k, v] of Object.entries(parsed.ticketDetails)) {
+        const id = Number(k);
+        if (!isNaN(id) && v && typeof v === 'object') ticketDetails[id] = v as TicketDetail;
+      }
+    }
+    return { tableItems: parsed.tableItems, ticketDetails };
+  } catch {
+    return null;
+  }
 }
 
-function mapActionItemToTicketDetail(
-  item: ActionItemResponse,
-  createdByFallback: { createdBy: string; createdByInitials: string }
-): TicketDetail {
-  const createdAt = item.created_at ? new Date(item.created_at) : new Date();
-  const dateCreated = `${MONTH_NAMES[createdAt.getMonth()].slice(0, 3)}. ${createdAt.getDate()}, ${createdAt.getFullYear()}`;
-  const createdByName = item.created_by_name || createdByFallback.createdBy;
-  const createdByInitials = getInitials(createdByName || createdByFallback.createdByInitials);
-  return {
-    ticketId: `I-${item.id}`,
-    productName: item.product_name ?? '',
-    productId: item.product_asin ?? '',
-    brand: item.product_brand ?? '',
-    unit: item.product_size ?? '',
-    subject: item.subject ?? '',
-    description: '',
-    instructions: item.instructions ?? '',
-    bullets: item.bullets ?? [],
-    status: item.status || 'To Do',
-    category: item.category || '',
-    assignee: item.assignee ?? '',
-    assigneeInitials: getInitials(item.assignee ?? ''),
-    dueDate: item.due_date ? formatDueDateTable(new Date(item.due_date)) : '',
-    createdBy: createdByName || createdByFallback.createdBy,
-    createdByInitials,
-    dateCreated,
-    descriptionHtml: item.description_html ?? '',
-    attachments: [],
-  };
+function saveActionItemsToStorage(tableItems: TableRow[], ticketDetails: Record<number, TicketDetail>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(ACTION_ITEMS_STORAGE_KEY, JSON.stringify({ tableItems, ticketDetails }));
+  } catch {
+    // ignore quota or other errors
+  }
 }
 
 function getInitials(name: string): string {
@@ -774,10 +760,14 @@ export function ActionItems() {
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
   const [showActionCreatedToast, setShowActionCreatedToast] = useState(false);
-  const [tableItems, setTableItems] = useState<TableRow[]>(DEFAULT_TABLE_ITEMS);
-  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>({});
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [itemsError, setItemsError] = useState<string | null>(null);
+  const [tableItems, setTableItems] = useState<TableRow[]>(() => {
+    const loaded = loadActionItemsFromStorage();
+    return loaded?.tableItems?.length ? loaded.tableItems : DEFAULT_TABLE_ITEMS;
+  });
+  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>(() => {
+    const loaded = loadActionItemsFromStorage();
+    return loaded?.ticketDetails ?? {};
+  });
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
@@ -893,29 +883,9 @@ export function ActionItems() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProductDropdownOpen, isAssigneeDropdownOpen, rowMenuOpenId]);
 
-  // Initial load of action items from backend
   useEffect(() => {
-    setLoadingItems(true);
-    setItemsError(null);
-    api
-      .getActionItems()
-      .then((items: ActionItemResponse[]) => {
-        setTableItems(items.map((i: ActionItemResponse) => mapActionItemToTableRow(i)));
-        const details: Record<number, TicketDetail> = {};
-        items.forEach((i: ActionItemResponse) => {
-          details[i.id] = mapActionItemToTicketDetail(i, {
-            createdBy: createdByDisplay,
-            createdByInitials: createdByInitialsDisplay,
-          });
-        });
-        setTicketDetails(details);
-      })
-      .catch((e: unknown) => {
-        console.error('Failed to load action items', e);
-        setItemsError(e instanceof Error ? e.message : 'Failed to load action items');
-      })
-      .finally(() => setLoadingItems(false));
-  }, [createdByDisplay, createdByInitialsDisplay]);
+    saveActionItemsToStorage(tableItems, ticketDetails);
+  }, [tableItems, ticketDetails]);
 
   useEffect(() => {
     if (!showDueDateCalendar) return;
@@ -2114,6 +2084,7 @@ export function ActionItems() {
         <DetailModal
           item={selectedDetailItem}
           onClose={() => {
+            saveActionItemsToStorage(tableItems, ticketDetails);
             setSelectedDetailId(null);
           }}
           descriptionHtml={descriptionHtml}
@@ -2147,7 +2118,7 @@ export function ActionItems() {
                 return next;
               });
             });
-            // Attachments are still client-side only for now
+            if (nextTicketDetails) saveActionItemsToStorage(tableItems, nextTicketDetails);
           }}
         />
       )}

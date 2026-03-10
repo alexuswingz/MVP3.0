@@ -283,50 +283,7 @@ class ExtendedApiClient extends ApiClient {
     return this.request<ProductsListResponse>(`/products/${query ? '?' + query : ''}`);
   }
 
-  // Action Items
-  async getActionItems(params?: {
-    status?: string;
-    category?: string;
-    assignee?: string;
-    product?: number;
-    search?: string;
-    ordering?: string;
-  }): Promise<ActionItemResponse[]> {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.category) searchParams.set('category', params.category);
-    if (params?.assignee) searchParams.set('assignee', params.assignee);
-    if (params?.product != null) searchParams.set('product', params.product.toString());
-    if (params?.search) searchParams.set('search', params.search);
-    if (params?.ordering) searchParams.set('ordering', params.ordering);
-    const query = searchParams.toString();
-    const response = await this.request<ActionItemResponse[] | { results: ActionItemResponse[] }>(
-      `/action-items/${query ? '?' + query : ''}`
-    );
-    return Array.isArray(response) ? response : response.results || [];
-  }
-
-  async createActionItem(data: ActionItemCreateInput): Promise<ActionItemResponse> {
-    return this.request<ActionItemResponse>('/action-items/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateActionItem(id: number, data: ActionItemUpdateInput): Promise<ActionItemResponse> {
-    return this.request<ActionItemResponse>(`/action-items/${id}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteActionItem(id: number): Promise<void> {
-    return this.request(`/action-items/${id}/`, {
-      method: 'DELETE',
-    });
-  }
-}
-
+// Action Items
 export interface ActionItemResponse {
   id: number;
   product: number;
