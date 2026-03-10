@@ -265,7 +265,43 @@ interface ProductStatsResponse {
   };
 }
 
-// Extend ApiClient with product methods
+// Action Items types
+export interface ActionItemResponse {
+  id: number;
+  product: number;
+  product_name: string;
+  product_brand: string | null;
+  product_size: string | null;
+  product_asin: string;
+  subject: string;
+  category: string;
+  status: string;
+  assignee: string;
+  due_date: string | null;
+  description_html: string;
+  instructions: string;
+  bullets: { label: string; value: string }[];
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActionItemCreateInput {
+  product_id: number;
+  subject: string;
+  category?: string;
+  status?: string;
+  assignee?: string;
+  due_date?: string | null;
+  description_html?: string;
+  instructions?: string;
+  bullets?: { label: string; value: string }[];
+}
+
+export type ActionItemUpdateInput = Partial<Omit<ActionItemCreateInput, 'product_id'>>;
+
+// Extend ApiClient with product and related methods
 class ExtendedApiClient extends ApiClient {
   async getProducts(params?: {
     search?: string;
@@ -325,43 +361,6 @@ class ExtendedApiClient extends ApiClient {
       method: 'DELETE',
     });
   }
-}
-
-export interface ActionItemResponse {
-  id: number;
-  product: number;
-  product_name: string;
-  product_brand: string | null;
-  product_size: string | null;
-  product_asin: string;
-  subject: string;
-  category: string;
-  status: string;
-  assignee: string;
-  due_date: string | null;
-  description_html: string;
-  instructions: string;
-  bullets: { label: string; value: string }[];
-  created_by: number | null;
-  created_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ActionItemCreateInput {
-  product_id: number;
-  subject: string;
-  category?: string;
-  status?: string;
-  assignee?: string;
-  due_date?: string | null;
-  description_html?: string;
-  instructions?: string;
-  bullets?: { label: string; value: string }[];
-}
-
-export type ActionItemUpdateInput = Partial<Omit<ActionItemCreateInput, 'product_id'>>;
-
   async getProduct(id: number): Promise<ProductResponse> {
     return this.request<ProductResponse>(`/products/${id}/`);
   }
