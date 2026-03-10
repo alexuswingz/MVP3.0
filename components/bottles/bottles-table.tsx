@@ -82,7 +82,7 @@ export function BottlesTable({
                 <th
                   className="text-left text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 0.5rem 1rem 1.25rem',
+                    padding: '22px 0.5rem 22px 1.25rem',
                     width: '1%',
                     whiteSpace: 'nowrap',
                     color: '#9CA3AF',
@@ -94,7 +94,7 @@ export function BottlesTable({
                 <th
                   className="text-center text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 0.5rem 1rem 2.75rem',
+                    padding: '22px 0.5rem 22px 2.75rem',
                     width: '1%',
                     whiteSpace: 'nowrap',
                     color: '#9CA3AF',
@@ -106,7 +106,7 @@ export function BottlesTable({
                 <th
                   className="text-center text-xs font-bold uppercase tracking-wider"
                   style={{
-                    padding: '1rem 2.75rem 1rem 0.5rem',
+                    padding: '22px 2.75rem 22px 0.5rem',
                     width: '1%',
                     whiteSpace: 'nowrap',
                     color: '#9CA3AF',
@@ -119,7 +119,7 @@ export function BottlesTable({
                   style={{
                     width: 48,
                     minWidth: 48,
-                    padding: '1rem 1.25rem 1rem 0.5rem',
+                    padding: '22px 1.25rem 22px 0.5rem',
                     height: 'auto',
                     backgroundColor: 'inherit',
                     boxSizing: 'border-box',

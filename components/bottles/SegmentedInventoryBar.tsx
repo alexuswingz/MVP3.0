@@ -3,80 +3,29 @@
 import React from 'react';
 
 export interface SegmentedInventoryBarProps {
-  available: number;
-  allocated: number;
-  inbound: number;
-  added: number;
+  /** 0–100: how much of the right light-blue track to fill with darker blue */
+  fillPercent?: number;
   width?: number | string;
   height?: number;
 }
 
-const COLORS = {
-  available: '#475569',
-  allocated: '#F97316',
-  allocatedStripe: 'rgba(0,0,0,0.2)',
-  inbound: '#3B82F6',
-  inboundStripe: 'rgba(0,0,0,0.2)',
-  added: '#BBDCE8',
-};
-
-const TRACK_BG = '#334155';
-
-function getSegmentStyle(
-  key: string,
-  color: string,
-  striped: boolean,
-  stripeColor?: string
-): React.CSSProperties {
-  const base: React.CSSProperties = {
-    height: '100%',
-    minWidth: 0,
-  };
-
-  if (striped && stripeColor) {
-    return {
-      ...base,
-      background: `repeating-linear-gradient(
-        45deg,
-        ${color} 0px,
-        ${color} 4px,
-        ${stripeColor} 4px,
-        ${stripeColor} 8px
-      )`,
-    };
-  }
-
-  return {
-    ...base,
-    backgroundColor: color,
-  };
+function stripeGradient(base: string, stripe: string, size = 8): string {
+  const half = size / 2;
+  return `repeating-linear-gradient(
+    -45deg,
+    ${base} 0px,
+    ${base} ${half}px,
+    ${stripe} ${half}px,
+    ${stripe} ${size}px
+  )`;
 }
 
 export function SegmentedInventoryBar({
-  available,
-  allocated,
-  inbound,
-  added,
-  width = '100%',
+  fillPercent = 0,
+  width = 395,
   height = 19,
 }: SegmentedInventoryBarProps) {
-  // Show only a simple two-part bar: base capacity and added quantity.
-  const base = Math.max(0, available + allocated + inbound);
-  const total = base + Math.max(0, added);
-  const safeTotal = Math.max(1, total);
-
-  const segments: Array<{
-    key: string;
-    value: number;
-    color: string;
-    striped: boolean;
-    stripeColor?: string;
-  }> = [
-    { key: 'base', value: base, color: COLORS.available, striped: false },
-    { key: 'added', value: added, color: COLORS.added, striped: false },
-  ];
-
-  const rawPcts = segments.map((seg) => (seg.value > 0 ? (seg.value / safeTotal) * 100 : 0));
+  const fill = Math.min(100, Math.max(0, fillPercent));
 
   return (
     <div
@@ -84,33 +33,65 @@ export function SegmentedInventoryBar({
         width,
         height,
         borderRadius: 4,
-        backgroundColor: TRACK_BG,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'row',
+        alignItems: 'stretch',
       }}
     >
-      {segments.map((seg, i) => {
-        const pct = rawPcts[i];
-        return (
-          <div
-            key={seg.key}
-            style={{
-              flexBasis: `${pct}%`,
-              flexGrow: 0,
-              flexShrink: 0,
-              minWidth: pct > 0 ? 2 : 0,
-              transition: 'flex-basis 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              ...getSegmentStyle(
-                seg.key,
-                seg.color,
-                seg.striped,
-                seg.stripeColor
-              ),
-            }}
-          />
-        );
-      })}
+      {/* Segment 1: dark muted blue-gray */}
+      <div
+        style={{
+          width: 70,
+          flexShrink: 0,
+          height: '100%',
+          backgroundColor: '#363d4f',
+        }}
+      />
+
+      {/* Segment 2: orange striped (medium width) */}
+      <div
+        style={{
+          width: 60,
+          flexShrink: 0,
+          height: '100%',
+          background: stripeGradient('#E96500', 'rgba(30,41,59,0.5)', 2.5),
+        }}
+      />
+
+      {/* Segment 3: bright blue striped (short) */}
+      <div
+        style={{
+          width: 28,
+          flexShrink: 0,
+          height: '100%',
+          background: stripeGradient('#2B7FE8', 'rgba(255,255,255,0.35)', 2.5),
+        }}
+      />
+
+      {/* Segment 4: light blue track — the longest section */}
+      {/* Inner darker blue fill grows from left on Add */}
+      <div
+        style={{
+          flex: 1,
+          height: '100%',
+          position: 'relative',
+          overflow: 'hidden',
+          backgroundColor: '#B8D4E8',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: `${fill}%`,
+            backgroundColor: '#2563EB',
+            transition: 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        />
+      </div>
     </div>
   );
 }
