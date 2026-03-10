@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.filters import OrderingFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,8 +10,8 @@ from datetime import date
 from io import StringIO
 import csv
 
-from .models import VineClaim
-from .serializers import VineClaimSerializer
+from .models import VineClaim, ActionItem
+from .serializers import VineClaimSerializer, ActionItemSerializer
 
 
 class VineClaimViewSet(viewsets.ModelViewSet):
@@ -135,6 +135,40 @@ class VineClaimViewSet(viewsets.ModelViewSet):
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+class ActionItemViewSet(viewsets.ModelViewSet):
+    """
+    CRUD API for Action Items.
+
+    - Scoped to the current tenant via product__user = request.user
+    - Supports filtering by status, category, assignee, product, and due_date
+    - Supports basic search over subject, category, assignee, and product fields
+    """
+
+    serializer_class = ActionItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_fields = ['status', 'category', 'assignee', 'product', 'due_date']
+    ordering_fields = ['due_date', 'created_at', 'updated_at', 'status', 'category', 'assignee']
+    ordering = ['-created_at']
+    search_fields = [
+        'subject',
+        'category',
+        'assignee',
+        'product__name',
+        'product__asin',
+        'product__sku',
+        'product__brand__name',
+    ]
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            ActionItem.objects.filter(product__user=user)
+            .select_related('product', 'product__brand', 'created_by')
+            .all()
+        )
 
 
 class ActionItemsExportView(APIView):
