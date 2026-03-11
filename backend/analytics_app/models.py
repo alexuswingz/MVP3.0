@@ -180,3 +180,88 @@ class ProductSeasonality(models.Model):
     
     def __str__(self):
         return f"{self.product.asin} - Week {self.week_of_year}: {self.seasonality_index:.2f}"
+
+
+class ActionItem(models.Model):
+    """
+    Persistent action items used by the dashboard "Action Items" module.
+
+    This is intentionally lightweight and aligned with the current frontend
+    shape so the UI can migrate from localStorage to real records without
+    a redesign.
+    """
+
+    STATUS_CHOICES = [
+        ('todo', 'To Do'),
+        ('in_progress', 'In Progress'),
+        ('in_review', 'In Review'),
+        ('blocked', 'Blocked'),
+        ('completed', 'Completed'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('inventory', 'Inventory'),
+        ('price', 'Price'),
+        ('ads', 'Ads'),
+        ('pdp', 'PDP'),
+        ('other', 'Other'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='action_items',
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='action_items',
+    )
+
+    # Core fields mirrored from the UI table/detail pane
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='todo')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='inventory')
+    category_sub_info = models.CharField(max_length=100, blank=True)
+
+    subject = models.CharField(max_length=255)
+
+    # Saved rich-text description from the editor (HTML)
+    description_html = models.TextField(blank=True)
+
+    # Optional plain-text summary / instructions if needed later
+    description = models.TextField(blank=True)
+    instructions = models.TextField(blank=True)
+
+    # Simple JSON payload for the bullet rows currently shown in the UI
+    bullets = models.JSONField(default=list, blank=True)
+
+    # Assignee metadata is kept denormalised for now; later this could
+    # become a FK to a "team member" table if needed.
+    assignee_name = models.CharField(max_length=100, blank=True)
+    assignee_initials = models.CharField(max_length=8, blank=True)
+
+    # Creator metadata (user FK is already stored; these are display labels)
+    created_by_name = models.CharField(max_length=100, blank=True)
+    created_by_initials = models.CharField(max_length=8, blank=True)
+
+    # Due date used by filters and calendar widget
+    due_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'action_items'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'category']),
+            models.Index(fields=['user', 'due_date']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+
+    def __str__(self) -> str:
+        product_part = f" ({self.product.asin})" if self.product_id else ""
+        return f"[{self.get_status_display()}] {self.subject}{product_part}"

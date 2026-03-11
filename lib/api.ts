@@ -478,6 +478,47 @@ class ExtendedApiClient extends ApiClient {
     });
   }
 
+  // Action items CRUD
+  async getActionItems(params?: {
+    search?: string;
+    status?: string;
+    category?: string;
+    product?: number;
+    ordering?: string;
+  }): Promise<ActionItemResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.product) searchParams.set('product', params.product.toString());
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+    const query = searchParams.toString();
+    const response = await this.request<ActionItemResponse[] | { results: ActionItemResponse[] }>(
+      `/action-items/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async createActionItem(data: ActionItemCreateInput): Promise<ActionItemResponse> {
+    return this.request<ActionItemResponse>('/action-items/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateActionItem(id: number, data: ActionItemUpdateInput): Promise<ActionItemResponse> {
+    return this.request<ActionItemResponse>(`/action-items/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteActionItem(id: number): Promise<void> {
+    return this.request(`/action-items/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
   // Amazon Account API methods
   async getAmazonAuthUrl(
     marketplaceId: string = 'ATVPDKIKX0DER',
@@ -759,6 +800,54 @@ interface VineClaimUpdateInput {
   notes?: string;
 }
 
+// Action item types
+type ActionItemStatus = 'todo' | 'in_progress' | 'in_review' | 'blocked' | 'completed';
+type ActionItemCategory = 'inventory' | 'price' | 'ads' | 'pdp' | 'other';
+
+interface ActionItemResponse {
+  id: number;
+  user: number;
+  product: number | null;
+  product_asin: string | null;
+  product_name: string | null;
+  product_brand: string | null;
+  product_size: string | null;
+  status: ActionItemStatus;
+  category: ActionItemCategory;
+  category_sub_info: string;
+  subject: string;
+  description_html: string;
+  description: string;
+  instructions: string;
+  bullets: { label: string; value: string }[];
+  assignee_name: string;
+  assignee_initials: string;
+  created_by_name: string;
+  created_by_initials: string;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ActionItemCreateInput {
+  product_id?: number | null;
+  status?: ActionItemStatus;
+  category?: ActionItemCategory;
+  category_sub_info?: string;
+  subject: string;
+  description_html?: string;
+  description?: string;
+  instructions?: string;
+  bullets?: { label: string; value: string }[];
+  assignee_name?: string;
+  assignee_initials?: string;
+  created_by_name?: string;
+  created_by_initials?: string;
+  due_date?: string | null;
+}
+
+type ActionItemUpdateInput = Partial<ActionItemCreateInput>;
+
 // Shipment types
 type ShipmentStatus = 'planning' | 'ready' | 'shipped' | 'in_transit' | 'receiving' | 'received' | 'cancelled';
 type ShipmentType = 'fba' | 'awd' | 'mfg' | 'hazmat';
@@ -937,4 +1026,7 @@ export type {
   Marketplace,
   SyncLog,
   SyncTriggerResponse,
+  ActionItemResponse,
+  ActionItemCreateInput,
+  ActionItemUpdateInput,
 };

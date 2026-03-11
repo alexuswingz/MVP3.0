@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.filters import OrderingFilter
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,8 +10,8 @@ from datetime import date
 from io import StringIO
 import csv
 
-from .models import VineClaim
-from .serializers import VineClaimSerializer
+from .models import VineClaim, ActionItem
+from .serializers import VineClaimSerializer, ActionItemSerializer
 
 
 class VineClaimViewSet(viewsets.ModelViewSet):
@@ -177,3 +177,29 @@ class ActionItemsExportView(APIView):
         response = HttpResponse(buffer.getvalue(), content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+
+class ActionItemViewSet(viewsets.ModelViewSet):
+    """
+    CRUD API for persistent action items.
+
+    Scoped to the authenticated user; supports basic filtering and search
+    aligned with the current Action Items UI.
+    """
+
+    serializer_class = ActionItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_fields = ['status', 'category', 'product']
+    ordering_fields = ['created_at', 'updated_at', 'due_date']
+    ordering = ['-created_at']
+    search_fields = ['subject', 'description', 'instructions', 'product__name', 'product__asin']
+
+    def get_queryset(self):
+        """
+        Limit items to the current user and optionally filter by
+        high-level "board" style tabs like status/category via query params.
+        """
+        user = self.request.user
+        qs = ActionItem.objects.filter(user=user)
+        return qs

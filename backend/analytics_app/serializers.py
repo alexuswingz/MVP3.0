@@ -1,6 +1,6 @@
 from django.db.models import Sum
 from rest_framework import serializers
-from .models import VineClaim
+from .models import VineClaim, ActionItem
 from forecast_app.models import Product
 
 
@@ -103,3 +103,59 @@ class VineClaimSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class ActionItemSerializer(serializers.ModelSerializer):
+    """Serializer for ActionItem CRUD, aligned with the Action Items UI."""
+
+    product_id = serializers.PrimaryKeyRelatedField(
+        source='product',
+        queryset=Product.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
+    product_asin = serializers.CharField(source='product.asin', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_brand = serializers.CharField(
+        source='product.brand.name', read_only=True, allow_null=True
+    )
+    product_size = serializers.CharField(
+        source='product.size', read_only=True, allow_blank=True
+    )
+
+    class Meta:
+        model = ActionItem
+        fields = [
+            'id',
+            'user',
+            'product',
+            'product_id',
+            'product_asin',
+            'product_name',
+            'product_brand',
+            'product_size',
+            'status',
+            'category',
+            'category_sub_info',
+            'subject',
+            'description_html',
+            'description',
+            'instructions',
+            'bullets',
+            'assignee_name',
+            'assignee_initials',
+            'created_by_name',
+            'created_by_initials',
+            'due_date',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'user', 'product', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and request.user and not validated_data.get('user'):
+            validated_data['user'] = request.user
+        return super().create(validated_data)

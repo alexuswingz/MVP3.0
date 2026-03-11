@@ -33,7 +33,7 @@ import {
   type ActionItemsDueDateSortState,
 } from '@/components/actions/action-items-due-date-sort';
 import { ActionItemsFilterDropdowns } from '@/components/actions/action-items-filter-dropdowns';
-import { api } from '@/lib/api';
+import { api, type ActionItemResponse } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
 type TicketDetail = {
@@ -204,6 +204,14 @@ function formatDueDateTable(date: Date): string {
   return `${month}. ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+/** ISO date for API: YYYY-MM-DD */
+function formatDueDateIso(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function parseDueDate(str: string): Date | null {
   if (!str || !str.trim()) return null;
   const trimmed = str.trim();
@@ -227,6 +235,108 @@ function parseDueDate(str: string): Date | null {
   }
   const d = new Date(trimmed);
   return !isNaN(d.getTime()) ? d : null;
+}
+
+/** API status (backend) <-> UI status (table/detail) */
+const STATUS_API_TO_UI: Record<string, string> = {
+  todo: 'To Do',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  blocked: 'Blocked',
+  completed: 'Completed',
+};
+const STATUS_UI_TO_API: Record<string, string> = {
+  'To Do': 'todo',
+  'In Progress': 'in_progress',
+  'In review': 'in_review',
+  'In Review': 'in_review',
+  'Blocked': 'blocked',
+  'Completed': 'completed',
+};
+function apiStatusToUi(apiStatus: string): string {
+  return STATUS_API_TO_UI[apiStatus] ?? apiStatus;
+}
+function uiStatusToApi(uiStatus: string): string {
+  return STATUS_UI_TO_API[uiStatus] ?? uiStatus.toLowerCase().replace(/\s+/g, '_');
+}
+
+/** API category (lowercase) -> UI category (title case) */
+const CATEGORY_API_TO_UI: Record<string, string> = {
+  inventory: 'Inventory',
+  price: 'Price',
+  ads: 'Ads',
+  pdp: 'PDP',
+  other: 'Other',
+};
+const CATEGORY_UI_TO_API: Record<string, string> = {
+  Inventory: 'inventory',
+  Price: 'price',
+  Ads: 'ads',
+  PDP: 'pdp',
+  Other: 'other',
+};
+function apiCategoryToUi(apiCategory: string): string {
+  return CATEGORY_API_TO_UI[apiCategory] ?? apiCategory;
+}
+function uiCategoryToApi(uiCategory: string): string {
+  const normalized = (uiCategory ?? '').trim();
+  return CATEGORY_UI_TO_API[normalized] ?? normalized.toLowerCase();
+}
+
+/** Format API due_date (YYYY-MM-DD) to table display (e.g. Feb. 24, 2025) */
+function formatDueDateFromApi(isoDate: string | null): string {
+  if (!isoDate || !isoDate.trim()) return '—';
+  const d = new Date(isoDate);
+  return !isNaN(d.getTime()) ? formatDueDateTable(d) : isoDate;
+}
+
+/** Format API created_at to dateCreated display */
+function formatDateCreatedFromApi(isoDateTime: string): string {
+  if (!isoDateTime || !isoDateTime.trim()) return '—';
+  const d = new Date(isoDateTime);
+  return !isNaN(d.getTime()) ? formatDueDateTable(d) : isoDateTime;
+}
+
+function actionItemToTableRow(a: ActionItemResponse): TableRow {
+  const productName = (a.product_name ?? '').trim() || '—';
+  return {
+    id: a.id,
+    status: apiStatusToUi(a.status),
+    productName: productName.length > SHORT_PRODUCT_NAME_MAX ? `${productName.slice(0, SHORT_PRODUCT_NAME_MAX - 1)}…` : productName,
+    productId: (a.product_asin ?? '').trim() || '—',
+    productBrand: (a.product_brand ?? '').trim() || undefined,
+    productSize: (a.product_size ?? '').trim() || undefined,
+    category: apiCategoryToUi(a.category),
+    subject: (a.subject ?? '').trim() || '—',
+    assignee: (a.assignee_name ?? '').trim() || '—',
+    assigneeInitials: (a.assignee_initials ?? '').trim() || '—',
+    dueDate: formatDueDateFromApi(a.due_date),
+  };
+}
+
+function actionItemToTicketDetail(a: ActionItemResponse): TicketDetail {
+  const productName = (a.product_name ?? '').trim() || '—';
+  return {
+    ticketId: `I-${a.id}`,
+    productName,
+    productId: (a.product_asin ?? '').trim() || '—',
+    brand: (a.product_brand ?? '').trim() || '—',
+    unit: (a.product_size ?? '').trim() || '—',
+    subject: (a.subject ?? '').trim() || '—',
+    description: (a.description ?? '').trim() || '',
+    instructions: (a.instructions ?? '').trim() || '',
+    bullets: Array.isArray(a.bullets) ? a.bullets : [],
+    status: apiStatusToUi(a.status),
+    category: apiCategoryToUi(a.category),
+    categorySubInfo: (a.category_sub_info ?? '').trim() || undefined,
+    assignee: (a.assignee_name ?? '').trim() || '—',
+    assigneeInitials: (a.assignee_initials ?? '').trim() || '—',
+    dueDate: formatDueDateFromApi(a.due_date),
+    createdBy: (a.created_by_name ?? '').trim() || '—',
+    createdByInitials: (a.created_by_initials ?? '').trim() || '—',
+    dateCreated: formatDateCreatedFromApi(a.created_at),
+    descriptionHtml: (a.description_html ?? '').trim() || undefined,
+  };
 }
 
 function DueDateCalendarGrid({
@@ -360,6 +470,7 @@ const CATEGORIES = [
 ];
 
 type Product = {
+  id: number;
   asin: string;
   name: string;
   brand: string;
@@ -367,24 +478,9 @@ type Product = {
 };
 
 const MOCK_PRODUCTS: Product[] = [
-  {
-    asin: 'B0C73TDZCQ',
-    name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food 8 oz (250mL)',
-    brand: 'TPS Nutrients',
-    unit: '8oz',
-  },
-  {
-    asin: 'B0C73TDZC1',
-    name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food, 32 oz (1 Quart)',
-    brand: 'TPS Nutrients',
-    unit: 'Quart',
-  },
-  {
-    asin: 'B0C73TDZC2',
-    name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food, 1 Gallon (128 oz)',
-    brand: 'TPS Nutrients',
-    unit: 'Gallon',
-  },
+  { id: 0, asin: 'B0C73TDZCQ', name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food 8 oz (250mL)', brand: 'TPS Nutrients', unit: '8oz' },
+  { id: 0, asin: 'B0C73TDZC1', name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food, 32 oz (1 Quart)', brand: 'TPS Nutrients', unit: 'Quart' },
+  { id: 0, asin: 'B0C73TDZC2', name: 'Hydrangea Fertilizer for Acid Loving Plants, Liquid Plant Food, 1 Gallon (128 oz)', brand: 'TPS Nutrients', unit: 'Gallon' },
 ];
 
 type AssigneeOption = {
@@ -760,14 +856,10 @@ export function ActionItems() {
   const [search, setSearch] = useState('');
   const [showNewActionModal, setShowNewActionModal] = useState(false);
   const [showActionCreatedToast, setShowActionCreatedToast] = useState(false);
-  const [tableItems, setTableItems] = useState<TableRow[]>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.tableItems?.length ? loaded.tableItems : DEFAULT_TABLE_ITEMS;
-  });
-  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>(() => {
-    const loaded = loadActionItemsFromStorage();
-    return loaded?.ticketDetails ?? {};
-  });
+  const [tableItems, setTableItems] = useState<TableRow[]>([]);
+  const [ticketDetails, setTicketDetails] = useState<Record<number, TicketDetail>>({});
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
   const [checkedRowIds, setCheckedRowIds] = useState<Set<number>>(new Set());
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
@@ -854,6 +946,7 @@ export function ActionItems() {
       .then((res) => {
         setProductsList(
           res.results.map((p) => ({
+            id: p.id,
             asin: p.asin,
             name: p.name,
             brand: p.brand_name ?? '',
@@ -864,6 +957,32 @@ export function ActionItems() {
       .catch((e) => setProductsError(e instanceof Error ? e.message : 'Failed to load products'))
       .finally(() => setProductsLoading(false));
   }, []);
+
+  const fetchActionItems = useCallback(async () => {
+    setItemsLoading(true);
+    setItemsError(null);
+    try {
+      const list = await api.getActionItems({ ordering: '-created_at' });
+      const rows: TableRow[] = list.map(actionItemToTableRow);
+      const details: Record<number, TicketDetail> = {};
+      list.forEach((a) => {
+        details[a.id] = actionItemToTicketDetail(a);
+      });
+      setTableItems(rows);
+      setTicketDetails(details);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to load action items';
+      setItemsError(message);
+      setTableItems([]);
+      setTicketDetails({});
+    } finally {
+      setItemsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActionItems();
+  }, [fetchActionItems]);
 
   useEffect(() => {
     if (!isProductDropdownOpen && !isAssigneeDropdownOpen && rowMenuOpenId === null) return;
@@ -883,9 +1002,6 @@ export function ActionItems() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProductDropdownOpen, isAssigneeDropdownOpen, rowMenuOpenId]);
 
-  useEffect(() => {
-    saveActionItemsToStorage(tableItems, ticketDetails);
-  }, [tableItems, ticketDetails]);
 
   useEffect(() => {
     if (!showDueDateCalendar) return;
@@ -916,23 +1032,22 @@ export function ActionItems() {
 
   const handleDescriptionSave = (html: string) => {
     const htmlToSave = (html?.trim() || descriptionHtml?.trim()) || '';
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ActionItems] handleDescriptionSave: selectedDetailId=', selectedDetailId, 'receivedLength=', html?.length, 'htmlToSaveLength=', htmlToSave.length, 'preview=', htmlToSave.slice(0, 80));
-    }
     if (selectedDetailId == null) {
       setDescriptionFocused(false);
       return;
     }
     const id = selectedDetailId;
     justSavedDescriptionRef.current = { id, html: htmlToSave };
+    api
+      .updateActionItem(id, { description_html: htmlToSave })
+      .catch((e) => {
+        toast.error('Failed to save description', { description: e instanceof Error ? e.message : 'Unknown error' });
+      });
     flushSync(() => {
       setTicketDetails((prev) => {
         const existing = prev[id];
         const row = tableItems.find((r) => r.id === id);
         const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
-        if (process.env.NODE_ENV === 'development' && !base) {
-          console.warn('[ActionItems] handleDescriptionSave: no detail or row for id=', id, 'keys=', Object.keys(prev));
-        }
         if (!base) return prev;
         return {
           ...prev,
@@ -942,9 +1057,6 @@ export function ActionItems() {
       setDescriptionHtml(htmlToSave);
       setDescriptionFocused(false);
     });
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ActionItems] handleDescriptionSave: committed id=', id, 'htmlToSaveLength=', htmlToSave.length);
-    }
   };
 
   const selectedDetailItem = selectedDetailId != null ? (() => {
@@ -1551,6 +1663,20 @@ export function ActionItems() {
           </div>
         </div>
 
+        {itemsError && (
+          <div className="rounded-lg p-4 flex items-center justify-between gap-4" style={{ background: '#1A2235', border: '1px solid #ef4444' }}>
+            <span className="text-sm text-red-400">{itemsError}</span>
+            <button
+              type="button"
+              onClick={() => fetchActionItems()}
+              className="px-3 py-1.5 text-sm font-medium text-white rounded-md hover:opacity-90"
+              style={{ background: '#3b82f6' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <div className="rounded-lg overflow-hidden pt-2 pb-4 px-4">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] border-separate" style={{ borderSpacing: '0 6px' }}>
@@ -1732,7 +1858,14 @@ export function ActionItems() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTableItems.map((row) => {
+                {itemsLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-gray-400 text-sm" style={{ background: '#1A2235' }}>
+                      Loading action items…
+                    </td>
+                  </tr>
+                ) : (
+                filteredTableItems.map((row) => {
                   const ROW_BG = '#1A2235';
                   return (
                   <tr
@@ -2042,14 +2175,20 @@ export function ActionItems() {
                               role="menuitem"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setTableItems((prev) => prev.filter((r) => r.id !== row.id));
-                                setTicketDetails((prev) => {
-                                  const next = { ...prev };
-                                  delete next[row.id];
-                                  return next;
-                                });
-                                if (selectedDetailId === row.id) setSelectedDetailId(null);
-                                setRowMenuOpenId(null);
+                                const id = row.id;
+                                api
+                                  .deleteActionItem(id)
+                                  .then(() => {
+                                    setTableItems((prev) => prev.filter((r) => r.id !== id));
+                                    setTicketDetails((prev) => {
+                                      const next = { ...prev };
+                                      delete next[id];
+                                      return next;
+                                    });
+                                    if (selectedDetailId === id) setSelectedDetailId(null);
+                                    setRowMenuOpenId(null);
+                                  })
+                                  .catch((err) => toast.error('Failed to delete action item', { description: err instanceof Error ? err.message : 'Unknown error' }));
                               }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-white/10 transition-colors"
                             >
@@ -2063,7 +2202,7 @@ export function ActionItems() {
                       </div>
                     </td>
                   </tr>
-                );})}
+                );}))}
               </tbody>
             </table>
           </div>
@@ -2083,10 +2222,7 @@ export function ActionItems() {
       {selectedDetailId != null && selectedDetailItem && (
         <DetailModal
           item={selectedDetailItem}
-          onClose={() => {
-            saveActionItemsToStorage(tableItems, ticketDetails);
-            setSelectedDetailId(null);
-          }}
+          onClose={() => setSelectedDetailId(null)}
           descriptionHtml={descriptionHtml}
           setDescriptionHtml={setDescriptionHtml}
           descriptionFocused={descriptionFocused}
@@ -2095,13 +2231,17 @@ export function ActionItems() {
           onDescriptionSave={handleDescriptionSave}
           onStatusChange={(status) => {
             if (selectedDetailId == null) return;
-            setTableItems((prev) => prev.map((r) => (r.id === selectedDetailId ? { ...r, status } : r)));
+            const id = selectedDetailId;
+            api
+              .updateActionItem(id, { status: uiStatusToApi(status) as 'todo' | 'in_progress' | 'in_review' | 'blocked' | 'completed' })
+              .catch((e) => toast.error('Failed to update status', { description: e instanceof Error ? e.message : 'Unknown error' }));
+            setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
             setTicketDetails((prev) => {
-              const existing = prev[selectedDetailId];
-              const row = tableItems.find((r) => r.id === selectedDetailId);
+              const existing = prev[id];
+              const row = tableItems.find((r) => r.id === id);
               const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
               if (!base) return prev;
-              return { ...prev, [selectedDetailId]: { ...base, status } };
+              return { ...prev, [id]: { ...base, status } };
             });
           }}
           onAttachmentsChange={(attachments) => {
@@ -2583,81 +2723,56 @@ export function ActionItems() {
               <button
                 type="button"
                 disabled={!(newItem.product.trim() || productSearch.trim()) || !newItem.subject.trim() || !newItem.category}
-                onClick={() => {
+                onClick={async () => {
                   const hasProduct = !!(newItem.product.trim() || productSearch.trim());
                   const hasSubject = !!newItem.subject.trim();
                   const hasCategory = !!newItem.category;
                   if (!hasProduct || !hasSubject || !hasCategory) return;
 
-                  const nextId = Math.max(0, ...tableItems.map((r) => r.id)) + 1;
                   const catLabel = CATEGORIES.find((c) => c.id === newItem.category)?.label ?? newItem.category;
-                  const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '—';
-                  const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '—';
+                  const assigneeStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.name).join(', ') : '';
+                  const assigneeInitialsStr = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.initials).join(', ') : '';
                   const dueDateParsed = parseDueDate(newItem.dueDate.trim());
-                  const dueDateTableStr = dueDateParsed ? formatDueDateTable(dueDateParsed) : '—';
-                  const productName = newItem.product.trim() || productSearch.trim();
-                  const now = new Date();
-                  const dateCreatedStr = formatDueDateTable(now);
+                  const productIdByAsin = newItem.productId.trim() ? productsList.find((p) => p.asin === newItem.productId.trim())?.id : undefined;
 
-                  setTableItems((prev) => [
-                    {
-                      id: nextId,
-                      status: 'To Do',
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      productBrand: newItem.productBrand.trim() || undefined,
-                      productSize: newItem.productUnit.trim() || undefined,
-                      category: catLabel,
-                      subject: newItem.subject.trim() || '—',
-                      assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                    },
-                    ...prev,
-                  ]);
+                  const payload = {
+                    subject: newItem.subject.trim(),
+                    category: uiCategoryToApi(catLabel) as 'inventory' | 'price' | 'ads' | 'pdp' | 'other',
+                    product_id: productIdByAsin ?? null,
+                    description: newItem.description.trim() || undefined,
+                    assignee_name: assigneeStr || undefined,
+                    assignee_initials: assigneeInitialsStr || undefined,
+                    created_by_name: createdByDisplay !== '—' ? createdByDisplay : undefined,
+                    created_by_initials: createdByInitialsDisplay !== '—' ? createdByInitialsDisplay : undefined,
+                    due_date: dueDateParsed ? formatDueDateIso(dueDateParsed) : null,
+                  };
 
-                  setTicketDetails((prev) => ({
-                    ...prev,
-                    [nextId]: {
-                      ticketId: `I-${nextId}`,
-                      productName,
-                      productId: newItem.productId.trim() || '—',
-                      brand: newItem.productBrand.trim() || '—',
-                      unit: newItem.productUnit.trim() || '—',
-                      subject: newItem.subject.trim() || '—',
-                      description: newItem.description.trim() || '',
-                      instructions: '',
-                      bullets: [],
-                      status: 'To Do',
-                      category: catLabel,
-                      assignee: assigneeStr,
-                      assigneeInitials: assigneeInitialsStr,
-                      dueDate: dueDateTableStr,
-                      createdBy: createdByDisplay,
-                      createdByInitials: createdByInitialsDisplay,
-                      dateCreated: dateCreatedStr,
-                    },
-                  }));
-
-                  setShowNewActionModal(false);
-                  setShowActionCreatedToast(true);
-                  setNewItem({
-                    product: '',
-                    productId: '',
-                    productBrand: '',
-                    productUnit: '',
-                    category: 'inventory',
-                    subject: '',
-                    description: '',
-                    assignee: '',
-                    dueDate: '',
-                  });
-                  setProductSearch('');
-                  setIsProductDropdownOpen(false);
-                  setAssigneeSearch('');
-                  setIsAssigneeDropdownOpen(false);
-                  setSelectedAssignees([]);
-                  setShowDueDateCalendar(false);
+                  try {
+                    const created = await api.createActionItem(payload);
+                    setTableItems((prev) => [actionItemToTableRow(created), ...prev]);
+                    setTicketDetails((prev) => ({ ...prev, [created.id]: actionItemToTicketDetail(created) }));
+                    setShowNewActionModal(false);
+                    setShowActionCreatedToast(true);
+                    setNewItem({
+                      product: '',
+                      productId: '',
+                      productBrand: '',
+                      productUnit: '',
+                      category: 'inventory',
+                      subject: '',
+                      description: '',
+                      assignee: '',
+                      dueDate: '',
+                    });
+                    setProductSearch('');
+                    setIsProductDropdownOpen(false);
+                    setAssigneeSearch('');
+                    setIsAssigneeDropdownOpen(false);
+                    setSelectedAssignees([]);
+                    setShowDueDateCalendar(false);
+                  } catch (e) {
+                    toast.error('Failed to create action item', { description: e instanceof Error ? e.message : 'Unknown error' });
+                  }
                 }}
                 className="px-4 py-2 text-sm font-medium text-white rounded-md transition-opacity disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:opacity-50 hover:opacity-90"
                 style={{ background: '#3b82f6' }}
