@@ -144,6 +144,7 @@ class ActionItemSerializer(serializers.ModelSerializer):
             'description',
             'instructions',
             'bullets',
+            'attachments',
             'assignee_name',
             'assignee_initials',
             'created_by_name',

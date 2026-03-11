@@ -10,7 +10,7 @@ const BORDER_RADIUS = 8;
 const BORDER_WIDTH = 1;
 const TEXT_SIZE = 12;
 
-const ACTION_ITEMS_STATUSES = ['To Do', 'In progress', 'In review', 'Completed'] as const;
+const ACTION_ITEMS_STATUSES = ['To Do', 'In progress', 'In review', 'Blocked', 'Completed'] as const;
 
 const DROPDOWN_STYLE: React.CSSProperties = {
   width: FILTER_WIDTH,

@@ -820,6 +820,7 @@ interface ActionItemResponse {
   description: string;
   instructions: string;
   bullets: { label: string; value: string }[];
+  attachments: { name: string; url: string; type?: string; uploadedAt: string }[];
   assignee_name: string;
   assignee_initials: string;
   created_by_name: string;
@@ -839,6 +840,7 @@ interface ActionItemCreateInput {
   description?: string;
   instructions?: string;
   bullets?: { label: string; value: string }[];
+  attachments?: { name: string; url: string; type?: string; uploadedAt: string }[];
   assignee_name?: string;
   assignee_initials?: string;
   created_by_name?: string;

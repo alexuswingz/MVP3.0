@@ -237,6 +237,9 @@ class ActionItem(models.Model):
     # Simple JSON payload for the bullet rows currently shown in the UI
     bullets = models.JSONField(default=list, blank=True)
 
+    # Attachments: list of { name, url, type?, uploadedAt } for the detail pane
+    attachments = models.JSONField(default=list, blank=True)
+
     # Assignee metadata is kept denormalised for now; later this could
     # become a FK to a "team member" table if needed.
     assignee_name = models.CharField(max_length=100, blank=True)

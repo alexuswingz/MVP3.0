@@ -149,37 +149,6 @@ function ticketDetailFromRow(
   };
 }
 
-const ACTION_ITEMS_STORAGE_KEY = 'action-items-persisted';
-
-function loadActionItemsFromStorage(): { tableItems: TableRow[]; ticketDetails: Record<number, TicketDetail> } | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(ACTION_ITEMS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { tableItems: TableRow[]; ticketDetails: Record<string, TicketDetail> };
-    if (!parsed?.tableItems || !Array.isArray(parsed.tableItems)) return null;
-    const ticketDetails: Record<number, TicketDetail> = {};
-    if (parsed.ticketDetails && typeof parsed.ticketDetails === 'object') {
-      for (const [k, v] of Object.entries(parsed.ticketDetails)) {
-        const id = Number(k);
-        if (!isNaN(id) && v && typeof v === 'object') ticketDetails[id] = v as TicketDetail;
-      }
-    }
-    return { tableItems: parsed.tableItems, ticketDetails };
-  } catch {
-    return null;
-  }
-}
-
-function saveActionItemsToStorage(tableItems: TableRow[], ticketDetails: Record<number, TicketDetail>) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(ACTION_ITEMS_STORAGE_KEY, JSON.stringify({ tableItems, ticketDetails }));
-  } catch {
-    // ignore quota or other errors
-  }
-}
-
 function getInitials(name: string): string {
   if (!name || !name.trim()) return '—';
   const parts = name.trim().split(/\s+/);
@@ -326,6 +295,7 @@ function actionItemToTicketDetail(a: ActionItemResponse): TicketDetail {
     description: (a.description ?? '').trim() || '',
     instructions: (a.instructions ?? '').trim() || '',
     bullets: Array.isArray(a.bullets) ? a.bullets : [],
+    attachments: Array.isArray(a.attachments) ? a.attachments : [],
     status: apiStatusToUi(a.status),
     category: apiCategoryToUi(a.category),
     categorySubInfo: (a.category_sub_info ?? '').trim() || undefined,
@@ -441,6 +411,11 @@ function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
       <span className="rounded-full flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, background: '#22c55e' }}>
         <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
       </span>
+    );
+  }
+  if (status === 'Blocked') {
+    return (
+      <span className="rounded-full flex-shrink-0 flex items-center justify-center" style={{ width: size, height: size, background: '#f59e0b' }} title="Blocked" />
     );
   }
   if (iconPath) {
@@ -777,6 +752,14 @@ function DetailModal({
                     >
                       <StatusIcon status="In review" size={12} />
                       In review
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { onStatusChange('Blocked'); setStatusDropdownOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
+                    >
+                      <StatusIcon status="Blocked" size={12} />
+                      Blocked
                     </button>
                     <button
                       type="button"
@@ -1151,7 +1134,7 @@ export function ActionItems() {
     if (checkedAssignees.length > 0) {
       list = list.filter((row) => checkedAssignees.includes(row.assignee ?? ''));
     }
-    const statusOrder = ['To Do', 'In progress', 'In review', 'Completed'];
+    const statusOrder = ['To Do', 'In progress', 'In review', 'Blocked', 'Completed'];
     const categoryOrder = ['Ads', 'Inventory', 'PDP', 'Price'];
     if (appliedStatusFilter.sortOrder) {
       list = [...list].sort((a, b) => {
@@ -2244,21 +2227,20 @@ export function ActionItems() {
               return { ...prev, [id]: { ...base, status } };
             });
           }}
-          onAttachmentsChange={(attachments) => {
+          onAttachmentsChange={async (attachments) => {
             if (selectedDetailId == null) return;
-            let nextTicketDetails: Record<number, TicketDetail> | null = null;
-            flushSync(() => {
-              setTicketDetails((prev) => {
-                const existing = prev[selectedDetailId];
-                const row = tableItems.find((r) => r.id === selectedDetailId);
-                const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
-                if (!base) return prev;
-                const next = { ...prev, [selectedDetailId]: { ...base, attachments } };
-                nextTicketDetails = next;
-                return next;
+            const existing = ticketDetails[selectedDetailId];
+            const row = tableItems.find((r) => r.id === selectedDetailId);
+            const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+            if (!base) return;
+            setTicketDetails((prev) => ({ ...prev, [selectedDetailId]: { ...base, attachments } }));
+            try {
+              await api.updateActionItem(selectedDetailId, { attachments });
+            } catch (e) {
+              toast.error('Failed to save attachments', {
+                description: e instanceof Error ? e.message : 'Unknown error',
               });
-            });
-            if (nextTicketDetails) saveActionItemsToStorage(tableItems, nextTicketDetails);
+            }
           }}
         />
       )}
