@@ -78,10 +78,13 @@ function StatusBadge({ status }: { status: BottleOrderRow['status'] }) {
       />
     ),
     'Partially Received': (
-      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" className="shrink-0">
-        <circle cx="12" cy="12" r="10" fill="#F59E0B" />
-        <path d="M12 7v5l3 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
+      <img
+        src="/assets/partial.png"
+        alt="Partially received"
+        width={14}
+        height={14}
+        style={{ objectFit: 'contain', flexShrink: 0 }}
+      />
     ),
     Received: (
       <svg width={14} height={14} viewBox="0 0 24 24" fill="none" className="shrink-0">
@@ -164,17 +167,26 @@ function Legend() {
   );
 }
 
-function getReceivedOrders(): Record<string, boolean> {
+type ReceiveStatus = 'none' | 'partial' | 'full';
+
+function getReceiveStatuses(): Record<string, ReceiveStatus> {
   try {
     const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
-      orderName: string; receivePOCompleted?: boolean;
+      orderName: string;
+      receivePOStatus?: ReceiveStatus;
     }[];
-    return Object.fromEntries(orders.map((o) => [o.orderName, !!o.receivePOCompleted]));
-  } catch (_) { return {}; }
+    const map: Record<string, ReceiveStatus> = {};
+    for (const o of orders) {
+      map[o.orderName] = o.receivePOStatus ?? 'none';
+    }
+    return map;
+  } catch (_) {
+    return {};
+  }
 }
 
 function buildRows(items: CompletedOrderItem[]): BottleOrderRow[] {
-  const receivedMap = getReceivedOrders();
+  const receiveStatuses = getReceiveStatuses();
   const grouped: Record<string, { orderName: string; supplier: string; items: CompletedOrderItem[] }> = {};
   for (const item of items) {
     if (!grouped[item.orderName]) {
@@ -182,15 +194,22 @@ function buildRows(items: CompletedOrderItem[]): BottleOrderRow[] {
     }
     grouped[item.orderName].items.push(item);
   }
-  return Object.values(grouped).map((g, i) => ({
-    id: String(i),
-    status: receivedMap[g.orderName] ? 'Received' as const : 'Submitted' as const,
-    orderNumber: g.orderName,
-    supplier: g.supplier,
-    addProducts: 'completed',
-    submitPO: 'completed',
-    receivePO: receivedMap[g.orderName] ? 'completed' : 'pending',
-  }));
+  return Object.values(grouped).map((g, i) => {
+    const rs: ReceiveStatus = receiveStatuses[g.orderName] ?? 'none';
+    const status: BottleOrderRow['status'] =
+      rs === 'full' ? 'Received' : rs === 'partial' ? 'Partially Received' : 'Submitted';
+
+    return {
+      id: String(i),
+      status,
+      orderNumber: g.orderName,
+      supplier: g.supplier,
+      addProducts: 'completed',
+      submitPO: 'completed',
+      // For partial receive, keep the Receive PO circle inactive (no fill)
+      receivePO: rs === 'full' ? 'completed' : 'pending',
+    };
+  });
 }
 
 export function BottlesOrdersTable({ items }: BottlesOrdersTableProps) {
@@ -321,14 +340,43 @@ export function BottlesOrdersTable({ items }: BottlesOrdersTableProps) {
                       <StatusBadge status={row.status} />
                     </td>
 
-                    {/* BOTTLE ORDER # */}
+                    {/* BOTTLE ORDER # + Archive */}
                     <td style={{ width: 160, padding: '10px 20px', verticalAlign: 'middle', textAlign: 'left', backgroundColor: 'inherit', overflow: 'hidden' }}>
-                      <span
-                        style={{ fontSize: 14, fontWeight: 500, color: TEXT_ACTIVE, textDecoration: 'underline', cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); handleOrderClick(row); }}
-                      >
-                        {row.orderNumber}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          style={{ fontSize: 14, fontWeight: 500, color: TEXT_ACTIVE, textDecoration: 'underline', cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); handleOrderClick(row); }}
+                        >
+                          {row.orderNumber}
+                        </span>
+                        {row.status === 'Partially Received' && (
+                          <button
+                            type="button"
+                            style={{
+                              width: 56,
+                              height: 23,
+                              borderRadius: 6,
+                              border: 'none',
+                              backgroundColor: '#007AFF',
+                              color: '#FFFFFF',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // TODO: wire actual archive behavior when available
+                            }}
+                          >
+                            Archive
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     {/* SUPPLIER */}

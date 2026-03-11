@@ -1019,28 +1019,234 @@ function ReceiveOrderModal({ onClose, onConfirm }: { onClose: () => void; onConf
   );
 }
 
+function PartialOrderConfirmationModal({
+  onClose,
+  onConfirm,
+  selectedCount,
+  totalCount,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+  selectedCount: number;
+  totalCount: number;
+}) {
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 12000,
+        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        animation: 'roFadeIn 150ms ease',
+      }}
+    >
+      <style>{`
+        @keyframes roFadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes roScaleIn { from { opacity: 0; transform: scale(0.95) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .ro-close-btn:hover   { background: rgba(148,163,184,0.12) !important; color: #CBD5E1 !important; }
+        .ro-back-btn:hover    { background: rgba(148,163,184,0.08) !important; border-color: #64748B !important; }
+        .ro-confirm-btn:hover { background: #1D4ED8 !important; }
+      `}</style>
+
+      <div
+        style={{
+          width: 458,
+          boxSizing: 'border-box',
+          background: '#0F172A',
+          border: '1px solid rgba(148,163,184,0.12)',
+          borderRadius: 12,
+          boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
+          padding: 24,
+          position: 'relative',
+          fontFamily: 'Inter, sans-serif',
+          animation: 'roScaleIn 180ms cubic-bezier(0.16,1,0.3,1)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        {/* Close */}
+        <button
+          type="button"
+          className="ro-close-btn"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 26,
+            height: 26,
+            border: 'none',
+            background: 'transparent',
+            borderRadius: 6,
+            color: '#475569',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 150ms, color 150ms',
+          }}
+        >
+          <X size={14} />
+        </button>
+
+        {/* Icon */}
+        <div style={{ marginBottom: 10 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              backgroundColor: '#FF9500',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Image
+              src="/assets/padamdam.png"
+              alt="warning"
+              width={20}
+              height={20}
+              style={{ objectFit: 'contain' }}
+            />
+          </div>
+        </div>
+
+        {/* Title */}
+        <h2
+          style={{
+            margin: '0 0 6px',
+            textAlign: 'center',
+            fontSize: 15,
+            fontWeight: 600,
+            color: '#F8FAFC',
+            lineHeight: 1.3,
+          }}
+        >
+          Partial Order Confirmation
+        </h2>
+
+        {/* Description */}
+        <p
+          style={{
+            margin: '0 0 4px',
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 400,
+            color: '#94A3B8',
+            lineHeight: 1.5,
+          }}
+        >
+          You’ve selected {selectedCount} of {totalCount} items to receive.
+        </p>
+        <p
+          style={{
+            margin: '0 0 16px',
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 400,
+            color: '#94A3B8',
+            lineHeight: 1.5,
+          }}
+        >
+          The remaining items will not be updated within your inventory.
+        </p>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+          <button
+            type="button"
+            className="ro-back-btn"
+            onClick={onClose}
+            style={{
+              flex: 1,
+              height: 31,
+              borderRadius: 4,
+              border: '1px solid #374151',
+              background: '#1E293B',
+              color: '#CBD5E1',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background 150ms, border-color 150ms',
+            }}
+          >
+            Go back
+          </button>
+          <button
+            type="button"
+            className="ro-confirm-btn"
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              height: 31,
+              borderRadius: 4,
+              border: '1px solid transparent',
+              background: '#2563EB',
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 150ms',
+            }}
+          >
+            Confirm &amp; Receive
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
   const router = useRouter();
   const [received, setReceived] = React.useState<Set<number>>(new Set());
   const [cardOrder, setCardOrder] = React.useState([0, 1, 2]);
   const [showReceiveModal, setShowReceiveModal] = React.useState(false);
+  const [showPartialModal, setShowPartialModal] = React.useState(false);
   const dragCardIdx = React.useRef<number | null>(null);
 
   const handleConfirmReceipt = React.useCallback(() => {
-    // Mark this order's receivePO as completed in sessionStorage
+    // Determine whether this is a full or partial receive based on selected items
+    const doneCount = received.size;
+    const totalCount = items.length;
+    const isFull = doneCount >= totalCount && totalCount > 0;
+
     try {
       const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
-        orderName: string; completedAt: string; receivePOCompleted?: boolean;
+        orderName: string;
+        completedAt: string;
+        receivePOStatus?: 'none' | 'partial' | 'full';
+        receivedCount?: number;
+        totalCount?: number;
         items: unknown[];
       }[];
+
       const updated = orders.map((o) =>
-        o.orderName === orderName ? { ...o, receivePOCompleted: true } : o
+        o.orderName === orderName
+          ? {
+              ...o,
+              receivePOStatus: isFull ? 'full' : 'partial',
+              receivedCount: doneCount,
+              totalCount,
+            }
+          : o
       );
       sessionStorage.setItem('completedOrders', JSON.stringify(updated));
-    } catch (_) {}
+    } catch (_) {
+      // ignore persistence errors
+    }
+
     setShowReceiveModal(false);
     router.push('/dashboard/bottles?tab=Orders');
-  }, [orderName, router]);
+  }, [items.length, orderName, received.size, router]);
 
   const toggleReceived = (i: number) => {
     setReceived((prev) => {
@@ -1306,7 +1512,14 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
             <button
               type="button"
               disabled={totalDone === 0}
-              onClick={() => totalDone > 0 && setShowReceiveModal(true)}
+              onClick={() => {
+                if (totalDone === 0) return;
+                if (totalDone === items.length) {
+                  setShowReceiveModal(true);
+                } else {
+                  setShowPartialModal(true);
+                }
+              }}
               style={{
                 height: 32, padding: '0 16px', borderRadius: 8,
                 fontSize: 12, fontWeight: 600,
@@ -1330,11 +1543,22 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
         </div>
       </div>
 
-      {/* Receive Order confirmation modal */}
+      {/* Receive Order confirmation modals */}
       {showReceiveModal && (
         <ReceiveOrderModal
           onClose={() => setShowReceiveModal(false)}
           onConfirm={handleConfirmReceipt}
+        />
+      )}
+      {showPartialModal && (
+        <PartialOrderConfirmationModal
+          onClose={() => setShowPartialModal(false)}
+          onConfirm={() => {
+            setShowPartialModal(false);
+            handleConfirmReceipt();
+          }}
+          selectedCount={totalDone}
+          totalCount={items.length}
         />
       )}
     </div>
