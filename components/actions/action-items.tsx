@@ -398,10 +398,10 @@ function DetailModalRow({ label, children, valueAlign = 'right', vertical = fals
   );
 }
 
-/** Status icons: In progress = progress.png, In review = time.png */
+/** Status icons: In Progress = progress.png, In Review = time.png (keys must match apiStatusToUi output) */
 const STATUS_ICONS: Record<string, string> = {
-  'In progress': '/assets/progress.png',
-  'In review': '/assets/time.png',
+  'In Progress': '/assets/progress.png',
+  'In Review': '/assets/time.png',
 };
 
 function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
@@ -739,19 +739,19 @@ function DetailModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { onStatusChange('In progress'); setStatusDropdownOpen(false); }}
+                      onClick={() => { onStatusChange('In Progress'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                     >
-                      <StatusIcon status="In progress" size={12} />
-                      In progress
+                      <StatusIcon status="In Progress" size={12} />
+                      In Progress
                     </button>
                     <button
                       type="button"
-                      onClick={() => { onStatusChange('In review'); setStatusDropdownOpen(false); }}
+                      onClick={() => { onStatusChange('In Review'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                     >
-                      <StatusIcon status="In review" size={12} />
-                      In review
+                      <StatusIcon status="In Review" size={12} />
+                      In Review
                     </button>
                     <button
                       type="button"
@@ -1134,7 +1134,7 @@ export function ActionItems() {
     if (checkedAssignees.length > 0) {
       list = list.filter((row) => checkedAssignees.includes(row.assignee ?? ''));
     }
-    const statusOrder = ['To Do', 'In progress', 'In review', 'Blocked', 'Completed'];
+    const statusOrder = ['To Do', 'In Progress', 'In Review', 'Blocked', 'Completed'];
     const categoryOrder = ['Ads', 'Inventory', 'PDP', 'Price'];
     if (appliedStatusFilter.sortOrder) {
       list = [...list].sort((a, b) => {
@@ -1250,7 +1250,7 @@ export function ActionItems() {
 
   const hasActiveStatusFilter = useMemo(() => {
     const { sortOrder, selectedStatuses } = appliedStatusFilter;
-    const allChecked = ['To Do', 'In progress', 'In review', 'Completed'].every(
+    const allChecked = ['To Do', 'In Progress', 'In Review', 'Completed'].every(
       (s) => selectedStatuses[s]
     );
     return sortOrder != null || !allChecked;
