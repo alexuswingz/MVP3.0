@@ -211,34 +211,52 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
       {/* Modal card */}
       <div
         style={{
-          width: 860,
+          // Layout from design: vertical flow, fixed width 761, radius 12, border 1px #334155
+          width: 761,
           maxWidth: 'calc(100vw - 32px)',
           maxHeight: 'calc(100vh - 48px)',
           overflowY: 'auto',
-          background: '#0F172A',
-          border: '1px solid rgba(148,163,184,0.15)',
+          backgroundColor: '#1A2235',
+          border: '1px solid #334155',
           borderRadius: 12,
           boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
           fontFamily: 'Inter, sans-serif',
           animation: 'scaleIn 180ms cubic-bezier(0.16,1,0.3,1)',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         {/* Header */}
-        <div style={{ padding: '24px 28px 20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div
+          style={{
+            // Layout: horizontal, width 761, padding 16/24, bottom border
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'nowrap',
+            padding: '16px 24px',
+            borderBottom: '1px solid #334155',
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
             <div>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#F1F5F9', lineHeight: 1.2 }}>
                 Inventory Timeline
               </h2>
-              <p style={{
-                margin: '5px 0 0',
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 500,
-                fontSize: 12,
-                lineHeight: 1,
-                letterSpacing: 0,
-                color: '#64748B',
-              }}>
+              <p
+                style={{
+                  margin: '5px 0 0',
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 500,
+                  fontSize: 12,
+                  lineHeight: 1,
+                  letterSpacing: 0,
+                  color: '#64748B',
+                }}
+              >
                 {bottle.name}
                 <span style={{ margin: '0 6px', color: '#334155' }}>•</span>
                 Capacity: {bottle.capacity.toLocaleString()}
@@ -246,43 +264,46 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
                 Today: {bottle.todayInventory.toLocaleString()}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: 6,
-                border: 'none',
-                background: 'rgba(148,163,184,0.08)',
-                borderRadius: 6,
-                color: '#64748B',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background 150ms',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(148,163,184,0.15)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(148,163,184,0.08)')}
-            >
-              <X size={16} />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: 6,
+              border: 'none',
+              background: 'rgba(148,163,184,0.08)',
+              borderRadius: 6,
+              color: '#64748B',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'background 150ms',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(148,163,184,0.15)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(148,163,184,0.08)')}
+          >
+            <X size={16} />
+          </button>
         </div>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: 'rgba(148,163,184,0.08)', margin: '0 0 4px' }} />
 
         {/* Chart section */}
         <div style={{ padding: '20px 28px 0' }}>
           <div
             style={{
-              background: 'linear-gradient(180deg, #0F1B2D 0%, #0A1628 100%)',
-              border: '1.5px solid rgba(148,163,184,0.20)',
+              // Match updated graph card layout from design
+              backgroundColor: '#0F172A',
+              border: '1px solid #334155',
               borderRadius: 12,
-              padding: '20px 12px 12px 4px',
+              padding: 16,
+              width: 713,
+              maxWidth: '100%',
+              height: 244,
+              boxSizing: 'border-box',
+              margin: '0 auto',
             }}
           >
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={CHART_DATA}
                 margin={{ top: 28, right: 32, left: 0, bottom: 4 }}
@@ -384,24 +405,32 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
                   key={ev.date}
                   style={{
                     display: 'flex',
+                    flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '11px 16px',
-                    background: isInbound ? '#0275FC1A' : '#E965001A',
-                    border: isInbound ? '1px solid rgba(2,117,252,0.2)' : '1px solid rgba(233,101,0,0.2)',
-                    borderRadius: 8,
+                    // Layout from design: horizontal, width 713, height 36, radius 12, padding 8/12, gap 16
+                    padding: '8px 12px',
+                    columnGap: 16,
+                    height: 36,
+                    borderRadius: 12,
+                    background: isInbound ? '#0275FC26' : 'rgba(233,101,0,0.10)',
+                    border: '1px solid #334155',
                     cursor: 'default',
-                    transition: 'background 150ms',
+                    transition: 'background 150ms, border-color 150ms',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = isInbound ? '#0275FC26' : '#E9650026')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = isInbound ? '#0275FC1A' : '#E965001A')}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = isInbound ? '#0275FC33' : 'rgba(233,101,0,0.16)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = isInbound ? '#0275FC26' : 'rgba(233,101,0,0.10)';
+                  }}
                 >
                   {/* Left */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div
                       style={{
-                        width: 26,
-                        height: 26,
+                        width: 24,
+                        height: 24,
                         borderRadius: 6,
                         background: `rgba(${isInbound ? '59,130,246' : '249,115,22'},0.12)`,
                         display: 'flex',

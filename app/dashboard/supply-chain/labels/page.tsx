@@ -111,14 +111,17 @@ export default function LabelsPage() {
       activeTab === 'Archive' ? false : true
     );
     if (!searchQuery.trim()) return base;
-    const q = searchQuery.toLowerCase();
-    return base.filter(
-      (l) =>
-        l.productName.toLowerCase().includes(q) ||
-        l.brand.toLowerCase().includes(q) ||
-        l.asin.toLowerCase().includes(q) ||
-        l.size.toLowerCase().includes(q)
-    );
+    const raw = searchQuery.toLowerCase();
+    const q = raw.replace(/[^a-z0-9]/gi, '');
+    return base.filter((l) => {
+      const asinNormalized = l.asin.toLowerCase().replace(/[^a-z0-9]/gi, '');
+      return (
+        l.productName.toLowerCase().includes(raw) ||
+        l.brand.toLowerCase().includes(raw) ||
+        asinNormalized.includes(q) ||
+        l.size.toLowerCase().includes(raw)
+      );
+    });
   }, [activeTab, searchQuery]);
 
   const ROW_BG = '#1A2235';

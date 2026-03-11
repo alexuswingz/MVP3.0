@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Search, MoreVertical } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
+import ProductsFilterDropdown, { type ColumnFilterData } from '@/app/dashboard/shipments/new/components/ProductsFilterDropdown';
+import { InventoryTimelineModal, type TimelineBottle } from '@/components/bottles/InventoryTimelineModal';
 
 const PAGE_BG = '#0B111E';
 const HEADER_BORDER = '#334155';
@@ -45,6 +47,27 @@ const STATUS_STYLE: Record<LabelStatus, { dot: string }> = {
   'Outdated':     { dot: '#EF4444' },
 };
 
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <img
+      src="/assets/Vector (1).png"
+      alt="Filter"
+      width={12}
+      height={12}
+      style={{
+        flexShrink: 0,
+        objectFit: 'contain',
+        ...(active
+          ? {
+              filter:
+                'invert(29%) sepia(94%) saturate(2576%) hue-rotate(199deg) brightness(102%) contrast(105%)',
+            }
+          : {}),
+      }}
+    />
+  );
+}
+
 function ProductThumbnail({ color }: { color: string }) {
   return (
     <div
@@ -73,23 +96,73 @@ function LabelStatusDropdown({ status }: { status: LabelStatus }) {
   return (
     <div
       style={{
+        // Layout: horizontal pill, fixed 156x24, padding 4/12, radius 4
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        width: 132,
-        padding: '5px 10px',
-        gap: 6,
-        borderRadius: 5,
-        backgroundColor: '#374151',
-        border: '1px solid #4B5563',
+        width: 156,
+        height: 24,
+        padding: '4px 12px',
+        gap: 8,
+        borderRadius: 4,
+        backgroundColor: '#4B5563',
+        border: '1px solid #334155',
         boxSizing: 'border-box',
         cursor: 'pointer',
         flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: st.dot, flexShrink: 0 }} />
-        <span style={{ fontSize: 12, fontWeight: 500, color: '#F9FAFB', whiteSpace: 'nowrap' }}>{status}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {status === 'Up to Date' ? (
+          <span
+            style={{
+              width: 18,
+              height: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width={18}
+              height={12}
+              viewBox="0 0 18 12"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M2 6.5L6.5 11L16 1.5"
+                stroke="#22C55E"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        ) : (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: st.dot,
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <span
+          style={{
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+            fontWeight: 500,
+            lineHeight: '100%',
+            color: '#F9FAFB',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {status}
+        </span>
       </div>
       <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth={2} style={{ flexShrink: 0 }}>
         <polyline points="6 9 12 15 18 9" />
@@ -125,6 +198,14 @@ export default function LabelOrderNewPage() {
   const [inventorySummaryOpen, setInventorySummaryOpen] = useState(false);
   const [inventorySummaryRowId, setInventorySummaryRowId] = useState<string | null>(null);
   const [inventorySummaryAnchor, setInventorySummaryAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [timelineLabel, setTimelineLabel] = useState<TimelineBottle | null>(null);
+  const [labelsDoiModalOpen, setLabelsDoiModalOpen] = useState(false);
+  const [amazonDoiGoal, setAmazonDoiGoal] = useState('120');
+  const [inboundLeadTime, setInboundLeadTime] = useState('30');
+  const [labelsDoiValue, setLabelsDoiValue] = useState(150);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Record<string, ColumnFilterData | null>>({});
 
   const [orderData, setOrderData] = useState<{ orderNumber: string; supplier: string } | null>(null);
 
@@ -132,6 +213,7 @@ export default function LabelOrderNewPage() {
   const footerMenuRef = useRef<HTMLDivElement>(null);
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const inventorySummaryRef = useRef<HTMLDivElement>(null);
+  const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -183,16 +265,109 @@ export default function LabelOrderNewPage() {
     return orderData.supplier.split(' ')[0].toUpperCase();
   }, [orderData]);
 
+  const getColumnValues = useCallback(
+    (key: string): (string | number)[] => {
+      switch (key) {
+        case 'status':
+          return MOCK_LABEL_ROWS.map((r) => r.labelStatus);
+        case 'product':
+          return MOCK_LABEL_ROWS.map((r) => r.productName);
+        case 'asin':
+          return MOCK_LABEL_ROWS.map((r) => r.asin);
+        case 'size':
+          return MOCK_LABEL_ROWS.map((r) => r.size);
+        case 'quantity':
+          return MOCK_LABEL_ROWS.map((r) => quantities[r.id] ?? '');
+        case 'capacity':
+          // For now use bar label names as capacity categories
+          return ['Available', 'Allocated', 'Inbound', 'New Order'];
+        default:
+          return [];
+      }
+    },
+    [quantities]
+  );
+
+  const hasActiveFilter = useCallback(
+    (key: string) => {
+      const data = columnFilters[key];
+      if (!data) return false;
+      if (data.selectedValues && data.selectedValues.size > 0) return true;
+      if (data.sortOrder && data.sortOrder !== '') return true;
+      return false;
+    },
+    [columnFilters]
+  );
+
   const filteredRows = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_LABEL_ROWS;
-    const q = searchQuery.toLowerCase();
-    return MOCK_LABEL_ROWS.filter(
-      (r) =>
-        r.productName.toLowerCase().includes(q) ||
-        r.asin.toLowerCase().includes(q) ||
-        r.size.toLowerCase().includes(q)
+    let base = MOCK_LABEL_ROWS;
+    if (searchQuery.trim()) {
+      const raw = searchQuery.toLowerCase();
+      const q = raw.replace(/[^a-z0-9]/gi, '');
+      base = base.filter((r) => {
+        const asinNormalized = r.asin.toLowerCase().replace(/[^a-z0-9]/gi, '');
+        return (
+          r.productName.toLowerCase().includes(raw) ||
+          asinNormalized.includes(q) ||
+          r.size.toLowerCase().includes(raw)
+        );
+      });
+    }
+
+    const applyValueFilter = (key: string, predicate: (row: LabelProductRow) => string) => {
+      const data = columnFilters[key];
+      const selected = data?.selectedValues;
+      if (selected && selected.size > 0 && selected.size < getColumnValues(key).length) {
+        base = base.filter((r) => selected.has(predicate(r)));
+      }
+    };
+
+    applyValueFilter('status', (r) => r.labelStatus);
+    applyValueFilter('product', (r) => r.productName);
+    applyValueFilter('asin', (r) => r.asin);
+    applyValueFilter('size', (r) => r.size);
+    applyValueFilter('quantity', (r) => quantities[r.id] ?? '');
+    // capacity filters are visual only for now (bar is static), so no row-level filter
+
+    // basic sort support
+    const sortData = Object.entries(columnFilters).find(
+      ([, data]) => data?.sortOrder && data.sortOrder !== ''
     );
-  }, [searchQuery]);
+    if (sortData) {
+      const [key, data] = sortData as [string, ColumnFilterData];
+      const dir = data.sortOrder === 'desc' ? -1 : 1;
+      base = [...base].sort((a, b) => {
+        const av =
+          key === 'status'
+            ? a.labelStatus
+            : key === 'product'
+            ? a.productName
+            : key === 'asin'
+            ? a.asin
+            : a.size;
+        const bv =
+          key === 'status'
+            ? b.labelStatus
+            : key === 'product'
+            ? b.productName
+            : key === 'asin'
+            ? b.asin
+            : b.size;
+        return av.localeCompare(bv) * dir;
+      });
+    }
+
+    return base;
+  }, [searchQuery, columnFilters, getColumnValues]);
+
+  const handleApplyFilter = useCallback((key: string, data: ColumnFilterData | null) => {
+    setColumnFilters((prev) => ({ ...prev, [key]: data }));
+    setOpenFilterColumn(null);
+  }, []);
+
+  const totalRequiredDoi =
+    (parseInt(amazonDoiGoal || '0', 10) || 0) +
+    (parseInt(inboundLeadTime || '0', 10) || 0);
 
   const productCount = addedIds.size;
 
@@ -433,21 +608,41 @@ export default function LabelOrderNewPage() {
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* DOI stat */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+            onClick={() => setLabelsDoiModalOpen(true)}
+          >
+            <span style={{ fontSize: 13, fontWeight: 500, color: '#007AFF', whiteSpace: 'nowrap' }}>
               Labels DOI
             </span>
-            <span
+            <div
               style={{
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                minWidth: 36, height: 24,
-                padding: '0 8px',
-                fontSize: 13, fontWeight: 700, color: '#FFFFFF',
-                backgroundColor: '#3B82F6', borderRadius: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 48,
+                minWidth: 48,
+                height: 27,
+                padding: '6px 12px',
+                borderRadius: 4,
+                backgroundColor: '#4B5563',
+                border: '1px solid #007AFF',
+                boxSizing: 'border-box',
               }}
             >
-              150
-            </span>
+              <span
+                style={{
+                  fontFamily:
+                    '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  lineHeight: '100%',
+                  color: '#FFFFFF',
+                }}
+              >
+                {labelsDoiValue}
+              </span>
+            </div>
             <span style={{ fontSize: 13, color: '#9CA3AF' }}>days</span>
           </div>
 
@@ -514,31 +709,316 @@ export default function LabelOrderNewPage() {
                   />
                 </th>
                 {/* LABEL STATUS */}
-                <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: ROW_BG, borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', color: '#9CA3AF', textTransform: 'uppercase', verticalAlign: 'middle' }}>
-                  Label Status
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                  }}
+                >
+                  <div
+                    className="group"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: '16px',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color:
+                        hasActiveFilter('status') || openFilterColumn === 'status'
+                          ? '#3B82F6'
+                          : '#64758B',
+                    }}
+                  >
+                    <span>Label Status</span>
+                    <button
+                      ref={(el) => {
+                        filterIconRefs.current['status'] = el;
+                      }}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenFilterColumn((prev) => (prev === 'status' ? null : 'status'));
+                      }}
+                      className={
+                        hasActiveFilter('status') || openFilterColumn === 'status'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      }
+                      style={{
+                        transition: 'opacity 0.2s',
+                        padding: 2,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      aria-label="Filter label status"
+                    >
+                      <FilterIcon
+                        active={hasActiveFilter('status') || openFilterColumn === 'status'}
+                      />
+                    </button>
+                  </div>
                 </th>
                 {/* PRODUCT */}
-                <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: ROW_BG, borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', color: '#9CA3AF', textTransform: 'uppercase', verticalAlign: 'middle' }}>
-                  Product
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                  }}
+                >
+                  <div
+                    className="group"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: '16px',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color:
+                        hasActiveFilter('product') || openFilterColumn === 'product'
+                          ? '#3B82F6'
+                          : '#64758B',
+                    }}
+                  >
+                    <span>Product</span>
+                    <button
+                      ref={(el) => {
+                        filterIconRefs.current['product'] = el;
+                      }}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenFilterColumn((prev) => (prev === 'product' ? null : 'product'));
+                      }}
+                      className={
+                        hasActiveFilter('product') || openFilterColumn === 'product'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      }
+                      style={{
+                        transition: 'opacity 0.2s',
+                        padding: 2,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      aria-label="Filter products"
+                    >
+                      <FilterIcon
+                        active={hasActiveFilter('product') || openFilterColumn === 'product'}
+                      />
+                    </button>
+                  </div>
                 </th>
                 {/* QUANTITY */}
-                <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: ROW_BG, borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', color: '#9CA3AF', textTransform: 'uppercase', verticalAlign: 'middle' }}>
-                  Quantity
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    verticalAlign: 'middle',
+                  }}
+                >
+                  <div
+                    className="group"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      transform: 'translateX(-40px)',
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      lineHeight: '16px',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color:
+                        hasActiveFilter('quantity') || openFilterColumn === 'quantity'
+                          ? '#3B82F6'
+                          : '#64758B',
+                    }}
+                  >
+                    <span>Quantity</span>
+                    <button
+                      ref={(el) => {
+                        filterIconRefs.current['quantity'] = el;
+                      }}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenFilterColumn((prev) =>
+                          prev === 'quantity' ? null : 'quantity'
+                        );
+                      }}
+                      className={
+                        hasActiveFilter('quantity') || openFilterColumn === 'quantity'
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100'
+                      }
+                      style={{
+                        transition: 'opacity 0.2s',
+                        padding: 2,
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: '#9CA3AF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      aria-label="Filter quantity"
+                    >
+                      <FilterIcon
+                        active={
+                          hasActiveFilter('quantity') || openFilterColumn === 'quantity'
+                        }
+                      />
+                    </button>
+                  </div>
                 </th>
                 {/* STORAGE CAPACITY */}
-                <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: ROW_BG, borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.05em', color: '#9CA3AF', textTransform: 'uppercase' }}>
-                      Storage Capacity
-                    </span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-                      {[
-                        { label: 'Available',  color: '#4B5563', pattern: false },
-                        { label: 'Allocated',  color: '#EA580C', pattern: true  },
-                        { label: 'Inbound',    color: '#3B82F6', pattern: false },
-                        { label: 'New Order',  color: '#93C5FD', pattern: false },
-                      ].map(({ label, color, pattern }) => (
-                        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 400, color: '#9CA3AF', textTransform: 'none', letterSpacing: 0 }}>
+                <th
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    backgroundColor: ROW_BG,
+                    borderBottom: `1px solid ${BORDER_COLOR}`,
+                    padding: '12px 16px',
+                    textAlign: 'center',
+                    verticalAlign: 'middle',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      alignItems: 'center',
+                      transform: 'translateX(-90px)',
+                    }}
+                  >
+                    <div
+                      className="group"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontFamily: 'Inter, system-ui, sans-serif',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        lineHeight: '16px',
+                        letterSpacing: '0.05em',
+                        textTransform: 'uppercase',
+                        color:
+                          hasActiveFilter('capacity') || openFilterColumn === 'capacity'
+                            ? '#3B82F6'
+                            : '#64758B',
+                      }}
+                    >
+                      <span>Storage Capacity</span>
+                      <button
+                        ref={(el) => {
+                          filterIconRefs.current['capacity'] = el;
+                        }}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenFilterColumn((prev) =>
+                            prev === 'capacity' ? null : 'capacity'
+                          );
+                        }}
+                        className={
+                          hasActiveFilter('capacity') || openFilterColumn === 'capacity'
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-100'
+                        }
+                        style={{
+                          transition: 'opacity 0.2s',
+                          padding: 2,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          color: '#9CA3AF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        aria-label="Filter storage capacity"
+                      >
+                        <FilterIcon
+                          active={
+                            hasActiveFilter('capacity') || openFilterColumn === 'capacity'
+                          }
+                        />
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 24,
+                        flexWrap: 'wrap',
+                        opacity: 0.9,
+                      }}
+                    >
+                        {[
+                          { label: 'Available',  color: '#4B5563', pattern: false },
+                          { label: 'Allocated',  color: '#EA580C', pattern: true  },
+                          { label: 'Inbound',    color: '#3B82F6', pattern: false },
+                          { label: 'New Order',  color: '#93C5FD', pattern: false },
+                        ].map(({ label, color, pattern }) => (
+                        <span
+                          key={label}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontFamily: 'Inter, system-ui, sans-serif',
+                            fontSize: 10,
+                            fontWeight: 500,
+                            lineHeight: '100%',
+                            color: '#FFFFFF',
+                            textTransform: 'none',
+                            letterSpacing: 0,
+                          }}
+                        >
                           <span
                             style={{
                               width: 10,
@@ -591,22 +1071,125 @@ export default function LabelOrderNewPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                           <span
                             style={{
-                              fontSize: 13, fontWeight: 500, color: '#F9FAFB',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              fontFamily: 'Inter, system-ui, sans-serif',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: '100%',
+                              color: '#F9FAFB',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                               display: 'block',
                             }}
                           >
                             {row.productName}
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap' }}>
-                            <span style={{ fontSize: 11, color: '#60A5FA', fontWeight: 500 }}>{row.asin}</span>
-                            <span style={{ fontSize: 11, color: '#6B7280' }}>•</span>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#D1D5DB' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontFamily: 'Inter, system-ui, sans-serif',
+                                  fontSize: 12,
+                                  fontWeight: 400,
+                                  lineHeight: '100%',
+                                  color: '#64758B',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {row.asin}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (navigator.clipboard?.writeText) {
+                                    navigator.clipboard
+                                      .writeText(row.asin)
+                                      .then(() => setCopyToast('ASIN copied'))
+                                      .catch(() => {});
+                                  } else {
+                                    setCopyToast('ASIN copied');
+                                  }
+                                  // auto-hide after 1.5s
+                                  setTimeout(() => setCopyToast((prev) => (prev ? null : prev)), 1500);
+                                }}
+                                aria-label="Copy ASIN"
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 4,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <img
+                                  src="/assets/Copy%20icon.png"
+                                  alt=""
+                                  width={12}
+                                  height={12}
+                                  style={{ display: 'block' }}
+                                />
+                              </button>
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                fontSize: 12,
+                                fontWeight: 400,
+                                lineHeight: '100%',
+                                color: '#64758B',
+                              }}
+                            >
+                              •
+                            </span>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                fontSize: 12,
+                                fontWeight: 400,
+                                lineHeight: '100%',
+                                color: '#64758B',
+                              }}
+                            >
                               <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#8B5CF6', flexShrink: 0 }} />
                               {row.category}
                             </span>
-                            <span style={{ fontSize: 11, color: '#6B7280' }}>•</span>
-                            <span style={{ fontSize: 11, color: '#D1D5DB' }}>{row.size}</span>
+                            <span
+                              style={{
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                fontSize: 12,
+                                fontWeight: 400,
+                                lineHeight: '100%',
+                                color: '#64758B',
+                              }}
+                            >
+                              •
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                fontSize: 12,
+                                fontWeight: 400,
+                                lineHeight: '100%',
+                                color: '#64758B',
+                              }}
+                            >
+                              {row.size}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -614,43 +1197,87 @@ export default function LabelOrderNewPage() {
 
                     {/* QUANTITY */}
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          transform: 'translateX(-40px)',
+                        }}
+                      >
                         <input
                           type="text"
                           value={quantities[row.id] ?? ''}
                           onChange={(e) => setQuantities((prev) => ({ ...prev, [row.id]: e.target.value }))}
                           style={{
-                            width: 80, height: 34,
-                            padding: '8px 6px', fontSize: 14, color: '#F9FAFB',
-                            backgroundColor: '#2C3544', border: '1px solid #334155',
-                            borderRadius: 8, outline: 'none', textAlign: 'center',
+                            // Quantity field container layout: horizontal, 115x34, padding 8/6, radius 8, bg #2C3544
+                            width: 115,
+                            height: 34,
+                            padding: '8px 6px',
+                            borderRadius: 8,
+                            backgroundColor: '#2C3544',
+                            border: '1px solid #2C3544',
                             boxSizing: 'border-box',
+                            color: '#F9FAFB',
+                            fontFamily:
+                              '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            lineHeight: '100%',
+                            textAlign: 'center',
+                            outline: 'none',
                           }}
                         />
                         <button
                           type="button"
                           onClick={() => handleAdd(row.id)}
                           style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-                            width: 64, height: 28, padding: 0,
-                            fontSize: 13, fontWeight: 600, color: '#FFFFFF',
-                            backgroundColor: addedIds.has(row.id) ? '#16A34A' : '#3B82F6',
-                            border: 'none', borderRadius: 6, cursor: 'pointer',
-                            boxSizing: 'border-box', transition: 'background-color 0.15s ease',
+                            // Add button layout: 64x24, padding 4/8, radius 6, blue background
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 8,
+                            minWidth: 64,
+                            height: 24,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            border: 'none',
+                            backgroundColor: addedIds.has(row.id) ? '#16A34A' : '#007AFF',
+                            cursor: 'pointer',
+                            boxSizing: 'border-box',
+                            transition: 'background-color 0.15s ease',
                             flexShrink: 0,
+                            fontFamily: 'Inter, system-ui, sans-serif',
+                            fontSize: 12,
+                            fontWeight: 500,
+                            lineHeight: '100%',
+                            color: '#FFFFFF',
                           }}
                         >
                           {addedIds.has(row.id) ? (
-                            <>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                              <span>Added</span>
-                            </>
+                            <span
+                              style={{
+                                fontFamily: 'Inter, system-ui, sans-serif',
+                                fontSize: 12,
+                                fontWeight: 500,
+                                lineHeight: '100%',
+                              }}
+                            >
+                              Added
+                            </span>
                           ) : (
                             <>
                               <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>
-                              <span>Add</span>
+                              <span
+                                style={{
+                                  fontFamily: 'Inter, system-ui, sans-serif',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  lineHeight: '100%',
+                                }}
+                              >
+                                Add
+                              </span>
                             </>
                           )}
                         </button>
@@ -659,65 +1286,127 @@ export default function LabelOrderNewPage() {
 
                     {/* STORAGE CAPACITY */}
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                      <div
-                        onMouseEnter={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setInventorySummaryAnchor({ top: rect.bottom, left: rect.left, width: rect.width });
-                          setInventorySummaryRowId(row.id);
-                          setInventorySummaryOpen(true);
-                        }}
-                        onMouseLeave={() => {
-                          setInventorySummaryOpen(false);
-                          setInventorySummaryRowId(null);
-                        }}
-                        style={{
-                          position: 'relative', height: 19, borderRadius: 4,
-                          overflow: 'hidden', display: 'flex', flexDirection: 'row',
-                          backgroundColor: '#1F2937', cursor: 'default',
-                        }}
-                      >
-                        {segments.map((seg, i) =>
-                          seg.width > 0 ? (
-                            i === segments.length - 1 ? (
-                              /* New Order segment — animated fill */
-                              <div
-                                key={i}
-                                style={{
-                                  position: 'relative',
-                                  width: `${seg.width}%`,
-                                  backgroundColor: '#93C5FD',
-                                  minWidth: 4,
-                                  overflow: 'hidden',
-                                  pointerEvents: 'none',
-                                }}
-                              >
+                      <div style={{ position: 'relative', transform: 'translateX(-90px)' }}>
+                        {/* Bar */}
+                        <div
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setInventorySummaryAnchor({ top: rect.bottom, left: rect.left, width: rect.width });
+                            setInventorySummaryRowId(row.id);
+                            setInventorySummaryOpen(true);
+                          }}
+                          onMouseLeave={() => {
+                            setInventorySummaryOpen(false);
+                            setInventorySummaryRowId(null);
+                          }}
+                          style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: 19,
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            backgroundColor: '#1F2937',
+                            cursor: 'default',
+                          }}
+                        >
+                          {segments.map((seg, i) =>
+                            seg.width > 0 ? (
+                              i === segments.length - 1 ? (
+                                /* New Order segment — animated fill */
                                 <div
+                                  key={i}
                                   style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    backgroundColor: '#3B82F6',
-                                    width: addedIds.has(row.id) ? '100%' : '0%',
-                                    transition: 'width 0.65s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    position: 'relative',
+                                    width: `${seg.width}%`,
+                                    backgroundColor: '#93C5FD',
+                                    minWidth: 4,
+                                    overflow: 'hidden',
+                                    pointerEvents: 'none',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      backgroundColor: '#3B82F6',
+                                      width: addedIds.has(row.id) ? '100%' : '0%',
+                                      transition: 'width 0.65s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div
+                                  key={i}
+                                  style={{
+                                    width: `${seg.width}%`,
+                                    backgroundColor: seg.pattern ? undefined : seg.color,
+                                    backgroundImage: seg.pattern
+                                      ? `repeating-linear-gradient(45deg, ${seg.color}, ${seg.color} 2px, transparent 2px, transparent 4px)`
+                                      : undefined,
+                                    minWidth: 4,
+                                    pointerEvents: 'none',
                                   }}
                                 />
-                              </div>
-                            ) : (
-                              <div
-                                key={i}
-                                style={{
-                                  width: `${seg.width}%`,
-                                  backgroundColor: seg.pattern ? undefined : seg.color,
-                                  backgroundImage: seg.pattern
-                                    ? `repeating-linear-gradient(45deg, ${seg.color}, ${seg.color} 2px, transparent 2px, transparent 4px)`
-                                    : undefined,
-                                  minWidth: 4,
-                                  pointerEvents: 'none',
-                                }}
-                              />
-                            )
-                          ) : null
-                        )}
-                        <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
+                              )
+                            ) : null
+                          )}
+                          <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 1 }} />
+                        </div>
+
+                        {/* Row action icons — visible on hover only, overlaid to the right */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '50%',
+                            right: -64,
+                            transform: 'translateY(-50%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            opacity: hoveredRowId === row.id ? 1 : 0,
+                            transition: 'opacity 0.15s ease',
+                          }}
+                        >
+                          {/* Calendar icon */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setTimelineLabel({
+                                id: row.id,
+                                name: row.productName,
+                                capacity: 4000,
+                                todayInventory: 2160,
+                              })
+                            }
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 28, height: 28, borderRadius: 6,
+                              backgroundColor: 'transparent', border: 'none',
+                              cursor: 'pointer', color: '#9CA3AF',
+                            }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                          </button>
+                          {/* Three-dots icon */}
+                          <button
+                            type="button"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              width: 28, height: 28, borderRadius: 6,
+                              backgroundColor: 'transparent', border: 'none',
+                              cursor: 'pointer', color: '#9CA3AF',
+                            }}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1019,6 +1708,311 @@ export default function LabelOrderNewPage() {
           document.body
         )
       }
+
+      {/* Column filter dropdown (shared with Add Products non-table) */}
+      {openFilterColumn && filterIconRefs.current[openFilterColumn] && (
+        <ProductsFilterDropdown
+          filterIconRef={{
+            get current() {
+              return filterIconRefs.current[openFilterColumn!];
+            },
+          } as React.RefObject<HTMLButtonElement | null>}
+          columnKey={openFilterColumn}
+          availableValues={getColumnValues(openFilterColumn)}
+          currentFilter={columnFilters[openFilterColumn] ?? {}}
+          onApply={(data) => handleApplyFilter(openFilterColumn, data)}
+          onClose={() => setOpenFilterColumn(null)}
+        />
+      )}
+
+      {/* ── Labels DOI Settings popup (non-modal) ── */}
+      {labelsDoiModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: 156,
+              right: 282,
+              zIndex: 3200,
+              // Layout from design: vertical flow, fixed 300px width, radius 12, border 1px #334155
+              width: 300,
+              maxWidth: '90vw',
+              backgroundColor: '#1A2235',
+              borderRadius: 12,
+              border: '1px solid #334155',
+              // Drop shadow: x 0, y 6, blur 6, spread 2, #000000 at 20%
+              boxShadow: '0 6px 8px 2px rgba(0,0,0,0.20)',
+              fontFamily: 'Inter, sans-serif',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                // Header layout: horizontal, width 300px, padding 12/16, gap 8
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderBottom: '1px solid #1F2937',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 16,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    color: '#F9FAFB',
+                  }}
+                >
+                  Labels DOI Settings
+                </span>
+                <span
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: '999px',
+                    border: '1px solid #4B5563',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 10,
+                    color: '#9CA3AF',
+                  }}
+                >
+                  i
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLabelsDoiModalOpen(false)}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: '#6B7280',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '12px 16px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Amazon DOI Goal */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    color: '#E5E7EB',
+                  }}
+                >
+                  Amazon DOI Goal
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={amazonDoiGoal}
+                  onChange={(e) => setAmazonDoiGoal(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    // Container layout: horizontal, fixed 106x24, padding 4/6, radius 4, bg #2C3544
+                    width: 106,
+                    height: 24,
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                    border: '1px solid #2C3544',
+                    backgroundColor: '#2C3544',
+                    color: '#F9FAFB',
+                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Inbound Lead Time */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    color: '#E5E7EB',
+                  }}
+                >
+                  Inbound Lead Time
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={inboundLeadTime}
+                  onChange={(e) => setInboundLeadTime(e.target.value.replace(/\D/g, ''))}
+                  style={{
+                    width: 106,
+                    height: 24,
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                    border: '1px solid #2C3544',
+                    backgroundColor: '#2C3544',
+                    color: '#F9FAFB',
+                    fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    textAlign: 'center',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+
+              {/* Total Required DOI */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                <span
+                  style={{
+                    fontFamily: 'Inter, system-ui, sans-serif',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    lineHeight: '100%',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  Total Required DOI
+                </span>
+                <span
+                  style={{
+                    fontFamily:
+                      '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    lineHeight: '100%',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  {totalRequiredDoi}
+                  <span style={{ marginLeft: 4, fontWeight: 400, color: '#9CA3AF' }}>days</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px 12px',
+                gap: 12,
+              }}
+            >
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px 10px',
+                  minWidth: 113,
+                  height: 23,
+                  borderRadius: 4,
+                  border: '1px solid #007AFF',
+                  backgroundColor: 'transparent',
+                  color: '#007AFF',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  lineHeight: '100%',
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                  gap: 10,
+                }}
+              >
+                Save as Default
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLabelsDoiValue(totalRequiredDoi);
+                  setLabelsDoiModalOpen(false);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px 10px',
+                  minWidth: 57,
+                  height: 23,
+                  borderRadius: 4,
+                  border: 'none',
+                  backgroundColor: 'rgba(0,122,255,0.5)', // #007AFF at ~50% opacity
+                  color: '#FFFFFF',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  lineHeight: '100%',
+                  cursor: 'pointer',
+                  gap: 10,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ASIN copy toast */}
+      {copyToast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 64,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 4000,
+            padding: '6px 12px',
+            borderRadius: 6,
+            backgroundColor: '#1A2235',
+            border: '1px solid #334155',
+            color: '#E5E7EB',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+            boxShadow: '0 8px 16px rgba(0,0,0,0.35)',
+          }}
+        >
+          {copyToast}
+        </div>
+      )}
+
+      {/* ── Inventory Timeline modal ── */}
+      {timelineLabel && (
+        <InventoryTimelineModal
+          bottle={timelineLabel}
+          onClose={() => setTimelineLabel(null)}
+        />
+      )}
 
       {/* ── Complete Order modal ── */}
       {completeOrderModalOpen && (
