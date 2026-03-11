@@ -165,3 +165,20 @@ body::-webkit-scrollbar {
   background: var(--color-primary);
   color: white;
 }
+
+/* Sidebar collapsed icon hover */
+.sidebar-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid transparent;
+}
+.sidebar-icon-btn:hover {
+  background: linear-gradient(135deg, #447BF5 0%, #8B3AEB 100%);
+  border-color: #015FCC;
+}

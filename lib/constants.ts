@@ -13,17 +13,8 @@ export const NAV_ITEMS = [
     path: '/dashboard/products',
     children: [
       { id: 'my-products', label: 'My Products', path: '/dashboard/products' },
+      { id: 'new-prod-development', label: 'New Prod. Development', path: '/dashboard/products/development' },
       { id: 'vine', label: 'Vine', path: '/dashboard/vines' },
-    ]
-  },
-  { 
-    id: 'production', 
-    label: 'Production', 
-    icon: 'TrendingUp', 
-    path: '/dashboard/forecast',
-    children: [
-      { id: 'forecast', label: 'Forecast', path: '/dashboard/forecast' },
-      { id: 'shipments', label: 'Shipments', path: '/dashboard/shipments' },
     ]
   },
   {
@@ -32,8 +23,23 @@ export const NAV_ITEMS = [
     icon: 'Link2',
     path: '/dashboard/supply-chain',
     children: [
-      { id: 'closures', label: 'Closures', path: '/dashboard/supply-chain/closures' },
       { id: 'bottles', label: 'Bottles', path: '/dashboard/bottles' },
+      { id: 'closures', label: 'Closures', path: '/dashboard/supply-chain/closures' },
+      { id: 'boxes', label: 'Boxes', path: '/dashboard/supply-chain/boxes' },
+      { id: 'labels', label: 'Labels', path: '/dashboard/supply-chain/labels' },
+    ]
+  },
+  { 
+    id: 'production', 
+    label: 'Production', 
+    icon: 'TrendingUp', 
+    path: '/dashboard/forecast',
+    children: [
+      { id: 'shipments', label: 'Shipments', path: '/dashboard/shipments' },
+      { id: 'manufacturing', label: 'Manufacturing', path: '/dashboard/manufacturing' },
+      { id: 'forecast', label: 'Forecast', path: '/dashboard/forecast' },
+      { id: 'packaging', label: 'Packaging', path: '/dashboard/packaging' },
+      { id: 'floor-inventory', label: 'Floor Inventory', path: '/dashboard/floor-inventory' },
     ]
   },
   { id: 'action-items', label: 'Action Items', icon: 'ClipboardList', path: '/dashboard/action-items' },
