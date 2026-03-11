@@ -37,6 +37,36 @@ const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
 const HEADER_MUTED = '#6B7280';
 
+const STORAGE_LEGEND_ITEMS = [
+  { key: 'available', label: 'Available', color: '#4B5563' },
+  { key: 'allocated', label: 'Allocated', color: '#E96500' },
+  { key: 'inbound', label: 'Inbound', color: '#2B7FE8' },
+  { key: 'neworder', label: 'New Order', color: '#7DD3FC' },
+];
+
+function StorageCapacityHeaderLegend() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+      {STORAGE_LEGEND_ITEMS.map((item) => (
+        <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              backgroundColor: item.color,
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap' }}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function getCheckboxStyle(checked: boolean): React.CSSProperties {
   return {
     appearance: 'none',
@@ -339,9 +369,12 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                 </th>
                 <th
                   className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px 22px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480 }}
+                  style={{ padding: '22px 12px 22px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480, verticalAlign: 'middle' }}
                 >
-                  STORAGE CAPACITY
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <span>STORAGE CAPACITY</span>
+                    <StorageCapacityHeaderLegend />
+                  </div>
                 </th>
                 <th
                   style={{
@@ -1578,7 +1611,10 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
               </th>
               <th className="text-center text-xs font-semibold uppercase tracking-wider"
                 style={{ padding: '22px 12px 22px 0px', color: HEADER_MUTED, whiteSpace: 'nowrap', width: 480, minWidth: 480, boxSizing: 'border-box', verticalAlign: 'middle' }}>
-                STORAGE CAPACITY
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <span>STORAGE CAPACITY</span>
+                  <StorageCapacityHeaderLegend />
+                </div>
               </th>
             </tr>
             <tr style={{ height: 1, backgroundColor: ROW_BG }}>
