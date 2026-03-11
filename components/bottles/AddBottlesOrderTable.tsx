@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,15 @@ import { InventoryTimelineModal, type TimelineBottle } from './InventoryTimeline
 import { CompleteOrderModal, ExportBottleOrderModal } from './CompleteOrderModal';
 import type { BottleRow } from './bottles-table';
 
+export interface BottleDraftPayload {
+  addedIds: string[];
+  qtyValues: Record<string, string>;
+}
+
+export interface AddBottlesOrderTableRef {
+  getDraftPayload: () => BottleDraftPayload | null;
+}
+
 interface AddBottlesOrderTableProps {
   bottles: BottleRow[];
   orderName?: string;
@@ -20,6 +29,8 @@ interface AddBottlesOrderTableProps {
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
   onOrderComplete?: (items: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }[]) => void;
+  initialAddedIds?: string[];
+  initialQtyValues?: Record<string, string>;
 }
 
 const ROW_BG = '#1A2235';
@@ -49,21 +60,27 @@ function getCheckboxStyle(checked: boolean): React.CSSProperties {
   };
 }
 
-export function AddBottlesOrderTable({
+export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, AddBottlesOrderTableProps>(function AddBottlesOrderTable({
   bottles,
   orderName = '',
   supplier = '',
   isDarkMode = true,
   searchQuery = '',
   onOrderComplete,
-}: AddBottlesOrderTableProps) {
+  initialAddedIds,
+  initialQtyValues,
+}, ref) {
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [timelineBottle, setTimelineBottle] = useState<TimelineBottle | null>(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
-  const [qtyValues, setQtyValues] = useState<Record<string, string>>({});
+  const [addedIds, setAddedIds] = useState<Set<string>>(() =>
+    initialAddedIds && initialAddedIds.length > 0 ? new Set(initialAddedIds) : new Set()
+  );
+  const [qtyValues, setQtyValues] = useState<Record<string, string>>(() =>
+    initialQtyValues && Object.keys(initialQtyValues).length > 0 ? { ...initialQtyValues } : {}
+  );
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [barFillAnimation, setBarFillAnimation] = useState<{
     bottleId: string;
@@ -76,6 +93,21 @@ export function AddBottlesOrderTable({
   const [cardOrder, setCardOrder] = useState([0, 1, 2]);
   const dragCardIdx = useRef<number | null>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    getDraftPayload: (): BottleDraftPayload | null => {
+      if (addedIds.size === 0) return null;
+      const qtySnapshot: Record<string, string> = {};
+      addedIds.forEach((id) => {
+        const v = qtyValues[id];
+        if (v !== undefined) qtySnapshot[id] = v;
+      });
+      return {
+        addedIds: Array.from(addedIds),
+        qtyValues: qtySnapshot,
+      };
+    },
+  }), [addedIds, qtyValues]);
 
   const filteredBottles = React.useMemo(() => {
     if (!searchQuery.trim()) return bottles;
@@ -865,7 +897,7 @@ export function AddBottlesOrderTable({
       </div>
     </motion.div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // ReceivePOTable — co-located here to avoid an extra file
@@ -911,9 +943,13 @@ function ReceiveBadge() {
   );
 }
 
-function DoneBadge() {
+function DoneBadge({ isEditing = false }: { isEditing?: boolean }) {
   return (
-    <span style={{ ...ACTION_BADGE_STYLE, backgroundColor: '#34C759', color: '#FFFFFF' }}>
+    <span style={{
+      ...ACTION_BADGE_STYLE,
+      backgroundColor: isEditing ? '#1D4ED8' : '#34C759',
+      color: '#FFFFFF',
+    }}>
       Done
     </span>
   );
@@ -1205,19 +1241,229 @@ function PartialOrderConfirmationModal({
   );
 }
 
+function BottleAmountChangedModal({
+  onClose,
+  onConfirm,
+  changedCount,
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+  changedCount: number;
+}) {
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 12000,
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'bamFadeIn 150ms ease',
+      }}
+    >
+      <style>{`
+        @keyframes bamFadeIn  { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes bamScaleIn { from { opacity: 0; transform: scale(0.95) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .bam-close-btn:hover   { background: rgba(148,163,184,0.12) !important; color: #CBD5E1 !important; }
+        .bam-back-btn:hover    { background: rgba(148,163,184,0.08) !important; border-color: #64748B !important; }
+        .bam-confirm-btn:hover { background: #1D4ED8 !important; }
+      `}</style>
+
+      <div
+        style={{
+          width: 458,
+          boxSizing: 'border-box',
+          background: '#0F172A',
+          border: '1px solid rgba(148,163,184,0.12)',
+          borderRadius: 12,
+          boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
+          padding: 24,
+          position: 'relative',
+          fontFamily: 'Inter, sans-serif',
+          animation: 'bamScaleIn 180ms cubic-bezier(0.16,1,0.3,1)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <button
+          type="button"
+          className="bam-close-btn"
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 26,
+            height: 26,
+            border: 'none',
+            background: 'transparent',
+            borderRadius: 6,
+            color: '#475569',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 150ms, color 150ms',
+          }}
+        >
+          <X size={14} />
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              backgroundColor: '#FF9500',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Image src="/assets/padamdam.png" alt="warning" width={20} height={20} style={{ objectFit: 'contain' }} />
+          </div>
+        </div>
+
+        <h2
+          style={{
+            margin: '0 0 6px',
+            textAlign: 'center',
+            fontSize: 15,
+            fontWeight: 600,
+            color: '#F8FAFC',
+            lineHeight: 1.3,
+          }}
+        >
+          Bottle Amount Changed
+        </h2>
+
+        <p
+          style={{
+            margin: '0 0 20px',
+            textAlign: 'center',
+            fontSize: 12,
+            fontWeight: 400,
+            color: '#94A3B8',
+            lineHeight: 1.5,
+          }}
+        >
+          {changedCount} {changedCount === 1 ? 'item has' : 'items have'} had a quantity change. Please confirm this change to receive your order.
+        </p>
+
+        <div style={{ display: 'flex', gap: 10, width: '100%' }}>
+          <button
+            type="button"
+            className="bam-back-btn"
+            onClick={onClose}
+            style={{
+              flex: 1,
+              height: 31,
+              borderRadius: 4,
+              border: '1px solid #374151',
+              background: '#1E293B',
+              color: '#CBD5E1',
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'background 150ms, border-color 150ms',
+            }}
+          >
+            Go back
+          </button>
+          <button
+            type="button"
+            className="bam-confirm-btn"
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              height: 31,
+              borderRadius: 4,
+              border: '1px solid transparent',
+              background: '#2563EB',
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 150ms',
+            }}
+          >
+            Confirm &amp; Receive
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
   const router = useRouter();
   const [received, setReceived] = React.useState<Set<number>>(new Set());
   const [cardOrder, setCardOrder] = React.useState([0, 1, 2]);
   const [showReceiveModal, setShowReceiveModal] = React.useState(false);
   const [showPartialModal, setShowPartialModal] = React.useState(false);
+  const [showBottleAmountChangedModal, setShowBottleAmountChangedModal] = React.useState(false);
+  const [openEditIdx, setOpenEditIdx] = React.useState<number | null>(null);
+  const [editingRowIndex, setEditingRowIndex] = React.useState<number | null>(null);
+  const [editedQuantityInput, setEditedQuantityInput] = React.useState('');
+  const [quantityOverrides, setQuantityOverrides] = React.useState<Record<number, number>>({});
   const dragCardIdx = React.useRef<number | null>(null);
+  const editingRowRef = React.useRef<HTMLTableRowElement | null>(null);
+
+  const getDisplayQuantity = (index: number) =>
+    quantityOverrides[index] ?? items[index]?.qty ?? 0;
+
+  const commitEdit = React.useCallback(() => {
+    if (editingRowIndex === null) return;
+    const raw = editedQuantityInput.replace(/,/g, '').trim();
+    const num = Number(raw);
+    const value = Number.isFinite(num) && num >= 0 ? num : getDisplayQuantity(editingRowIndex);
+    setQuantityOverrides((prev) => ({ ...prev, [editingRowIndex]: value }));
+    setEditingRowIndex(null);
+    setEditedQuantityInput('');
+  }, [editingRowIndex, editedQuantityInput, items, quantityOverrides]);
+
+  React.useEffect(() => {
+    if (openEditIdx === null) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (!el?.closest?.('[data-receive-edit-area]')) {
+        setOpenEditIdx(null);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [openEditIdx]);
+
+  React.useEffect(() => {
+    if (editingRowIndex === null) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const el = e.target as Node | null;
+      if (el && editingRowRef.current?.contains(el)) return;
+      commitEdit();
+    };
+    document.addEventListener('mousedown', onMouseDown, true);
+    return () => document.removeEventListener('mousedown', onMouseDown, true);
+  }, [editingRowIndex, commitEdit]);
 
   const handleConfirmReceipt = React.useCallback(() => {
-    // Determine whether this is a full or partial receive based on selected items
     const doneCount = received.size;
     const totalCount = items.length;
     const isFull = doneCount >= totalCount && totalCount > 0;
+    const hasQuantityEdits = items.some(
+      (item, i) => (quantityOverrides[i] ?? item.qty) !== (item.qty ?? 0)
+    );
 
     try {
       const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
@@ -1226,27 +1472,36 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
         receivePOStatus?: 'none' | 'partial' | 'full';
         receivedCount?: number;
         totalCount?: number;
-        items: unknown[];
+        edited?: boolean;
+        items: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }[];
       }[];
 
-      const updated = orders.map((o) =>
-        o.orderName === orderName
-          ? {
-              ...o,
-              receivePOStatus: isFull ? 'full' : 'partial',
-              receivedCount: doneCount,
-              totalCount,
-            }
-          : o
-      );
+      const updated = orders.map((o) => {
+        if (o.orderName !== orderName) return o;
+        const updatedItems = o.items.map((it: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }, idx: number) => {
+          const override = quantityOverrides[idx];
+          if (override !== undefined) {
+            return { ...it, qty: override };
+          }
+          return it;
+        });
+        return {
+          ...o,
+          items: updatedItems,
+          receivePOStatus: isFull ? 'full' : 'partial',
+          receivedCount: doneCount,
+          totalCount,
+          edited: hasQuantityEdits,
+          receivedAt: new Date().toISOString(),
+        };
+      });
       sessionStorage.setItem('completedOrders', JSON.stringify(updated));
-    } catch (_) {
-      // ignore persistence errors
-    }
+      sessionStorage.setItem('bottleOrderToast', JSON.stringify({ orderName }));
+    } catch (_) {}
 
     setShowReceiveModal(false);
     router.push('/dashboard/bottles?tab=Orders');
-  }, [items.length, orderName, received.size, router]);
+  }, [items, orderName, quantityOverrides, received.size, router]);
 
   const toggleReceived = (i: number) => {
     setReceived((prev) => {
@@ -1335,6 +1590,14 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
           <tbody>
             {items.map((item, index) => {
               const isReceived = received.has(index);
+              const isEditing = editingRowIndex === index;
+              const displayQty = getDisplayQuantity(index);
+              const originalQty = quantityOverrides[index] ?? item.qty ?? 0;
+              const editedNum = isEditing
+                ? (() => { const n = Number(String(editedQuantityInput).replace(/,/g, '')); return Number.isFinite(n) ? n : originalQty; })()
+                : originalQty;
+              const delta = isEditing ? editedNum - originalQty : 0;
+
               return (
                 <React.Fragment key={item.id}>
                   {index > 0 && (
@@ -1345,8 +1608,9 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                     </tr>
                   )}
                   <tr
+                    ref={isEditing ? editingRowRef : undefined}
                     style={{ backgroundColor: ROW_BG, height: 60 }}
-                    onClick={() => toggleReceived(index)}
+                    onClick={() => !isEditing && toggleReceived(index)}
                     className="cursor-pointer transition-colors"
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1A2636'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ROW_BG; }}
@@ -1358,10 +1622,23 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                       </label>
                     </td>
                     <td style={{ padding: '8px 12px', verticalAlign: 'middle', backgroundColor: 'inherit' }} onClick={(e) => e.stopPropagation()}>
-                      <button type="button" onClick={() => toggleReceived(index)}
-                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
-                        {isReceived ? <DoneBadge /> : <ReceiveBadge />}
-                      </button>
+                      {isEditing ? (
+                        <DoneBadge isEditing />
+                      ) : editingRowIndex !== null ? (
+                        isReceived ? (
+                          <button type="button" onClick={() => toggleReceived(index)}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                            <DoneBadge />
+                          </button>
+                        ) : (
+                          <span style={{ ...ACTION_BADGE_STYLE, visibility: 'hidden' }}>Receive</span>
+                        )
+                      ) : (
+                        <button type="button" onClick={() => toggleReceived(index)}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                          {isReceived ? <DoneBadge /> : <ReceiveBadge />}
+                        </button>
+                      )}
                     </td>
                     <td style={{ padding: '8px 12px', verticalAlign: 'middle', backgroundColor: 'inherit', width: 250, maxWidth: 250, overflow: 'hidden' }}>
                       <Link href={`/dashboard/bottles/${item.id}`}
@@ -1376,19 +1653,192 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                     <td style={{ padding: '8px 12px', verticalAlign: 'middle', textAlign: 'center', backgroundColor: 'inherit', fontSize: 13, fontWeight: 500, color: '#FFFFFF' }}>
                       {(item.warehouseInventory + item.supplierInventory).toLocaleString()}
                     </td>
-                    <td style={{ padding: '8px 0px 8px 12px', verticalAlign: 'middle', textAlign: 'center', backgroundColor: 'inherit' }}>
-                      <div style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        minWidth: 80, height: 30, borderRadius: 7, padding: '0 12px',
-                        background: '#111827', border: '1px solid #374151',
-                        fontSize: 12, fontWeight: 500, color: '#E5E7EB', letterSpacing: '0.04em',
-                      }}>
-                        {item.qty > 0 ? item.qty.toLocaleString() : '—'}
-                      </div>
+                    <td style={{ padding: '8px 0px 8px 12px', verticalAlign: 'middle', textAlign: 'center', backgroundColor: 'inherit', width: 180, boxSizing: 'border-box' }} onClick={(e) => e.stopPropagation()}>
+                      {isEditing ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: 137, justifyContent: 'flex-start' }}>
+                          <input
+                            type="text"
+                            value={editedQuantityInput}
+                            onChange={(e) => setEditedQuantityInput(e.target.value)}
+                            onBlur={commitEdit}
+                            autoFocus
+                            style={{
+                              width: 88,
+                              height: 30,
+                              borderRadius: 7,
+                              padding: '0 12px',
+                              background: '#111827',
+                              border: 'none',
+                              outline: 'none',
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: '#E5E7EB',
+                              letterSpacing: '0.04em',
+                              textAlign: 'center',
+                              boxSizing: 'border-box',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 39,
+                              height: 16,
+                              minWidth: 39,
+                              gap: 10,
+                              borderRadius: 4,
+                              paddingTop: 2,
+                              paddingRight: 4,
+                              paddingBottom: 2,
+                              paddingLeft: 4,
+                              backgroundColor: delta !== 0 ? (delta < 0 ? '#321B1B' : '#2b692b') : 'transparent',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: delta !== 0 ? (delta < 0 ? '#FCA5A5' : '#86EFAC') : 'transparent',
+                              boxSizing: 'border-box',
+                              visibility: delta !== 0 ? 'visible' : 'hidden',
+                            }}
+                          >
+                            {delta > 0 ? `+${delta}` : delta}
+                          </span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: 137, justifyContent: 'flex-start' }}>
+                          <div style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            minWidth: 80, height: 30, borderRadius: 7, padding: '0 12px',
+                            background: 'rgba(17,24,39,0.6)', border: '1px solid #334155',
+                            fontSize: 12, fontWeight: 500, color: '#6B7280', letterSpacing: '0.04em',
+                            flexShrink: 0,
+                          }}>
+                            {displayQty > 0 ? displayQty.toLocaleString() : '—'}
+                          </div>
+                          {(() => {
+                            const orig = item.qty ?? 0;
+                            const diff = displayQty - orig;
+                            return (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: 39,
+                                  height: 16,
+                                  minWidth: 39,
+                                  gap: 10,
+                                  borderRadius: 4,
+                                  paddingTop: 2,
+                                  paddingRight: 4,
+                                  paddingBottom: 2,
+                                  paddingLeft: 4,
+                                  backgroundColor: diff !== 0 ? (diff < 0 ? '#321B1B' : '#2b692b') : 'transparent',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: diff !== 0 ? (diff < 0 ? '#FCA5A5' : '#86EFAC') : 'transparent',
+                                  boxSizing: 'border-box',
+                                  visibility: diff !== 0 ? 'visible' : 'hidden',
+                                }}
+                              >
+                                {diff > 0 ? `+${diff}` : diff}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '8px 12px 8px 0px', verticalAlign: 'middle', textAlign: 'center', backgroundColor: 'inherit', width: 480, minWidth: 480 }}>
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12 }}>
+                      <div
+                        data-receive-edit-area
+                        style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12, flexWrap: 'nowrap' }}
+                      >
                         <SegmentedInventoryBar fillPercent={100} width={452} height={19} />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenEditIdx(openEditIdx === index ? null : index);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: 28,
+                            height: 28,
+                            flexShrink: 0,
+                            padding: 0,
+                            border: 'none',
+                            outline: 'none',
+                            boxShadow: 'none',
+                            background: 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            color: '#9CA3AF',
+                          }}
+                        >
+                          <MoreVertical size={14} />
+                        </button>
+
+                        {openEditIdx === index && (
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            style={{
+                              position: 'absolute',
+                              right: 4,
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              width: 78,
+                              height: 44,
+                              padding: 8,
+                              borderBottomWidth: 1,
+                              borderStyle: 'solid',
+                              borderColor: 'rgba(148,163,184,0.38)',
+                              borderRadius: 10,
+                              backgroundColor: '#0F172A',
+                              boxShadow: '0 10px 30px rgba(0,0,0,0.55)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              boxSizing: 'border-box',
+                              zIndex: 10,
+                              cursor: 'pointer',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingRowIndex(index);
+                              setEditedQuantityInput(String(getDisplayQuantity(index)));
+                              setOpenEditIdx(null);
+                            }}
+                          >
+                            <svg
+                              width={14}
+                              height={14}
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#E5E7EB"
+                              strokeWidth={1.7}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 500,
+                                color: '#E5E7EB',
+                              }}
+                            >
+                              Edit
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1514,7 +1964,14 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
               disabled={totalDone === 0}
               onClick={() => {
                 if (totalDone === 0) return;
-                if (totalDone === items.length) {
+                const changedCount = items.reduce((n, item, i) => {
+                  const orig = item.qty ?? 0;
+                  const display = quantityOverrides[i] ?? orig;
+                  return display !== orig ? n + 1 : n;
+                }, 0);
+                if (changedCount > 0) {
+                  setShowBottleAmountChangedModal(true);
+                } else if (totalDone === items.length) {
                   setShowReceiveModal(true);
                 } else {
                   setShowPartialModal(true);
@@ -1543,6 +2000,21 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
         </div>
       </div>
 
+      {/* Bottle Amount Changed modal — shown when user has edited quantities and clicks Receive Order */}
+      {showBottleAmountChangedModal && (
+        <BottleAmountChangedModal
+          changedCount={items.reduce((n, item, i) => {
+            const orig = item.qty ?? 0;
+            const display = quantityOverrides[i] ?? orig;
+            return display !== orig ? n + 1 : n;
+          }, 0)}
+          onClose={() => setShowBottleAmountChangedModal(false)}
+          onConfirm={() => {
+            setShowBottleAmountChangedModal(false);
+            handleConfirmReceipt();
+          }}
+        />
+      )}
       {/* Receive Order confirmation modals */}
       {showReceiveModal && (
         <ReceiveOrderModal

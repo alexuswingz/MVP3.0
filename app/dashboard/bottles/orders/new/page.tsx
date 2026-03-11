@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { AddBottlesOrderTable, ReceivePOTable, type ReceivePOItem } from '@/components/bottles/AddBottlesOrderTable';
+import { AddBottlesOrderTable, ReceivePOTable, type AddBottlesOrderTableRef, type ReceivePOItem } from '@/components/bottles/AddBottlesOrderTable';
 import type { BottleRow } from '@/components/bottles/bottles-table';
+
+const BOTTLE_ORDER_DRAFTS_KEY = 'bottleOrderDrafts';
 
 const PAGE_BG = '#0B111E';
 const HEADER_BG = '#1A2235';
@@ -37,6 +38,24 @@ export default function NewBottleOrderPage() {
 
   const [activeTab, setActiveTab] = useState<(typeof WORKFLOW_TABS)[number]>(validTab);
   const [searchQuery, setSearchQuery] = useState('');
+  const addBottlesRef = useRef<AddBottlesOrderTableRef | null>(null);
+
+  // Load draft state when resuming a draft order
+  const draftState = useMemo(() => {
+    if (validTab !== 'Add Products' || !orderName) return null;
+    try {
+      const drafts = JSON.parse(sessionStorage.getItem(BOTTLE_ORDER_DRAFTS_KEY) ?? '[]') as {
+        orderName: string;
+        supplier: string;
+        addedIds: string[];
+        qtyValues: Record<string, string>;
+      }[];
+      const draft = drafts.find((d) => d.orderName === orderName);
+      return draft ?? null;
+    } catch (_) {
+      return null;
+    }
+  }, [validTab, orderName]);
 
   // Steps that are already completed (used when entering Receive PO from Orders tab)
   const completedSteps = useMemo<Set<string>>(() => {
@@ -81,8 +100,38 @@ export default function NewBottleOrderPage() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link
-            href="/dashboard/bottles"
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab === 'Add Products') {
+                const payload = addBottlesRef.current?.getDraftPayload?.();
+                if (payload && payload.addedIds.length > 0) {
+                  try {
+                    const drafts = JSON.parse(sessionStorage.getItem(BOTTLE_ORDER_DRAFTS_KEY) ?? '[]') as {
+                      orderName: string;
+                      supplier: string;
+                      addedIds: string[];
+                      qtyValues: Record<string, string>;
+                      savedAt: string;
+                    }[];
+                    const orderNameVal = orderName || `Order ${new Date().toLocaleDateString()}`;
+                    const supplierVal = supplier || 'Rhino Container';
+                    const updated = drafts.filter((d) => d.orderName !== orderNameVal);
+                    updated.push({
+                      orderName: orderNameVal,
+                      supplier: supplierVal,
+                      addedIds: payload.addedIds,
+                      qtyValues: payload.qtyValues,
+                      savedAt: new Date().toISOString(),
+                    });
+                    sessionStorage.setItem(BOTTLE_ORDER_DRAFTS_KEY, JSON.stringify(updated));
+                  } catch (_) {}
+                  router.push('/dashboard/bottles?tab=Orders');
+                  return;
+                }
+              }
+              router.push('/dashboard/bottles');
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -96,13 +145,14 @@ export default function NewBottleOrderPage() {
               borderRadius: 8,
               cursor: 'pointer',
               padding: 6,
+              color: 'white',
             }}
             aria-label="Back to bottles"
           >
-            <svg style={{ width: 16, height: 16, color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg style={{ width: 16, height: 16 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-          </Link>
+          </button>
           {dateStr && (
             <div style={{ fontSize: 16, fontWeight: 400, color: '#FFFFFF', fontFamily: 'Inter, system-ui, sans-serif' }}>
               {dateStr}
@@ -339,20 +389,29 @@ export default function NewBottleOrderPage() {
           <ReceivePOTable items={receiveItems} orderName={orderName || undefined} />
         ) : (
           <AddBottlesOrderTable
+            ref={addBottlesRef}
             bottles={MOCK_BOTTLES}
             orderName={orderName}
             supplier={supplier}
             isDarkMode={true}
             searchQuery={searchQuery}
+            initialAddedIds={draftState?.addedIds}
+            initialQtyValues={draftState?.qtyValues}
             onOrderComplete={(items) => {
               try {
                 const existing = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]');
+                const orderNameVal = orderName || `Order ${new Date().toLocaleDateString()}`;
                 const newOrder = {
-                  orderName: orderName || `Order ${new Date().toLocaleDateString()}`,
+                  orderName: orderNameVal,
                   completedAt: new Date().toISOString(),
                   items,
                 };
                 sessionStorage.setItem('completedOrders', JSON.stringify([...existing, newOrder]));
+                sessionStorage.setItem('bottleOrderToast', JSON.stringify({ orderName: orderNameVal }));
+                // Remove from drafts when order is completed
+                const drafts = JSON.parse(sessionStorage.getItem(BOTTLE_ORDER_DRAFTS_KEY) ?? '[]') as { orderName: string }[];
+                const filtered = drafts.filter((d) => d.orderName !== orderNameVal);
+                sessionStorage.setItem(BOTTLE_ORDER_DRAFTS_KEY, JSON.stringify(filtered));
               } catch (_) {}
               router.push('/dashboard/bottles?tab=Orders');
             }}
