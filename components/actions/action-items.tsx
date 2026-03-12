@@ -40,6 +40,7 @@ type TicketDetail = {
   ticketId: string;
   productName: string;
   productId: string;
+  productImageUrl?: string;
   brand: string;
   unit: string;
   subject: string;
@@ -285,12 +286,13 @@ function actionItemToTableRow(a: ActionItemResponse): TableRow {
   };
 }
 
-function actionItemToTicketDetail(a: ActionItemResponse): TicketDetail {
+function actionItemToTicketDetail(a: ActionItemResponse, overrides?: { productImageUrl?: string }): TicketDetail {
   const productName = (a.product_name ?? '').trim() || '—';
   return {
     ticketId: `I-${a.id}`,
     productName,
     productId: (a.product_asin ?? '').trim() || '—',
+    productImageUrl: overrides?.productImageUrl || (a as any).product_image_url || undefined,
     brand: (a.product_brand ?? '').trim() || '—',
     unit: (a.product_size ?? '').trim() || '—',
     subject: (a.subject ?? '').trim() || '—',
@@ -585,8 +587,12 @@ function DetailModal({
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'row', background: '#1A2235' }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, overflow: 'visible', overflowX: 'hidden' }} className="scrollbar-hide">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', flexShrink: 0 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                {item.productImageUrl ? (
+                  <Image src={item.productImageUrl} alt={item.productName} width={40} height={40} style={{ objectFit: 'cover' }} />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
+                )}
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <p
@@ -1054,11 +1060,21 @@ export function ActionItems() {
     setItemsError(null);
     try {
       const list = await api.getActionItems({ ordering: '-created_at' });
-      const rows: TableRow[] = list.map(actionItemToTableRow);
+      let rows: TableRow[] = list.map(actionItemToTableRow);
       const details: Record<number, TicketDetail> = {};
       list.forEach((a) => {
-        details[a.id] = actionItemToTicketDetail(a);
+        const product = productsList.find((p) => p.asin === (a.product_asin ?? '').trim());
+        const productImageUrl = (a as any).product_image_url || product?.imageUrl || undefined;
+        details[a.id] = actionItemToTicketDetail(a, { productImageUrl });
       });
+      if (productsList.length > 0) {
+        rows = rows.map((row) => {
+          if (row.productImageUrl) return row;
+          const product = productsList.find((p) => p.asin === row.productId);
+          const imageUrl = product?.imageUrl || details[row.id]?.productImageUrl;
+          return imageUrl ? { ...row, productImageUrl: imageUrl } : row;
+        });
+      }
       setTableItems(rows);
       setTicketDetails(details);
     } catch (e) {
@@ -1069,7 +1085,7 @@ export function ActionItems() {
     } finally {
       setItemsLoading(false);
     }
-  }, []);
+  }, [productsList]);
 
   useEffect(() => {
     fetchActionItems();
@@ -2917,8 +2933,12 @@ export function ActionItems() {
 
                   try {
                     const created = await api.createActionItem(payload);
-                    setTableItems((prev) => [actionItemToTableRow(created), ...prev]);
-                    setTicketDetails((prev) => ({ ...prev, [created.id]: actionItemToTicketDetail(created) }));
+                    const createdRow = actionItemToTableRow(created);
+                    const product = productsList.find((p) => p.asin === createdRow.productId);
+                    const productImageUrl = createdRow.productImageUrl || product?.imageUrl || undefined;
+                    const createdDetail = actionItemToTicketDetail(created, { productImageUrl });
+                    setTableItems((prev) => [createdRow, ...prev]);
+                    setTicketDetails((prev) => ({ ...prev, [created.id]: createdDetail }));
                     setShowNewActionModal(false);
                     setShowActionCreatedToast(true);
                     setNewItem({
