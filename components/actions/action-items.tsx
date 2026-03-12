@@ -2387,7 +2387,7 @@ export function ActionItems() {
                               product.asin.toLowerCase().includes(q) ||
                               (product.brand && product.brand.toLowerCase().includes(q))
                             );
-                          });
+                          }).sort((a, b) => a.name.localeCompare(b.name));
                           if (filtered.length === 0) {
                             return (
                               <div className="px-4 py-3 text-sm text-gray-500" style={{ background: '#0F172A' }}>
