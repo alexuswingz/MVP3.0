@@ -151,6 +151,9 @@ export default function LabelsPage() {
 
   const [orders, setOrders] = useState<LabelOrderRow[]>([]);
   const [completionToastDate, setCompletionToastDate] = useState<string | null>(null);
+  const [receivedToastDate, setReceivedToastDate] = useState<string | null>(null);
+  const [archivedToastDate, setArchivedToastDate] = useState<string | null>(null);
+  const [archiveConfirmOrderId, setArchiveConfirmOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settingsDropdownOpen) return;
@@ -187,8 +190,9 @@ export default function LabelsPage() {
     } catch (_) {}
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'Orders') {
-      setActiveTab('Orders');
+    const tab = params.get('tab');
+    if (tab === 'Orders' || tab === 'Archive') {
+      setActiveTab(tab as LabelTabId);
       const url = new URL(window.location.href);
       url.searchParams.delete('tab');
       window.history.replaceState({}, '', url.toString());
@@ -201,6 +205,22 @@ export default function LabelsPage() {
         window.sessionStorage.removeItem('last_label_order_complete_date');
       }
     } catch (_) {}
+
+    try {
+      const lastReceived = window.sessionStorage.getItem('last_label_order_received_date');
+      if (lastReceived) {
+        setReceivedToastDate(lastReceived);
+        window.sessionStorage.removeItem('last_label_order_received_date');
+      }
+    } catch (_) {}
+
+    try {
+      const lastArchived = window.sessionStorage.getItem('last_label_order_archived_date');
+      if (lastArchived) {
+        setArchivedToastDate(lastArchived);
+        window.sessionStorage.removeItem('last_label_order_archived_date');
+      }
+    } catch (_) {}
   }, []);
 
   useEffect(() => {
@@ -210,6 +230,22 @@ export default function LabelsPage() {
     }, 4000);
     return () => window.clearTimeout(id);
   }, [completionToastDate]);
+
+  useEffect(() => {
+    if (!receivedToastDate) return;
+    const id = window.setTimeout(() => {
+      setReceivedToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [receivedToastDate]);
+
+  useEffect(() => {
+    if (!archivedToastDate) return;
+    const id = window.setTimeout(() => {
+      setArchivedToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [archivedToastDate]);
 
   const filteredLabels = useMemo(() => {
     const base = MOCK_LABELS.filter((l) =>
@@ -397,6 +433,7 @@ export default function LabelsPage() {
                 No label orders yet. Click &quot;+ New Order&quot; to create one.
               </div>
             ) : (
+              <div>
               <div
                 style={{
                   borderRadius: 12,
@@ -406,7 +443,8 @@ export default function LabelsPage() {
                   fontFamily: 'Inter, sans-serif',
                 }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ maxHeight: 620, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead
                     style={{
                       position: 'sticky',
@@ -568,19 +606,50 @@ export default function LabelsPage() {
                                 >
                                   {order.date}
                                 </a>
-                                {order.archive && (
-                                  <span
+                                {order.receivePO === 'completed' && !order.archive && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (order.status === 'Partially Received') {
+                                        setArchiveConfirmOrderId(order.id);
+                                      } else {
+                                        setOrders((prev) => {
+                                          const updated = prev.map((o) =>
+                                            o.id === order.id ? { ...o, archive: true } : o,
+                                          );
+                                          try {
+                                            if (typeof window !== 'undefined') {
+                                              window.localStorage.setItem('label_orders', JSON.stringify(updated));
+                                              window.sessionStorage.setItem(
+                                                'last_label_order_archived_date',
+                                                order.date,
+                                              );
+                                              const url = new URL(window.location.href);
+                                              url.searchParams.set('tab', 'Archive');
+                                              window.history.replaceState({}, '', url.toString());
+                                            }
+                                          } catch (_) {}
+                                          return updated;
+                                        });
+                                        setActiveTab('Archive');
+                                        setArchivedToastDate(order.date);
+                                      }
+                                    }}
                                     style={{
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      color: '#FFFFFF',
+                                      marginLeft: 8,
+                                      padding: '2px 10px',
+                                      borderRadius: 999,
+                                      border: 'none',
                                       backgroundColor: '#3B82F6',
-                                      padding: '2px 8px',
-                                      borderRadius: 4,
+                                      color: '#FFFFFF',
+                                      fontSize: 11,
+                                      fontWeight: 500,
+                                      cursor: 'pointer',
                                     }}
                                   >
                                     Archive
-                                  </span>
+                                  </button>
                                 )}
                               </div>
                             </td>
@@ -662,6 +731,66 @@ export default function LabelsPage() {
                   </tbody>
                 </table>
               </div>
+              </div>
+
+              {/* Workflow legend */}
+              <div
+                style={{
+                  marginTop: 12,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 24,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #334155',
+                  backgroundColor: '#0F172A',
+                  opacity: 0.9,
+                  boxShadow: '0 4px 4px rgba(0,0,0,0.2)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      border: '2px solid #9CA3AF',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>Not Started</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: '#3B82F6',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>In Progress</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: '#16A34A',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>Completed</span>
+                </div>
+              </div>
+              </div>
+              </div>
             )}
           </div>
         ) : activeTab === 'Archive' ? (
@@ -690,6 +819,7 @@ export default function LabelsPage() {
                   fontFamily: 'Inter, sans-serif',
                 }}
               >
+                <div style={{ maxHeight: 620, overflowY: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead
                     style={{
@@ -872,6 +1002,7 @@ export default function LabelsPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>
@@ -1287,6 +1418,337 @@ export default function LabelsPage() {
           <button
             type="button"
             onClick={() => setCompletionToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* ── Receive toast (Archive) ── */}
+      {receivedToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 56,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 8px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{receivedToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order received.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setReceivedToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* ── Partial Order Archive modal ── */}
+      {archiveConfirmOrderId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000,
+            padding: 24,
+          }}
+          onClick={() => setArchiveConfirmOrderId(null)}
+        >
+          <div
+            style={{
+              width: 380,
+              maxWidth: '90vw',
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#111827',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              padding: 24,
+              boxSizing: 'border-box',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setArchiveConfirmOrderId(null)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                borderRadius: 6,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Content */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {/* Warning icon */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 32,
+                  backgroundColor: '#F97316',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 16, fontWeight: 700, color: '#111827', lineHeight: 1 }}>!</span>
+              </div>
+
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  textAlign: 'center',
+                }}
+              >
+                Partial Order Archive
+              </h2>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 14,
+                  color: '#D1D5DB',
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                }}
+              >
+                Not all items are received. Archive anyway?
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => setArchiveConfirmOrderId(null)}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: '1px solid #4B5563',
+                  backgroundColor: '#111827',
+                  color: '#E5E7EB',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = archiveConfirmOrderId;
+                  const archivedDateFromState = orders.find((o) => o.id === targetId)?.date || null;
+                  setOrders((prev) => {
+                    const updated = prev.map((o) =>
+                      o.id === targetId ? { ...o, archive: true } : o,
+                    );
+                    try {
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('label_orders', JSON.stringify(updated));
+                        const archived = updated.find((o) => o.id === targetId);
+                        if (archived?.date) {
+                          window.sessionStorage.setItem('last_label_order_archived_date', archived.date);
+                        }
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', 'Archive');
+                        window.history.replaceState({}, '', url.toString());
+                      }
+                    } catch (_) {}
+                    return updated;
+                  });
+                  setArchiveConfirmOrderId(null);
+                  setActiveTab('Archive');
+                  if (archivedDateFromState) {
+                    setArchivedToastDate(archivedDateFromState);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: '#3B82F6',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Archived toast (Archive) ── */}
+      {archivedToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 96,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 8px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{archivedToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order archived.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setArchivedToastDate(null)}
             style={{
               marginLeft: 4,
               background: 'transparent',

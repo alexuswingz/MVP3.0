@@ -205,12 +205,17 @@ export default function LabelOrderNewPage() {
   const [quantities, setQuantities] = useState<Record<string, string>>(() =>
     Object.fromEntries(MOCK_LABEL_ROWS.map((r) => [r.id, '9,720']))
   );
+  const [originalQuantities, setOriginalQuantities] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [footerMenuOpen, setFooterMenuOpen] = useState(false);
+  const [receivePoRowMenuId, setReceivePoRowMenuId] = useState<string | null>(null);
+  const [editableQuantityRowId, setEditableQuantityRowId] = useState<string | null>(null);
+  const [editableQuantityOriginal, setEditableQuantityOriginal] = useState<string | null>(null);
   const [completeOrderModalOpen, setCompleteOrderModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState('');
   const [dontRemindAgain, setDontRemindAgain] = useState(false);
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [inventorySummaryOpen, setInventorySummaryOpen] = useState(false);
@@ -241,12 +246,37 @@ export default function LabelOrderNewPage() {
     [receivePoProductIds, addedIds]
   );
 
+  // How many rows are being received on the Receive PO step
+  const receivedCount = useMemo(
+    () => receivePoRows.filter((r) => receivedIds.has(r.id)).length,
+    [receivePoRows, receivedIds]
+  );
+
+  // Count how many line items currently have a quantity change vs their original quantity.
+  const changedItemsCount = useMemo(() => {
+    const parseNumber = (s: string | undefined) => {
+      if (!s) return NaN;
+      const cleaned = s.replace(/,/g, '');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : NaN;
+    };
+    let count = 0;
+    for (const row of receivePoRows) {
+      const original = parseNumber(originalQuantities[row.id] ?? receivePoQuantities[row.id]);
+      const current = parseNumber(quantities[row.id]);
+      if (!Number.isFinite(original) || !Number.isFinite(current)) continue;
+      if (original !== current) count += 1;
+    }
+    return count;
+  }, [receivePoRows, originalQuantities, receivePoQuantities, quantities]);
+
   const headerMenuRef = useRef<HTMLDivElement>(null);
   const footerMenuRef = useRef<HTMLDivElement>(null);
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const inventorySummaryRef = useRef<HTMLDivElement>(null);
   const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const receivePoBarPopupLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const estimatedDeliveryInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -273,6 +303,7 @@ export default function LabelOrderNewPage() {
         if (order?.productQuantities) {
           setReceivePoQuantities(order.productQuantities);
           setQuantities(order.productQuantities);
+          setOriginalQuantities(order.productQuantities);
         }
       }
     } catch (_) {}
@@ -284,6 +315,13 @@ export default function LabelOrderNewPage() {
       }
     } catch (_) {}
   }, []);
+
+  // For new orders (no saved quantities), capture the initial quantities as "original" once on mount.
+  useEffect(() => {
+    if (Object.keys(originalQuantities).length === 0 && Object.keys(quantities).length > 0) {
+      setOriginalQuantities(quantities);
+    }
+  }, [originalQuantities, quantities]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -473,7 +511,7 @@ export default function LabelOrderNewPage() {
   const handleCompleteOrder = () => {
     if (typeof window !== 'undefined') {
       const today = new Date();
-      const date = orderData?.orderNumber || `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(
+      const date = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(
         today.getDate(),
       ).padStart(2, '0')}`;
       const supplier = orderData?.supplier || supplierShort;
@@ -784,9 +822,28 @@ export default function LabelOrderNewPage() {
                 <col style={{ width: '28%' }} />
               </colgroup>
               <thead>
-                <tr style={{ backgroundColor: '#272A38', height: 56 }}>
+              <tr style={{ backgroundColor: '#272A38', height: 56 }}>
                   <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 8px 12px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
-                    <input type="checkbox" style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                    <input
+                      type="checkbox"
+                      checked={
+                        receivePoRows.length > 0 &&
+                        receivePoRows.every((r) => receivedIds.has(r.id))
+                      }
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setReceivedIds((prev) => {
+                          const next = new Set(prev);
+                          if (checked) {
+                            receivePoRows.forEach((r) => next.add(r.id));
+                          } else {
+                            receivePoRows.forEach((r) => next.delete(r.id));
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{ width: 16, height: 16, cursor: 'pointer' }}
+                    />
                   </th>
                   <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>PRODUCTS</th>
                   <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>INVENTORY</th>
@@ -830,22 +887,67 @@ export default function LabelOrderNewPage() {
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
                         <td style={{ padding: '12px 8px 12px 16px', verticalAlign: 'middle' }}>
-                          <input type="checkbox" style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                          <input
+                            type="checkbox"
+                            checked={receivedIds.has(row.id)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setReceivedIds((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(row.id);
+                                else next.delete(row.id);
+                                return next;
+                              });
+                            }}
+                            style={{ width: 16, height: 16, cursor: 'pointer' }}
+                          />
                         </td>
                         <td style={{ padding: '12px 16px', verticalAlign: 'middle', overflow: 'hidden' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <button
-                              type="button"
-                              onClick={() => setReceivedIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; })}
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                minWidth: 64, height: 24, padding: '0 8px', borderRadius: 6, border: 'none',
-                                fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
-                                backgroundColor: isReceived ? '#16A34A' : '#3B82F6', color: '#FFFFFF',
-                              }}
-                            >
-                              {isReceived ? 'Done' : 'Receive'}
-                            </button>
+                            {editableQuantityRowId && editableQuantityRowId !== row.id ? (
+                              <div style={{ minWidth: 64, height: 24 }} />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (editableQuantityRowId === row.id) {
+                                    setEditableQuantityRowId(null);
+                                    setEditableQuantityOriginal(null);
+                                    setReceivedIds((prev) => {
+                                      const next = new Set(prev);
+                                      next.add(row.id);
+                                      return next;
+                                    });
+                                  } else {
+                                    setReceivedIds((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(row.id)) next.delete(row.id);
+                                      else next.add(row.id);
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  minWidth: 64,
+                                  height: 24,
+                                  padding: '0 8px',
+                                  borderRadius: 6,
+                                  border: 'none',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  backgroundColor:
+                                    editableQuantityRowId === row.id || isReceived ? '#16A34A' : '#3B82F6',
+                                  color: '#FFFFFF',
+                                }}
+                              >
+                                {editableQuantityRowId === row.id || isReceived ? 'Done' : 'Receive'}
+                              </button>
+                            )}
                             <ProductThumbnail color={row.imageColor} />
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
                               <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, lineHeight: '100%', color: '#F9FAFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{row.productName}</span>
@@ -867,12 +969,89 @@ export default function LabelOrderNewPage() {
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#F9FAFB', verticalAlign: 'middle' }}>24,869</td>
                         <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                          <input
-                            type="text"
-                            value={quantities[row.id] ?? ''}
-                            onChange={(e) => setQuantities((prev) => ({ ...prev, [row.id]: e.target.value }))}
-                            style={{ width: 115, height: 34, padding: '8px 6px', borderRadius: 8, backgroundColor: '#2C3544', border: '1px solid #2C3544', color: '#F9FAFB', fontFamily: '"IBM Plex Mono", ui-monospace, sans-serif', fontSize: 14, fontWeight: 500, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
-                          />
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              justifyContent: 'flex-start',
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={quantities[row.id] ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const digits = raw.replace(/\D/g, '');
+                                let formatted = digits;
+                                if (digits.length > 3) {
+                                  const head = digits.slice(0, -3);
+                                  const tail = digits.slice(-3);
+                                  const headWithCommas = head.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                                  formatted = `${headWithCommas},${tail}`;
+                                }
+                                setQuantities((prev) => ({ ...prev, [row.id]: formatted }));
+                              }}
+                              disabled={editableQuantityRowId !== row.id}
+                              style={{
+                                width: 115,
+                                height: 34,
+                                padding: '8px 6px',
+                                borderRadius: 8,
+                                backgroundColor: '#2C3544',
+                                border: '1px solid #2C3544',
+                                color: '#F9FAFB',
+                                fontFamily: '"IBM Plex Mono", ui-monospace, sans-serif',
+                                fontSize: 14,
+                                fontWeight: 500,
+                                textAlign: 'center',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                opacity: editableQuantityRowId === row.id ? 1 : 0.6,
+                                cursor: editableQuantityRowId === row.id ? 'text' : 'default',
+                              }}
+                            />
+                            {(() => {
+                              const parseNumber = (s: string | undefined) => {
+                                if (!s) return NaN;
+                                const cleaned = s.replace(/,/g, '');
+                                const n = Number(cleaned);
+                                return Number.isFinite(n) ? n : NaN;
+                              };
+                              const originalRaw = originalQuantities[row.id] ?? receivePoQuantities[row.id];
+                              const original = parseNumber(originalRaw);
+                              const current = parseNumber(quantities[row.id]);
+                              if (!Number.isFinite(original) || !Number.isFinite(current)) return null;
+                              const delta = current - original;
+                              if (delta === 0) return null;
+                              const formatted = String(Math.abs(delta));
+                              const sign = delta > 0 ? '+' : '-';
+                              const bgColor = delta > 0 ? '#064E3B' : '#321B1B';
+                              const textColor = delta > 0 ? '#6EE7B7' : '#FF3B30';
+                              return (
+                                <div
+                                  style={{
+                                    width: 39,
+                                    minWidth: 39,
+                                    height: 16,
+                                    padding: '2px 4px',
+                                    borderRadius: 4,
+                                    backgroundColor: bgColor,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 10,
+                                    fontWeight: 500,
+                                    color: textColor,
+                                    textTransform: 'uppercase',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {`${sign}${formatted}`}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </td>
                         <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
@@ -904,6 +1083,7 @@ export default function LabelOrderNewPage() {
                             {/* Calendar + vertical ellipsis on the right – no overlap */}
                             <div
                               style={{
+                                position: 'relative',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 4,
@@ -912,44 +1092,108 @@ export default function LabelOrderNewPage() {
                                 transition: 'opacity 0.15s ease',
                               }}
                             >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setTimelineLabel({
-                                  id: row.id,
-                                  name: row.productName,
-                                  capacity: 4000,
-                                  todayInventory: 2160,
-                                })
-                              }
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: 28, height: 28, borderRadius: 6,
-                                backgroundColor: 'transparent', border: 'none',
-                                cursor: 'pointer', color: '#6C7280',
-                              }}
-                              aria-label="Calendar"
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                <line x1="16" y1="2" x2="16" y2="6" />
-                                <line x1="8" y1="2" x2="8" y2="6" />
-                                <line x1="3" y1="10" x2="21" y2="10" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                width: 28, height: 28, borderRadius: 6,
-                                backgroundColor: 'transparent', border: 'none',
-                                cursor: 'pointer', color: '#6C7280',
-                              }}
-                              aria-label="More options"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setTimelineLabel({
+                                    id: row.id,
+                                    name: row.productName,
+                                    capacity: 4000,
+                                    todayInventory: 2160,
+                                  })
+                                }
+                                style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 28, height: 28, borderRadius: 6,
+                                  backgroundColor: 'transparent', border: 'none',
+                                  cursor: 'pointer', color: '#6C7280',
+                                }}
+                                aria-label="Calendar"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                  <line x1="16" y1="2" x2="16" y2="6" />
+                                  <line x1="8" y1="2" x2="8" y2="6" />
+                                  <line x1="3" y1="10" x2="21" y2="10" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReceivePoRowMenuId((prev) => (prev === row.id ? null : row.id));
+                                }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 28, height: 28, borderRadius: 6,
+                                  backgroundColor: 'transparent', border: 'none',
+                                  cursor: 'pointer', color: '#6C7280',
+                                }}
+                                aria-label="More options"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+
+                              {receivePoRowMenuId === row.id && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    right: 17,
+                                    marginTop: -36,
+                                    borderRadius: 8,
+                                    backgroundColor: '#1A2235',
+                                    border: `1px solid ${BORDER_COLOR}`,
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                                    padding: 8,
+                                    width: 78,
+                                    zIndex: 40,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 4,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReceivePoRowMenuId(null);
+                                      setEditableQuantityOriginal(quantities[row.id] ?? '');
+                                      setEditableQuantityRowId(row.id);
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: 8,
+                                      height: 28,
+                                      padding: 0,
+                                      background: 'transparent',
+                                      border: 'none',
+                                      borderRadius: 6,
+                                      cursor: 'pointer',
+                                      color: '#E5E7EB',
+                                      fontSize: 14,
+                                    }}
+                                  >
+                                    <svg
+                                      width="14"
+                                      height="14"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="1.8"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <path d="M12 20h9" />
+                                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                    </svg>
+                                    <span>Edit</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1860,7 +2104,17 @@ export default function LabelOrderNewPage() {
             {/* Complete Order */}
             <button
               type="button"
+              disabled={activeTab === 'receive-po' && receivedIds.size === 0}
               onClick={() => {
+                if (activeTab === 'receive-po' && receivedIds.size === 0) return;
+
+                // On Receive PO we always show the "Receive Label Order" / "Label Amount Changed" modal.
+                if (activeTab === 'receive-po') {
+                  setCompleteOrderModalOpen(true);
+                  return;
+                }
+
+                // For Add Products / Submit PO, respect the "don't remind me" setting.
                 if (typeof window !== 'undefined') {
                   try {
                     const skipPrompt = window.localStorage.getItem('label_skip_complete_order_prompt');
@@ -1878,11 +2132,14 @@ export default function LabelOrderNewPage() {
                 fontSize: 14,
                 fontWeight: 600,
                 color: '#FFFFFF',
-                backgroundColor: '#3B82F6',
+                backgroundColor:
+                  activeTab === 'receive-po' && receivedIds.size === 0 ? '#4B5563' : '#3B82F6',
                 border: 'none',
                 borderRadius: 10,
-                cursor: 'pointer',
+                cursor:
+                  activeTab === 'receive-po' && receivedIds.size === 0 ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
+                opacity: activeTab === 'receive-po' && receivedIds.size === 0 ? 0.7 : 1,
               }}
             >
               Complete Order
@@ -2456,7 +2713,7 @@ export default function LabelOrderNewPage() {
         >
           <div
             style={{
-              width: 458,
+              width: 420,
               maxWidth: '90vw',
               borderRadius: 12,
               border: '1px solid #334155',
@@ -2467,7 +2724,7 @@ export default function LabelOrderNewPage() {
               position: 'relative',
               display: 'flex',
               flexDirection: 'column',
-              gap: 24,
+              gap: 20,
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -2478,13 +2735,13 @@ export default function LabelOrderNewPage() {
               onClick={() => setCompleteOrderModalOpen(false)}
               style={{
                 position: 'absolute',
-                top: 16,
-                right: 16,
+                top: 14,
+                right: 14,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 backgroundColor: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -2492,7 +2749,7 @@ export default function LabelOrderNewPage() {
                 borderRadius: 6,
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
@@ -2510,23 +2767,96 @@ export default function LabelOrderNewPage() {
                   borderRadius: 32,
                   backgroundColor: '#F97316',
                   flexShrink: 0,
-                  boxSizing: 'border-box',
                 }}
               >
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>!</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: '#111827', lineHeight: 1 }}>!</span>
               </div>
 
               {/* Title */}
               <h2
-                style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#FFFFFF', textAlign: 'center' }}
+                style={{
+                  margin: 0,
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  textAlign: 'center',
+                }}
               >
-                Receive Label Order?
+                {changedItemsCount > 0
+                  ? 'Label Amount Changed'
+                  : receivedCount > 0 && receivedCount < receivePoRows.length
+                  ? 'Partial Order Confirmation'
+                  : 'Receive Label Order?'}
               </h2>
 
               {/* Subtitle */}
-              <p style={{ margin: 0, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 1.5 }}>
-                Confirm all packages are delivered before receiving this order.
-              </p>
+              {changedItemsCount > 0 ? (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 14,
+                      color: '#D1D5DB',
+                      textAlign: 'center',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {changedItemsCount === 1
+                      ? '1 item has had a quantity change.'
+                      : `${changedItemsCount} items have had quantity changes.`}
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      marginTop: 4,
+                      fontSize: 13,
+                      color: '#9CA3AF',
+                      textAlign: 'center',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Please confirm this change to receive your order.
+                  </p>
+                </>
+              ) : receivedCount > 0 && receivedCount < receivePoRows.length ? (
+                <>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 14,
+                      color: '#D1D5DB',
+                      textAlign: 'center',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {`You've selected ${receivedCount} of ${receivePoRows.length} items to receive.`}
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      marginTop: 4,
+                      fontSize: 13,
+                      color: '#9CA3AF',
+                      textAlign: 'center',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    The remaining items will not be updated within your inventory.
+                  </p>
+                </>
+              ) : (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 14,
+                    color: '#D1D5DB',
+                    textAlign: 'center',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Confirm all packages are delivered before receiving this order.
+                </p>
+              )}
             </div>
 
             {/* Action buttons */}
@@ -2556,35 +2886,52 @@ export default function LabelOrderNewPage() {
                     today.getDate(),
                   ).padStart(2, '0')}`;
                   const supplier = orderData?.supplier || supplierShort;
+                  let finalDate = dateStr;
+                  if (typeof window !== 'undefined' && resumeOrderId) {
+                    try {
+                      const existing: LabelOrderRow[] = JSON.parse(
+                        window.localStorage.getItem('label_orders') || '[]',
+                      );
+                      const existingOrder = existing.find((o) => o.id === resumeOrderId);
+                      if (existingOrder?.date) {
+                        finalDate = existingOrder.date;
+                      }
+                    } catch (_) {}
+                  }
                   const updatedOrder: LabelOrderRow = {
                     id: resumeOrderId || String(Date.now()),
-                    date: orderData?.orderNumber || dateStr,
+                    date: finalDate,
                     supplier,
                     status: 'Partially Received',
                     addProducts: 'completed',
                     submitPO: 'completed',
                     receivePO: 'completed',
-                    archive: true,
+                    archive: false,
                     productIds: receivePoProductIds.length > 0 ? receivePoProductIds : Array.from(addedIds),
                     productQuantities: quantities,
                   };
                   saveOrderToStorage(updatedOrder);
+                  try {
+                    window.sessionStorage.setItem('last_label_order_received_date', updatedOrder.date);
+                  } catch (_) {}
                   setCompleteOrderModalOpen(false);
-                  router.push('/dashboard/supply-chain/labels?tab=Archive');
+                  router.push('/dashboard/supply-chain/labels?tab=Orders');
                 }}
                 style={{
                   flex: 1,
                   height: 32,
                   borderRadius: 6,
                   border: 'none',
-                  backgroundColor: '#007AFF',
+                  backgroundColor: '#3B82F6',
                   color: '#FFFFFF',
                   fontSize: 14,
                   fontWeight: 500,
                   cursor: 'pointer',
                 }}
               >
-                Confirm
+                {changedItemsCount > 0 || (receivedCount > 0 && receivedCount < receivePoRows.length)
+                  ? 'Confirm & Receive'
+                  : 'Confirm'}
               </button>
             </div>
           </div>
@@ -2847,6 +3194,78 @@ export default function LabelOrderNewPage() {
 
               {/* Body */}
               <div style={{ padding: '20px 20px 0' }}>
+                {/* Estimated Delivery Date */}
+                <div style={{ marginBottom: 16 }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      marginBottom: 6,
+                      color: '#9CA3AF',
+                    }}
+                  >
+                    Estimated Delivery Date<span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <div
+                    onClick={() => {
+                      if (estimatedDeliveryInputRef.current) {
+                        // @ts-expect-error showPicker is not yet in TS lib for all targets
+                        if (typeof estimatedDeliveryInputRef.current.showPicker === 'function') {
+                          // Prefer native date picker when available
+                          // @ts-expect-error
+                          estimatedDeliveryInputRef.current.showPicker();
+                        } else {
+                          estimatedDeliveryInputRef.current.focus();
+                        }
+                      }
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #334155',
+                      backgroundColor: '#4B5563',
+                      cursor: 'text',
+                    }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#9CA3AF"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{ flexShrink: 0 }}
+                    >
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    <input
+                      ref={estimatedDeliveryInputRef}
+                      type="date"
+                      placeholder="Enter Estimated Delivery Date..."
+                      value={estimatedDeliveryDate}
+                      onChange={(e) => setEstimatedDeliveryDate(e.target.value)}
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        outline: 'none',
+                        backgroundColor: 'transparent',
+                        fontSize: 14,
+                        color: '#F9FAFB',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {/* Filename field */}
                 <div
                   style={{
@@ -2857,7 +3276,7 @@ export default function LabelOrderNewPage() {
                     borderRadius: 8,
                     border: '1px solid #3B82F6',
                     backgroundColor: 'rgba(59,130,246,0.08)',
-                    marginBottom: 14,
+                    marginBottom: 20,
                   }}
                 >
                   <svg
