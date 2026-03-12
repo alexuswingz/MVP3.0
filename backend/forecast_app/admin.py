@@ -109,8 +109,9 @@ class PackagingTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Closure)
 class ClosureAdmin(admin.ModelAdmin):
-    list_display = ['name', 'closure_type', 'get_user_email']
-    search_fields = ['name']
+    list_display = ['name', 'category', 'supplier', 'warehouse_inventory', 'get_user_email']
+    list_filter = ['category', 'is_active']
+    search_fields = ['name', 'supplier']
     list_select_related = ['user']
     list_per_page = 50
     
