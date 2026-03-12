@@ -433,6 +433,63 @@ class ClosureViewSet(viewsets.ModelViewSet):
         ).values('id', 'name', 'asin', 'sku', 'status')
         return Response(list(products))
 
+    @action(detail=False, methods=['get'])
+    def suppliers(self, request):
+        """Get list of unique closure suppliers for the current user"""
+        suppliers = (
+            self.get_queryset()
+            .filter(is_active=True)
+            .exclude(supplier__isnull=True)
+            .exclude(supplier__exact='')
+            .values_list('supplier', flat=True)
+            .distinct()
+            .order_by('supplier')
+        )
+        return Response(list(suppliers))
+
+    @action(detail=False, methods=['post'])
+    def receive_inventory(self, request):
+        """
+        Receive inventory for multiple closures.
+        Expects: { "items": [{ "id": 1, "quantity": 100 }, ...] }
+        """
+        items = request.data.get('items', [])
+        if not items:
+            return Response(
+                {'error': 'No items provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated = []
+        errors = []
+        
+        with transaction.atomic():
+            for item in items:
+                closure_id = item.get('id')
+                quantity = item.get('quantity', 0)
+                
+                if not closure_id or quantity <= 0:
+                    errors.append({'id': closure_id, 'error': 'Invalid id or quantity'})
+                    continue
+                
+                try:
+                    closure = Closure.objects.get(id=closure_id, user=request.user)
+                    closure.warehouse_inventory = (closure.warehouse_inventory or 0) + quantity
+                    closure.save(update_fields=['warehouse_inventory'])
+                    updated.append({
+                        'id': closure.id,
+                        'name': closure.name,
+                        'new_inventory': closure.warehouse_inventory
+                    })
+                except Closure.DoesNotExist:
+                    errors.append({'id': closure_id, 'error': 'Closure not found'})
+        
+        return Response({
+            'updated': updated,
+            'errors': errors,
+            'total_updated': len(updated)
+        })
+
 
 class FormulaViewSet(viewsets.ModelViewSet):
     serializer_class = FormulaSerializer

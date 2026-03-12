@@ -10,6 +10,13 @@ export interface ClosureRow {
   name: string;
   warehouseInventory: number;
   supplierInventory: number;
+  allocatedInventory?: number;
+  maxWarehouseInventory?: number;
+  category?: string;
+  capSize?: string;
+  supplier?: string;
+  unitsPerCase?: number;
+  casesPerPallet?: number;
 }
 
 interface ClosuresTableProps {

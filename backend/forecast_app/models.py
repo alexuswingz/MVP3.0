@@ -318,9 +318,10 @@ class Closure(models.Model):
     
     # Inventory
     supplier_order_strategy = models.CharField(max_length=20, choices=SUPPLIER_ORDER_CHOICES, blank=True)
-    supplier_inventory = models.IntegerField(null=True, blank=True)
-    warehouse_inventory = models.IntegerField(null=True, blank=True)
-    max_warehouse_inventory = models.IntegerField(null=True, blank=True)
+    supplier_inventory = models.IntegerField(null=True, blank=True, help_text='Inbound inventory (ordered but not arrived)')
+    warehouse_inventory = models.IntegerField(null=True, blank=True, help_text='Available inventory in warehouse')
+    allocated_inventory = models.IntegerField(null=True, blank=True, default=0, help_text='Inventory allocated to shipments')
+    max_warehouse_inventory = models.IntegerField(null=True, blank=True, help_text='Maximum storage capacity')
     
     # Metadata
     is_active = models.BooleanField(default=True)

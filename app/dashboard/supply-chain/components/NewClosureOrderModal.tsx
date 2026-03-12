@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { api } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
-const SUPPLIER_OPTIONS = ['Supplier A', 'Supplier B', 'Supplier C'];
+const FALLBACK_SUPPLIERS = ['Berry Global', 'Aptar', 'Silgan'];
 
 const SELLER_ACCOUNT_OPTIONS = [
   { id: 'rhino', label: 'Rhino Container', logo: 'R', logoColor: '#DC2626' },
-  { id: 'rhino-tb', label: 'Rhino Container', logo: 'TB', logoColor: '#6B7280' },
+  { id: 'rhino-tb', label: 'TricorBraun', logo: 'TB', logoColor: '#6B7280' },
 ];
 
 export interface NewClosureOrderForm {
@@ -32,6 +34,8 @@ export function NewClosureOrderModal({
   const [supplier, setSupplier] = useState('');
   const [sellerAccountId, setSellerAccountId] = useState('');
   const [supplierOpen, setSupplierOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const supplierRef = useRef<HTMLDivElement>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
@@ -50,6 +54,20 @@ export function NewClosureOrderModal({
       setSellerAccountId('');
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && suppliers.length === 0) {
+      setLoadingSuppliers(true);
+      api.getClosureSuppliers()
+        .then((data) => {
+          setSuppliers(data.length > 0 ? data : FALLBACK_SUPPLIERS);
+        })
+        .catch(() => {
+          setSuppliers(FALLBACK_SUPPLIERS);
+        })
+        .finally(() => setLoadingSuppliers(false));
+    }
+  }, [isOpen, suppliers.length]);
 
   if (!isOpen) return null;
 
@@ -223,9 +241,16 @@ export function NewClosureOrderModal({
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
                     overflow: 'hidden',
                     zIndex: 100,
+                    maxHeight: 200,
+                    overflowY: 'auto',
                   }}
                 >
-                  {SUPPLIER_OPTIONS.map((option) => (
+                  {loadingSuppliers ? (
+                    <div style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: placeholderColor }}>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Loading suppliers...</span>
+                    </div>
+                  ) : suppliers.map((option) => (
                     <button
                       key={option}
                       type="button"

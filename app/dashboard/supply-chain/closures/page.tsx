@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, Loader2 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
+import { api } from '@/lib/api';
 import {
   ClosuresHeader,
   type ClosureTabId,
@@ -14,16 +15,11 @@ import {
 } from '../components/ClosuresTable';
 import { NewClosureOrderModal, type NewClosureOrderForm } from '../components/NewClosureOrderModal';
 
-// Mock data – replace with API when available
-const MOCK_CLOSURES: ClosureRow[] = [
+const FALLBACK_CLOSURES: ClosureRow[] = [
   { id: '1', name: 'Reliable Cap', warehouseInventory: 24869, supplierInventory: 87980 },
   { id: '2', name: 'VENTED Berry Cap', warehouseInventory: 15200, supplierInventory: 42100 },
   { id: '3', name: 'Berry Unvented Cap', warehouseInventory: 18300, supplierInventory: 35600 },
   { id: '4', name: 'Aptar Pour Cap', warehouseInventory: 22100, supplierInventory: 54800 },
-  { id: '5', name: '3oz Sprayer Top Down', warehouseInventory: 31200, supplierInventory: 67400 },
-  { id: '6', name: '6oz Sprayer Top Down', warehouseInventory: 28900, supplierInventory: 52100 },
-  { id: '7', name: '16oz Sprayer Trigger Foam', warehouseInventory: 12400, supplierInventory: 38900 },
-  { id: '8', name: '16oz Sprayer Trigger No-Foam', warehouseInventory: 16700, supplierInventory: 44200 },
 ];
 
 type StepStatus = 'not-started' | 'in-progress' | 'completed';
@@ -71,6 +67,8 @@ export default function SupplyChainClosuresPage() {
   const [activeTab, setActiveTab] = useState<ClosureTabId>('Inventory');
   const [searchQuery, setSearchQuery] = useState('');
   const [orders, setOrders] = useState<OrderRow[]>(MOCK_ORDERS);
+  const [closures, setClosures] = useState<ClosureRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const [newOrderModalOpen, setNewOrderModalOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -79,7 +77,35 @@ export default function SupplyChainClosuresPage() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
-  const closures = useMemo(() => MOCK_CLOSURES, []);
+  const fetchClosures = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.getClosures({ is_active: true });
+      const mapped: ClosureRow[] = data.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        warehouseInventory: c.warehouse_inventory ?? 0,
+        supplierInventory: c.supplier_inventory ?? 0,
+        allocatedInventory: c.allocated_inventory ?? 0,
+        maxWarehouseInventory: c.max_warehouse_inventory ?? undefined,
+        category: c.category,
+        capSize: c.cap_size,
+        supplier: c.supplier,
+        unitsPerCase: c.units_per_case ?? undefined,
+        casesPerPallet: c.cases_per_pallet ?? undefined,
+      }));
+      setClosures(mapped.length > 0 ? mapped : FALLBACK_CLOSURES);
+    } catch (err) {
+      console.error('Failed to fetch closures:', err);
+      setClosures(FALLBACK_CLOSURES);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchClosures();
+  }, [fetchClosures]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -721,6 +721,21 @@ class ExtendedApiClient extends ApiClient {
     return this.request<ClosureInventorySummary>('/closures/inventory/');
   }
 
+  async getClosureSuppliers(): Promise<string[]> {
+    return this.request<string[]>('/closures/suppliers/');
+  }
+
+  async receiveClosureInventory(items: { id: number; quantity: number }[]): Promise<{
+    updated: { id: number; name: string; new_inventory: number }[];
+    errors: { id: number; error: string }[];
+    total_updated: number;
+  }> {
+    return this.request('/closures/receive_inventory/', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
   async getClosureProducts(id: number): Promise<{ id: number; name: string; asin: string; sku: string; status: string }[]> {
     return this.request(`/closures/${id}/products/`);
   }
@@ -1209,27 +1224,27 @@ interface ClosureListResponse {
   shape: string;
   color: string;
   cap_size: string;
+  material: string;
   supplier: string;
+  units_per_case: number | null;
+  cases_per_pallet: number | null;
   warehouse_inventory: number | null;
   supplier_inventory: number | null;
+  allocated_inventory: number | null;
+  max_warehouse_inventory: number | null;
   is_active: boolean;
 }
 
 interface ClosureDetailResponse extends ClosureListResponse {
   image: string;
   thread_type: string;
-  material: string;
   packaging_part_number: string;
   description: string;
   brand: string;
   lead_time_weeks: number | null;
   moq: number | null;
   units_per_pallet: number | null;
-  units_per_case: number | null;
-  cases_per_pallet: number | null;
   supplier_order_strategy: string;
-  supplier_inventory: number | null;
-  max_warehouse_inventory: number | null;
   created_at: string;
   updated_at: string;
 }

@@ -68,7 +68,9 @@ class ClosureListSerializer(serializers.ModelSerializer):
         model = Closure
         fields = [
             'id', 'name', 'category', 'shape', 'color', 'cap_size',
-            'supplier', 'warehouse_inventory', 'supplier_inventory', 'is_active'
+            'material', 'supplier', 'units_per_case', 'cases_per_pallet',
+            'warehouse_inventory', 'supplier_inventory', 'allocated_inventory',
+            'max_warehouse_inventory', 'is_active'
         ]
 
 
@@ -85,7 +87,7 @@ class ClosureDetailSerializer(serializers.ModelSerializer):
             'units_per_case', 'cases_per_pallet',
             # Inventory
             'supplier_order_strategy', 'supplier_inventory',
-            'warehouse_inventory', 'max_warehouse_inventory',
+            'warehouse_inventory', 'allocated_inventory', 'max_warehouse_inventory',
             # Metadata
             'is_active', 'created_at', 'updated_at'
         ]
