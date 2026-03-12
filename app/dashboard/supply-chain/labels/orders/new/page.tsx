@@ -656,15 +656,22 @@ export default function LabelOrderNewPage() {
           type="button"
           aria-label="Settings"
           style={{
-            width: 24, height: 24,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'transparent', border: 'none', cursor: 'pointer', color: '#9CA3AF',
+            width: 24,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#9CA3AF',
           }}
         >
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-          </svg>
+          <img
+            src="/assets/Icon%20Button.png"
+            alt="Settings"
+            style={{ width: 20, height: 20, display: 'block' }}
+          />
         </button>
       </header>
 
@@ -2185,7 +2192,38 @@ export default function LabelOrderNewPage() {
                     <button
                       key={item}
                       type="button"
-                      onClick={() => setFooterMenuOpen(false)}
+                      onClick={() => {
+                        setFooterMenuOpen(false);
+                        if (item === 'Submit PO') {
+                          // For Add Products / Submit PO steps, treat Submit PO as creating the order
+                          // with Submitted status and send it to the Orders table.
+                          if (activeTab !== 'receive-po') {
+                            handleCompleteOrder();
+                          }
+                        } else if (item === 'Save as Draft') {
+                          if (typeof window !== 'undefined') {
+                            const today = new Date();
+                            const dateStr = `${today.getFullYear()}.${String(
+                              today.getMonth() + 1,
+                            ).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
+                            const supplier = orderData?.supplier || supplierShort;
+                            const draftOrder: LabelOrderRow = {
+                              id: resumeOrderId || String(Date.now()),
+                              date: dateStr,
+                              supplier,
+                              status: 'Draft',
+                              addProducts: 'in-progress',
+                              submitPO: 'not-started',
+                              receivePO: 'not-started',
+                              archive: false,
+                              productIds: Array.from(addedIds),
+                              productQuantities: quantities,
+                            };
+                            saveOrderToStorage(draftOrder);
+                          }
+                          router.push('/dashboard/supply-chain/labels?tab=Orders');
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '8px 12px',

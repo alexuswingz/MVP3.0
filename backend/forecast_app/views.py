@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.core.cache import cache
-from django.db import models as db_models
+from django.db import models as db_models, transaction
 from django.db.models import Count, Q, Sum, Prefetch, F
 from django.db import connection
 from django.http import HttpResponse

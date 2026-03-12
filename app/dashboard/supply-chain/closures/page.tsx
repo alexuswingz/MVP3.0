@@ -62,11 +62,14 @@ function StepCircle({ status }: { status: StepStatus }) {
   return <span style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid #4B5563', display: 'inline-block', boxSizing: 'border-box', flexShrink: 0 }} />;
 }
 
+const ARCHIVED_CLOSURE_ORDERS_KEY = 'archivedClosureOrders';
+
 export default function SupplyChainClosuresPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ClosureTabId>('Inventory');
   const [searchQuery, setSearchQuery] = useState('');
   const [orders, setOrders] = useState<OrderRow[]>(MOCK_ORDERS);
+  const [archivedOrders, setArchivedOrders] = useState<OrderRow[]>([]);
   const [closures, setClosures] = useState<ClosureRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
@@ -119,10 +122,20 @@ export default function SupplyChainClosuresPage() {
       }
     } catch (_) {}
 
-    // Switch to Orders tab if redirected with ?tab=Orders
+    // Load archived orders from sessionStorage
+    try {
+      const archivedRaw = sessionStorage.getItem(ARCHIVED_CLOSURE_ORDERS_KEY);
+      if (archivedRaw) {
+        const archived = JSON.parse(archivedRaw) as OrderRow[];
+        setArchivedOrders(archived);
+      }
+    } catch (_) {}
+
+    // Switch to tab if redirected with ?tab=
     const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') === 'Orders') {
-      setActiveTab('Orders');
+    const tabParam = params.get('tab');
+    if (tabParam === 'Orders' || tabParam === 'Archive') {
+      setActiveTab(tabParam as ClosureTabId);
       const url = new URL(window.location.href);
       url.searchParams.delete('tab');
       window.history.replaceState({}, '', url.toString());
@@ -329,12 +342,80 @@ export default function SupplyChainClosuresPage() {
               </div>
             </div>
           </div>
+        ) : activeTab === 'Archive' ? (
+          <div style={{ position: 'relative' }}>
+            {archivedOrders.length === 0 ? (
+              <div style={{ 
+                padding: 64, 
+                textAlign: 'center', 
+                color: '#6B7280',
+                backgroundColor: '#1A2235',
+                borderRadius: 12,
+                border: '1px solid #374151'
+              }}>
+                <p style={{ fontSize: 16, marginBottom: 8 }}>No archived orders yet</p>
+                <p style={{ fontSize: 14 }}>Orders will appear here after they are received</p>
+              </div>
+            ) : (
+              <div style={{ borderRadius: 12, border: '1px solid #1A2235', overflow: 'hidden', backgroundColor: '#1A2235', fontFamily: 'Inter, sans-serif' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 10, backgroundColor: '#1A2235' }}>
+                    <tr>
+                      {['STATUS', 'CLOSURE ORDER #', 'SUPPLIER', 'RECEIVED DATE', 'ITEMS'].map((col) => (
+                        <th key={col} style={{ padding: '16px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr style={{ height: 1 }}>
+                      <td colSpan={5} style={{ padding: 0 }}>
+                        <div style={{ marginLeft: 20, marginRight: 20, height: 1, backgroundColor: '#374151' }} />
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archivedOrders.map((order, i) => (
+                      <React.Fragment key={order.id}>
+                        {i > 0 && (
+                          <tr style={{ height: 1 }}>
+                            <td colSpan={5} style={{ padding: 0 }}>
+                              <div style={{ marginLeft: 20, marginRight: 20, height: 1, backgroundColor: '#374151' }} />
+                            </td>
+                          </tr>
+                        )}
+                        <tr style={{ backgroundColor: '#1A2235', height: 56 }}>
+                          <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 12px', borderRadius: 4, backgroundColor: '#166534', border: '1px solid #22C55E' }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#22C55E', flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, fontWeight: 500, color: '#F9FAFB', whiteSpace: 'nowrap' }}>Received</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 20px', fontSize: 14, color: '#3B82F6', fontWeight: 500, verticalAlign: 'middle' }}>
+                            {order.date}
+                          </td>
+                          <td style={{ padding: '12px 20px', fontSize: 14, color: '#F9FAFB', fontWeight: 500, verticalAlign: 'middle' }}>
+                            {order.supplier}
+                          </td>
+                          <td style={{ padding: '12px 20px', fontSize: 14, color: '#9CA3AF', verticalAlign: 'middle' }}>
+                            {(order as any).receivedAt ? new Date((order as any).receivedAt).toLocaleDateString() : order.date}
+                          </td>
+                          <td style={{ padding: '12px 20px', fontSize: 14, color: '#9CA3AF', verticalAlign: 'middle' }}>
+                            {(order as any).items?.length || 0} items
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         ) : (
           <ClosuresTable
             closures={closures}
             searchQuery={searchQuery}
             isDarkMode={isDarkMode}
-            isLoading={false}
+            isLoading={isLoading}
           />
         )}
       </div>
