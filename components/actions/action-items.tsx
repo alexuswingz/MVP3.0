@@ -501,6 +501,8 @@ function DetailModal({
   onDescriptionSave,
   onStatusChange,
   onAttachmentsChange,
+  onAssigneeChange,
+  onDueDateChange,
 }: {
   item: TicketDetail;
   onClose: () => void;
@@ -512,6 +514,8 @@ function DetailModal({
   onDescriptionSave: (html: string) => void;
   onStatusChange: (status: string) => void;
   onAttachmentsChange: (attachments: { name: string; url: string; type?: string; uploadedAt: string }[]) => void;
+  onAssigneeChange: (assignee: { name: string; initials: string }) => void;
+  onDueDateChange: (date: Date) => void;
 }) {
   const descriptionEditorRef = useRef<RichTextEditorHandle | null>(null);
   /** Capture editor content on Save mousedown (before blur) so we don't lose content to re-renders. */
@@ -520,17 +524,31 @@ function DetailModal({
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const attachments = item.attachments ?? [];
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [dueDateCalendarOpen, setDueDateCalendarOpen] = useState(false);
+  const [dueDateCalendarMonth, setDueDateCalendarMonth] = useState(() => {
+    const parsed = parseDueDate(item.dueDate || '');
+    return parsed ?? new Date();
+  });
 
   useEffect(() => {
-    if (!statusDropdownOpen) return;
+    if (!statusDropdownOpen && !assigneeDropdownOpen && !dueDateCalendarOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
         setStatusDropdownOpen(false);
+      }
+      if (assigneeDropdownOpen) {
+        // Close assignee dropdown when clicking anywhere outside its trigger; simple heuristic is fine
+        setAssigneeDropdownOpen(false);
+      }
+      if (dueDateCalendarOpen) {
+        setDueDateCalendarOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [statusDropdownOpen]);
+  }, [statusDropdownOpen, assigneeDropdownOpen, dueDateCalendarOpen]);
 
   return (
     <div
@@ -801,19 +819,93 @@ function DetailModal({
                   <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 72, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#12B981', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#182A2C' }}>{item.category}</span>
                 )}
               </div>
-              <div>
+              <div style={{ position: 'relative' }}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Assigned To</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', width: '100%', maxWidth: 232 }}>
+                <button
+                  type="button"
+                  onClick={() => setAssigneeDropdownOpen((v) => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', width: '100%', maxWidth: 232, cursor: 'pointer' }}
+                >
                   <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1e40af', color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.assigneeInitials}</span>
                   <span style={{ fontSize: 12, color: '#fff' }}>{item.assignee || 'Unassigned'}</span>
-                </div>
+                  <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {assigneeDropdownOpen && (
+                  <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: 4, minWidth: 232, borderRadius: 6, border: '1px solid #404040', background: '#0F172A', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 60, maxHeight: 260, overflowY: 'auto' }}>
+                    {MOCK_ASSIGNEES.map((assignee) => (
+                      <button
+                        key={assignee.name}
+                        type="button"
+                        onClick={() => {
+                          onAssigneeChange({ name: assignee.name, initials: assignee.initials });
+                          setAssigneeDropdownOpen(false);
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#E5E7EB', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <span style={{ width: 20, height: 20, borderRadius: '50%', background: assignee.color, color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{assignee.initials}</span>
+                        <span style={{ fontSize: 12 }}>{assignee.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              <div style={{ position: 'relative' }}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Due Date</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232 }}>
+                <button
+                  type="button"
+                  onClick={() => setDueDateCalendarOpen((v) => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232, cursor: 'pointer' }}
+                >
                   <svg style={{ width: 14, height: 14, color: '#9ca3af', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   <span style={{ fontSize: 12, color: '#fff' }}>{item.dueDate || 'Select date'}</span>
-                </div>
+                  <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {dueDateCalendarOpen && (
+                  <div
+                    className="absolute left-0 top-full mt-2 z-50 overflow-hidden shadow-xl box-border"
+                    style={{
+                      width: 304,
+                      padding: 16,
+                      borderRadius: 8,
+                      background: '#0F172A',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                        {MONTH_NAMES[dueDateCalendarMonth.getMonth()]} {dueDateCalendarMonth.getFullYear()}
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDueDateCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1))}
+                          className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDueDateCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1))}
+                          className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:bg白/10 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {DAY_NAMES.map((d) => (
+                        <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
+                      ))}
+                    </div>
+                    <DueDateCalendarGrid
+                      currentMonth={dueDateCalendarMonth}
+                      selectedDate={parseDueDate(item.dueDate || '')}
+                      onSelect={(date) => {
+                        onDueDateChange(date);
+                        setDueDateCalendarOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
@@ -2284,6 +2376,43 @@ export function ActionItems() {
                 description: e instanceof Error ? e.message : 'Unknown error',
               });
             }
+          }}
+          onAssigneeChange={({ name, initials }) => {
+            if (selectedDetailId == null) return;
+            const id = selectedDetailId;
+            setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, assignee: name, assigneeInitials: initials } : r)));
+            setTicketDetails((prev) => {
+              const existing = prev[id];
+              const row = tableItems.find((r) => r.id === id);
+              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+              if (!base) return prev;
+              return { ...prev, [id]: { ...base, assignee: name, assigneeInitials: initials } };
+            });
+            api.updateActionItem(id, {
+              assignee_name: name,
+              assignee_initials: initials,
+            }).catch((e) =>
+              toast.error('Failed to update assignee', { description: e instanceof Error ? e.message : 'Unknown error' })
+            );
+          }}
+          onDueDateChange={(date) => {
+            if (selectedDetailId == null) return;
+            const id = selectedDetailId;
+            const display = formatDueDateTable(date);
+            const iso = formatDueDateIso(date);
+            setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, dueDate: display } : r)));
+            setTicketDetails((prev) => {
+              const existing = prev[id];
+              const row = tableItems.find((r) => r.id === id);
+              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+              if (!base) return prev;
+              return { ...prev, [id]: { ...base, dueDate: display } };
+            });
+            api.updateActionItem(id, {
+              due_date: iso,
+            }).catch((e) =>
+              toast.error('Failed to update due date', { description: e instanceof Error ? e.message : 'Unknown error' })
+            );
           }}
         />
       )}
