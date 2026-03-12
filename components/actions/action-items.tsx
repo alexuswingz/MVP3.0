@@ -94,6 +94,7 @@ type TableRow = {
   status: string;
   productName: string;
   productId: string;
+  productImageUrl?: string;
   productBrand?: string;
   productSize?: string;
   category: string;
@@ -273,6 +274,7 @@ function actionItemToTableRow(a: ActionItemResponse): TableRow {
     status: apiStatusToUi(a.status),
     productName: productName.length > SHORT_PRODUCT_NAME_MAX ? `${productName.slice(0, SHORT_PRODUCT_NAME_MAX - 1)}…` : productName,
     productId: (a.product_asin ?? '').trim() || '—',
+    productImageUrl: (a as any).product_image_url || undefined,
     productBrand: (a.product_brand ?? '').trim() || undefined,
     productSize: (a.product_size ?? '').trim() || undefined,
     category: apiCategoryToUi(a.category),
@@ -448,6 +450,7 @@ type Product = {
   id: number;
   asin: string;
   name: string;
+  imageUrl?: string;
   brand: string;
   unit: string;
 };
@@ -932,6 +935,7 @@ export function ActionItems() {
             id: p.id,
             asin: p.asin,
             name: p.name,
+            imageUrl: p.image_url || undefined,
             brand: p.brand_name ?? '',
             unit: p.size ?? '',
           }))
@@ -1898,18 +1902,45 @@ export function ActionItems() {
                         <span
                           role="checkbox"
                           aria-checked={checkedRowIds.has(row.id)}
-                          onClick={(e) => { e.stopPropagation(); setCheckedRowIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; }); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCheckedRowIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(row.id)) next.delete(row.id);
+                              else next.add(row.id);
+                              return next;
+                            });
+                          }}
                           className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border-2 cursor-pointer"
                           style={{ borderColor: checkedRowIds.has(row.id) ? '#3B82F6' : '#6b7280', background: checkedRowIds.has(row.id) ? '#3B82F6' : 'transparent' }}
                         >
                           {checkedRowIds.has(row.id) && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
                           )}
                         </span>
-                        <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
-                          <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                          </svg>
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            minWidth: 36,
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                            backgroundColor: '#374151',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            color: '#6B7280',
+                            fontSize: 12,
+                          }}
+                        >
+                          {row.productImageUrl ? (
+                            <Image src={row.productImageUrl} alt={row.productName} width={36} height={36} style={{ objectFit: 'cover' }} />
+                          ) : (
+                            'No img'
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p
@@ -2365,45 +2396,59 @@ export function ActionItems() {
                             );
                           }
                           return filtered.map((product) => (
-                          <button
-                            key={product.asin}
-                            type="button"
-                            onClick={() => {
-                              setNewItem((p) => ({
-                                ...p,
-                                product: product.name,
-                                productId: product.asin,
-                                productBrand: product.brand,
-                                productUnit: product.unit,
-                              }));
-                              setProductSearch(product.name);
-                              setIsProductDropdownOpen(false);
-                            }}
-                            className="w-full text-left border-b border-[#111827] last:border-b-0 hover:bg-white/5 transition-colors"
-                            style={{ padding: '10px 14px', background: '#0F172A' }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}
-                              >
-                                <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                                </svg>
+                            <button
+                              key={product.asin}
+                              type="button"
+                              onClick={() => {
+                                setNewItem((p) => ({
+                                  ...p,
+                                  product: product.name,
+                                  productId: product.asin,
+                                  productBrand: product.brand,
+                                  productUnit: product.unit,
+                                }));
+                                setProductSearch(product.name);
+                                setIsProductDropdownOpen(false);
+                              }}
+                              className="w-full text-left border-b border-[#111827] last:border-b-0 hover:bg-white/5 transition-colors"
+                              style={{ padding: '10px 14px', background: '#0F172A' }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    minWidth: 36,
+                                    borderRadius: 3,
+                                    overflow: 'hidden',
+                                    backgroundColor: '#374151',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    color: '#6B7280',
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  {product.imageUrl ? (
+                                    <Image src={product.imageUrl} alt={product.name} width={36} height={36} style={{ objectFit: 'cover' }} />
+                                  ) : (
+                                    'No img'
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-white truncate">{product.name}</p>
+                                  <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    <span>{product.asin}</span>
+                                    <span>•</span>
+                                    <span>{product.brand}</span>
+                                    <span>•</span>
+                                    <span>{product.unit}</span>
+                                  </p>
+                                </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-white truncate">{product.name}</p>
-                                <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span>{product.asin}</span>
-                                  <span>•</span>
-                                  <span>{product.brand}</span>
-                                  <span>•</span>
-                                  <span>{product.unit}</span>
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        ));
+                            </button>
+                          ));
                         })()}
                       </div>
                     </div>
