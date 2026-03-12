@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { Search, Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AddBottlesOrderTable, ReceivePOTable, type AddBottlesOrderTableRef, type ReceivePOItem } from '@/components/bottles/AddBottlesOrderTable';
 import type { BottleRow } from '@/components/bottles/bottles-table';
+import { api, type BottleListResponse } from '@/lib/api';
 
 const BOTTLE_ORDER_DRAFTS_KEY = 'bottleOrderDrafts';
 
@@ -12,17 +13,25 @@ const PAGE_BG = '#0B111E';
 const HEADER_BG = '#1A2235';
 const HEADER_BORDER = '#334155';
 
-const MOCK_BOTTLES: BottleRow[] = [
-  { id: '1', name: '8oz', warehouseInventory: 12500, supplierInventory: 8000 },
-  { id: '2', name: 'Quart', warehouseInventory: 8400, supplierInventory: 5200 },
-  { id: '3', name: 'Gallon', warehouseInventory: 3200, supplierInventory: 2100 },
-  { id: '4', name: '3oz Spray', warehouseInventory: 15600, supplierInventory: 9200 },
-  { id: '5', name: '6oz Spray', warehouseInventory: 9800, supplierInventory: 6400 },
-  { id: '6', name: '16oz Square Cylinder Clear', warehouseInventory: 4200, supplierInventory: 2800 },
-  { id: '7', name: '16oz Square Cylinder Spray White', warehouseInventory: 3500, supplierInventory: 2200 },
-  { id: '8', name: '16oz Round Cylinder Clear', warehouseInventory: 3800, supplierInventory: 2500 },
-  { id: '9', name: '16oz Round Cylinder Spray White', warehouseInventory: 2900, supplierInventory: 1900 },
-];
+function mapApiBottleToRow(bottle: BottleListResponse): BottleRow {
+  return {
+    id: String(bottle.id),
+    name: bottle.name,
+    warehouseInventory: bottle.warehouse_inventory ?? 0,
+    supplierInventory: bottle.supplier_inventory ?? 0,
+    allocatedInventory: bottle.allocated_inventory ?? 0,
+    sizeOz: bottle.size_oz,
+    shape: bottle.shape,
+    color: bottle.color,
+    material: bottle.material,
+    supplier: bottle.supplier,
+    labelSize: bottle.label_size,
+    boxSize: bottle.box_size,
+    unitsPerCase: bottle.units_per_case,
+    maxWarehouseInventory: bottle.max_warehouse_inventory,
+    casesPerPallet: bottle.cases_per_pallet,
+  };
+}
 
 const WORKFLOW_TABS = ['Add Products', 'Submit PO', 'Receive PO'] as const;
 
@@ -39,6 +48,39 @@ export default function NewBottleOrderPage() {
   const [activeTab, setActiveTab] = useState<(typeof WORKFLOW_TABS)[number]>(validTab);
   const [searchQuery, setSearchQuery] = useState('');
   const addBottlesRef = useRef<AddBottlesOrderTableRef | null>(null);
+
+  // State for API data
+  const [bottles, setBottles] = useState<BottleRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch bottles from API
+  const fetchBottles = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Fetch all active bottles, optionally filtered by supplier
+      const params: { is_active?: boolean; supplier?: string } = { is_active: true };
+      if (supplier) {
+        params.supplier = supplier;
+      }
+      
+      const bottlesData = await api.getBottles(params);
+      const mappedBottles = bottlesData.map(mapApiBottleToRow);
+      setBottles(mappedBottles);
+    } catch (err) {
+      console.error('Failed to fetch bottles:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load bottles');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [supplier]);
+
+  // Fetch bottles on mount
+  useEffect(() => {
+    fetchBottles();
+  }, [fetchBottles]);
 
   // Load draft state when resuming a draft order
   const draftState = useMemo(() => {
@@ -385,12 +427,50 @@ export default function NewBottleOrderPage() {
           overflow: 'hidden',
         }}
       >
-        {activeTab === 'Receive PO' ? (
+        {isLoading ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            color: '#9CA3AF',
+            gap: 12,
+          }}>
+            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+            <span>Loading bottles...</span>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : error ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            color: '#EF4444',
+            flexDirection: 'column',
+            gap: 8,
+          }}>
+            <span>Error: {error}</span>
+            <button
+              onClick={fetchBottles}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3B82F6',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : activeTab === 'Receive PO' ? (
           <ReceivePOTable items={receiveItems} orderName={orderName || undefined} />
         ) : (
           <AddBottlesOrderTable
             ref={addBottlesRef}
-            bottles={MOCK_BOTTLES}
+            bottles={bottles}
             orderName={orderName}
             supplier={supplier}
             isDarkMode={true}

@@ -20,6 +20,9 @@ export interface TimelineBottle {
   name: string;
   capacity: number;
   todayInventory: number;
+  supplierInventory?: number;
+  inboundQuantity?: number;
+  allocatedQuantity?: number;
 }
 
 interface ChartPoint {
@@ -37,24 +40,75 @@ interface ScheduledEvent {
   type: 'outbound' | 'inbound';
 }
 
-// ─── Static demo data (matches reference) ────────────────────────────────────
-const CHART_DATA: ChartPoint[] = [
-  { label: 'Today',    value: 2160, date: 'Today' },
-  { label: '11/18/25', value: 1440, isShipment: true,  date: '11/18/25' },
-  { label: '11/19/25', value: 1080, date: '11/19/25' },
-  { label: '11/20/25', value: 980,  isShipment: true,  date: '11/20/25' },
-  { label: '11/21/25', value: 880,  isShipment: true,  date: '11/21/25' },
-  { label: '11/22/25', value: 1960, isInbound: true,   date: '11/22/25' },
-];
+// Generate chart data based on real bottle data
+function generateChartData(bottle: TimelineBottle): ChartPoint[] {
+  const today = new Date();
+  const todayInventory = bottle.todayInventory;
+  const inbound = bottle.inboundQuantity ?? 0;
+  
+  // Generate dates for next 5 days
+  const points: ChartPoint[] = [];
+  let runningInventory = todayInventory;
+  
+  for (let i = 0; i <= 5; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + i);
+    const dateStr = i === 0 ? 'Today' : `${date.getMonth() + 1}/${date.getDate()}/${String(date.getFullYear()).slice(-2)}`;
+    
+    if (i === 0) {
+      points.push({ label: dateStr, value: runningInventory, date: dateStr });
+    } else if (i === 5 && inbound > 0) {
+      // Last day shows inbound arrival
+      points.push({ label: dateStr, value: runningInventory + inbound, isInbound: true, date: dateStr });
+    } else {
+      // Show gradual decrease (simulated usage)
+      const dailyUsage = Math.floor(todayInventory * 0.05); // ~5% daily usage
+      runningInventory = Math.max(0, runningInventory - dailyUsage);
+      points.push({ label: dateStr, value: runningInventory, date: dateStr });
+    }
+  }
+  
+  return points;
+}
 
-const SCHEDULED_EVENTS: ScheduledEvent[] = [
-  { date: '2025.11.18', label: 'Shipment 2025.11.18', delta: -720,   type: 'outbound' },
-  { date: '2025.11.20', label: 'Shipment 2025.11.20', delta: -360,   type: 'outbound' },
-  { date: '2025.11.21', label: 'Shipment 2025.11.21', delta: -100,   type: 'outbound' },
-  { date: '2025.11.22', label: 'Shipment 2025.11.22', delta: -1080,  type: 'inbound'  },
-];
-
-const CAPACITY = 4000;
+// Generate scheduled events based on real data
+function generateScheduledEvents(bottle: TimelineBottle): ScheduledEvent[] {
+  const events: ScheduledEvent[] = [];
+  const today = new Date();
+  
+  // If there's inbound quantity, show it as a scheduled inbound event
+  if (bottle.inboundQuantity && bottle.inboundQuantity > 0) {
+    const inboundDate = new Date(today);
+    inboundDate.setDate(inboundDate.getDate() + 5);
+    const dateStr = `${inboundDate.getFullYear()}.${String(inboundDate.getMonth() + 1).padStart(2, '0')}.${String(inboundDate.getDate()).padStart(2, '0')}`;
+    events.push({
+      date: dateStr,
+      label: `Inbound ${dateStr}`,
+      delta: bottle.inboundQuantity,
+      type: 'inbound',
+    });
+  }
+  
+  // If there's allocated quantity, show it as scheduled outbound
+  if (bottle.allocatedQuantity && bottle.allocatedQuantity > 0) {
+    const allocDate = new Date(today);
+    allocDate.setDate(allocDate.getDate() + 2);
+    const dateStr = `${allocDate.getFullYear()}.${String(allocDate.getMonth() + 1).padStart(2, '0')}.${String(allocDate.getDate()).padStart(2, '0')}`;
+    events.push({
+      date: dateStr,
+      label: `Shipment ${dateStr}`,
+      delta: -bottle.allocatedQuantity,
+      type: 'outbound',
+    });
+  }
+  
+  // If no events, show placeholder message
+  if (events.length === 0) {
+    return [];
+  }
+  
+  return events;
+}
 
 function fmtK(v: number) {
   return v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(v);
@@ -62,7 +116,7 @@ function fmtK(v: number) {
 
 // ─── Custom dot ──────────────────────────────────────────────────────────────
 function CustomDot(props: any) {
-  const { cx, cy, payload, activeIndex, index } = props;
+  const { cx, cy, payload, activeIndex, index, dataLength } = props;
   const isActive = activeIndex === index;
 
   if (payload.isShipment) {
@@ -73,7 +127,7 @@ function CustomDot(props: any) {
       </g>
     );
   }
-  if (payload.isInbound || index === CHART_DATA.length - 1) {
+  if (payload.isInbound || index === dataLength - 1) {
     return (
       <g>
         <circle cx={cx} cy={cy} r={isActive ? 7 : 5} fill="#3B82F6" stroke="#0F172A" strokeWidth={2} />
@@ -93,8 +147,9 @@ function CustomDot(props: any) {
 
 // ─── Custom label above dot ───────────────────────────────────────────────────
 function CustomLabel(props: any) {
-  const { x, y, value, payload } = props;
-  if (!payload?.isShipment && !payload?.isInbound && payload?.label !== 'Today' && payload?.label !== '11/22/25') return null;
+  const { x, y, value, payload, index, dataLength } = props;
+  // Show labels on Today, shipment points, inbound points, and last point
+  if (!payload?.isShipment && !payload?.isInbound && payload?.label !== 'Today' && index !== dataLength - 1) return null;
   return (
     <text x={x} y={y - 12} textAnchor="middle" fill="#94A3B8" fontSize={11} fontFamily="Inter, sans-serif">
       {fmtK(value)}
@@ -139,13 +194,14 @@ function CustomTooltip({ active, payload }: any) {
 const CHART_MARGIN_TOP    = 28;
 const CHART_MARGIN_BOTTOM = 4;
 
-function CustomCursor({ points, height }: any) {
+function CustomCursor({ points, height, capacity }: any) {
   if (!points?.length) return null;
   const { x } = points[0];
   const plotHeight = height - CHART_MARGIN_TOP - CHART_MARGIN_BOTTOM;
-  const domainMax  = CAPACITY + 200; // 4200
-  // pixel y of the MAX (4000) line inside the full SVG
-  const yStart = CHART_MARGIN_TOP + ((domainMax - CAPACITY) / domainMax) * plotHeight;
+  const cap = capacity || 4000;
+  const domainMax  = cap + (cap * 0.05); // 5% padding
+  // pixel y of the MAX line inside the full SVG
+  const yStart = CHART_MARGIN_TOP + ((domainMax - cap) / domainMax) * plotHeight;
   const yEnd   = height - CHART_MARGIN_BOTTOM;
   return (
     <line
@@ -164,6 +220,23 @@ interface InventoryTimelineModalProps {
 
 export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineModalProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  
+  // Generate chart data and events based on real bottle data
+  const chartData = React.useMemo(() => generateChartData(bottle), [bottle]);
+  const scheduledEvents = React.useMemo(() => generateScheduledEvents(bottle), [bottle]);
+  const capacity = bottle.capacity;
+  const domainMax = capacity + (capacity * 0.05);
+  const yTicks = React.useMemo(() => {
+    const step = Math.ceil(capacity / 4 / 1000) * 1000;
+    const ticks = [];
+    for (let i = 0; i <= capacity; i += step) {
+      ticks.push(i);
+    }
+    if (ticks[ticks.length - 1] < capacity) {
+      ticks.push(capacity);
+    }
+    return ticks;
+  }, [capacity]);
 
   const handleMouseMove = useCallback((state: any) => {
     if (state?.activeTooltipIndex !== undefined) {
@@ -305,7 +378,7 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
           >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={CHART_DATA}
+                data={chartData}
                 margin={{ top: 28, right: 32, left: 0, bottom: 4 }}
                 onMouseMove={handleMouseMove}
                 onMouseLeave={handleMouseLeave}
@@ -326,7 +399,7 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
 
                 {/* Max capacity reference line */}
                 <ReferenceLine
-                  y={CAPACITY}
+                  y={capacity}
                   stroke="rgba(239,68,68,0.35)"
                   strokeDasharray="5 4"
                   strokeWidth={1}
@@ -350,12 +423,12 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
                   dy={6}
                 />
                 <YAxis
-                  tickFormatter={(v) => `${v / 1000}k`}
+                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                   tick={{ fill: '#64748B', fontSize: 11, fontFamily: 'Inter, sans-serif' }}
                   axisLine={false}
                   tickLine={false}
-                  domain={[0, CAPACITY + 200]}
-                  ticks={[0, 1000, 2000, 3000, 4000]}
+                  domain={[0, domainMax]}
+                  ticks={yTicks}
                   width={72}
                   label={{
                     value: 'Inventory (Units)',
@@ -368,7 +441,7 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
 
                 <Tooltip
                   content={<CustomTooltip />}
-                  cursor={<CustomCursor />}
+                  cursor={<CustomCursor capacity={capacity} />}
                   isAnimationActive={false}
                 />
 
@@ -381,10 +454,10 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
                   isAnimationActive={true}
                   animationDuration={800}
                   dot={(dotProps: any) => (
-                    <CustomDot {...dotProps} activeIndex={activeIndex} />
+                    <CustomDot {...dotProps} activeIndex={activeIndex} dataLength={chartData.length} />
                   )}
                   activeDot={false}
-                  label={<CustomLabel />}
+                  label={(labelProps: any) => <CustomLabel {...labelProps} dataLength={chartData.length} />}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -397,7 +470,19 @@ export function InventoryTimelineModal({ bottle, onClose }: InventoryTimelineMod
             Scheduled Events
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {SCHEDULED_EVENTS.map((ev) => {
+            {scheduledEvents.length === 0 ? (
+              <div style={{
+                padding: '16px',
+                textAlign: 'center',
+                color: '#64748B',
+                fontSize: 13,
+                borderRadius: 12,
+                border: '1px solid #334155',
+                background: 'rgba(15,23,42,0.5)',
+              }}>
+                No scheduled events
+              </div>
+            ) : scheduledEvents.map((ev) => {
               const isInbound = ev.type === 'inbound';
               const accentColor = isInbound ? '#38BDF8' : '#F97316';
               return (

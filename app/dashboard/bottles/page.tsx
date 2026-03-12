@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Check, X } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
@@ -14,11 +14,29 @@ import {
   type BottleRow,
 } from '@/components/bottles';
 import { BottlesOrdersTable, type CompletedOrderItem } from '@/components/bottles/BottlesOrdersTable';
+import { api, type BottleListResponse } from '@/lib/api';
 
 const BOTTLE_ORDER_TOAST_KEY = 'bottleOrderToast';
 const ARCHIVED_ORDERS_KEY = 'archivedBottleOrders';
 
-// Mock data – replace with API/store when available
+function mapApiBottleToRow(bottle: BottleListResponse): BottleRow {
+  return {
+    id: bottle.id,
+    name: bottle.name,
+    warehouseInventory: bottle.warehouse_inventory ?? 0,
+    supplierInventory: bottle.supplier_inventory ?? 0,
+    sizeOz: bottle.size_oz,
+    shape: bottle.shape,
+    color: bottle.color,
+    material: bottle.material,
+    supplier: bottle.supplier,
+    labelSize: bottle.label_size,
+    boxSize: bottle.box_size,
+    unitsPerCase: bottle.units_per_case,
+  };
+}
+
+// Fallback mock data in case API fails
 const MOCK_BOTTLES: BottleRow[] = [
   { id: '1', name: '8oz', warehouseInventory: 12500, supplierInventory: 8000 },
   { id: '2', name: 'Quart', warehouseInventory: 8400, supplierInventory: 5200 },
@@ -97,6 +115,15 @@ export default function BottlesPage() {
       } catch (_) {}
     } else if (activeTab === 'Archive') {
       setArchivedOrderItems(loadArchivedOrders());
+      // Check for toast when coming to Archive tab (e.g., after receiving order)
+      try {
+        const raw = sessionStorage.getItem(BOTTLE_ORDER_TOAST_KEY);
+        if (raw) {
+          const { orderName } = JSON.parse(raw) as { orderName?: string };
+          sessionStorage.removeItem(BOTTLE_ORDER_TOAST_KEY);
+          if (orderName) setToastOrderName(orderName);
+        }
+      } catch (_) {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -135,8 +162,52 @@ export default function BottlesPage() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
-  const bottles = useMemo(() => MOCK_BOTTLES, []);
-  const stats = useMemo(() => MOCK_STATS, []);
+  // State for API data
+  const [bottles, setBottles] = useState<BottleRow[]>([]);
+  const [stats, setStats] = useState<BottlesSummaryStats>(MOCK_STATS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch bottles from API
+  const fetchBottles = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const [bottlesData, inventoryData] = await Promise.all([
+        api.getBottles({ is_active: true }),
+        api.getBottleInventory().catch(() => null),
+      ]);
+      
+      const mappedBottles = bottlesData.map(mapApiBottleToRow);
+      setBottles(mappedBottles);
+      
+      // Calculate stats from bottles data
+      const totalWarehouseInventory = mappedBottles.reduce((sum, b) => sum + b.warehouseInventory, 0);
+      const totalSupplierInventory = mappedBottles.reduce((sum, b) => sum + b.supplierInventory, 0);
+      
+      setStats({
+        totalDoi: inventoryData?.total_bottles ?? mappedBottles.length,
+        unitsToMake: totalWarehouseInventory,
+        palletsToMake: Math.ceil(totalWarehouseInventory / 1000),
+        productsAtRisk: inventoryData?.low_inventory ?? 0,
+        productsAtRiskDetail: `${inventoryData?.low_inventory ?? 0} low inventory`,
+      });
+    } catch (err) {
+      console.error('Failed to fetch bottles:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load bottles');
+      // Fall back to mock data
+      setBottles(MOCK_BOTTLES);
+      setStats(MOCK_STATS);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Fetch bottles on mount
+  useEffect(() => {
+    fetchBottles();
+  }, [fetchBottles]);
 
   useEffect(() => {
     if (!settingsDropdownOpen) return;
@@ -260,12 +331,19 @@ export default function BottlesPage() {
       />
 
       {activeTab === 'Inventory' && (
-        <BottlesTable
-          bottles={bottles}
-          searchQuery={searchQuery}
-          isDarkMode={isDarkMode}
-          isLoading={false}
-        />
+        <>
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              {error} - Showing fallback data
+            </div>
+          )}
+          <BottlesTable
+            bottles={bottles}
+            searchQuery={searchQuery}
+            isDarkMode={isDarkMode}
+            isLoading={isLoading}
+          />
+        </>
       )}
 
       {activeTab === 'Orders' && (

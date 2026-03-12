@@ -162,7 +162,7 @@ class CustomFieldValue(models.Model):
 # ============================================================================
 
 class PackagingType(models.Model):
-    """TPS: Bottle/Bag packaging types"""
+    """TPS: Bottle/Bag packaging types (legacy - use Bottle model instead)"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='packaging_types')
     name = models.CharField(max_length=200)
     packaging_type = models.CharField(max_length=50, blank=True)  # Bottle, Bag, etc.
@@ -180,16 +180,166 @@ class PackagingType(models.Model):
         return self.name
 
 
-class Closure(models.Model):
-    """TPS: Closure/cap types"""
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='closures')
-    name = models.CharField(max_length=200)
-    closure_type = models.CharField(max_length=100, blank=True)
+class Bottle(models.Model):
+    """
+    Comprehensive bottle packaging database.
+    Maps to BottleDatabase sheet in Excel.
+    Referenced by products via Packaging Name.
+    """
+    REPLENISHMENT_CHOICES = [
+        ('corral', 'Corral'),
+        ('manual', 'Manual'),
+        ('auto', 'Auto'),
+    ]
+    
+    SUPPLIER_ORDER_CHOICES = [
+        ('manual', 'Manual'),
+        ('auto', 'Auto'),
+    ]
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bottles')
+    
+    # Core Data (Primary identifier)
+    name = models.CharField(max_length=200, help_text='Bottle Name - primary identifier')
+    image = models.URLField(max_length=500, blank=True, help_text='Bottle Image URL')
+    size_oz = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='Size in oz')
+    shape = models.CharField(max_length=100, blank=True, help_text='e.g., Tall Cylinder, Standard Handle, Rounded')
+    color = models.CharField(max_length=50, blank=True, help_text='e.g., White, Clear')
+    thread_type = models.CharField(max_length=50, blank=True, help_text='e.g., Non-Ratchet, Ratchet')
+    cap_size = models.CharField(max_length=50, blank=True, help_text='e.g., 38-400, 24-410, 28-410')
+    material = models.CharField(max_length=50, blank=True, help_text='e.g., HDPE, PET, PETE')
+    supplier = models.CharField(max_length=200, blank=True, help_text='Supplier name')
+    packaging_part_number = models.CharField(max_length=100, blank=True, help_text='Supplier part number')
+    description = models.TextField(blank=True, help_text='Full supplier description')
+    brand = models.CharField(max_length=200, blank=True, help_text='Brand/manufacturer')
+    
+    # Supplier Info
+    lead_time_weeks = models.IntegerField(null=True, blank=True, help_text='Lead time in weeks')
+    moq = models.IntegerField(null=True, blank=True, help_text='Minimum Order Quantity')
+    units_per_pallet = models.IntegerField(null=True, blank=True)
+    units_per_case = models.IntegerField(null=True, blank=True)
+    cases_per_pallet = models.IntegerField(null=True, blank=True)
+    
+    # Finished Goods / Box Info
+    box_size = models.CharField(max_length=50, blank=True, help_text='e.g., 12x10x12')
+    box_length_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    box_width_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    box_height_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    units_per_case_finished = models.IntegerField(null=True, blank=True, help_text='Units per case (finished goods)')
+    units_per_gallon = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    box_weight_lbs = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    max_boxes_per_pallet = models.IntegerField(null=True, blank=True)
+    single_box_pallet_share = models.DecimalField(max_digits=8, decimal_places=6, null=True, blank=True)
+    replenishment_strategy = models.CharField(max_length=20, choices=REPLENISHMENT_CHOICES, blank=True)
+    packaging_bpm = models.IntegerField(null=True, blank=True, help_text='Bottles per minute')
+    
+    # Product Dimensions (Finished Goods)
+    length_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Product length in inches')
+    width_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Product width in inches')
+    height_in = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Product height in inches')
+    weight_lbs = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text='Product weight in lbs')
+    label_size = models.CharField(max_length=50, blank=True, help_text='e.g., 5" x 8"')
+    
+    # Inventory
+    supplier_order_strategy = models.CharField(max_length=20, choices=SUPPLIER_ORDER_CHOICES, blank=True)
+    supplier_inventory = models.IntegerField(null=True, blank=True, help_text='Inbound inventory (ordered but not arrived)')
+    warehouse_inventory = models.IntegerField(null=True, blank=True, help_text='Available inventory in warehouse')
+    allocated_inventory = models.IntegerField(null=True, blank=True, default=0, help_text='Inventory allocated to shipments')
+    max_warehouse_inventory = models.IntegerField(null=True, blank=True, help_text='Maximum storage capacity')
+    
+    # Metadata
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'bottles'
+        unique_together = ['user', 'name']
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['user', 'name']),
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user', 'is_active', 'name']),
+            models.Index(fields=['size_oz']),
+            models.Index(fields=['supplier']),
+            models.Index(fields=['shape']),
+            models.Index(fields=['warehouse_inventory']),
+        ]
+    
+    def __str__(self):
+        return self.name
+    
+    @property
+    def case_size(self):
+        """Alias for box_size for compatibility"""
+        return self.box_size
+
+
+class Closure(models.Model):
+    """
+    Comprehensive closure/cap database.
+    Maps to ClosureDatabase sheet in Excel.
+    Referenced by products via Closure Name.
+    """
+    CATEGORY_CHOICES = [
+        ('closure', 'Closure'),
+        ('cap', 'Cap'),
+        ('sprayer', 'Sprayer'),
+        ('pump', 'Pump'),
+    ]
+    
+    SUPPLIER_ORDER_CHOICES = [
+        ('manual', 'Manual'),
+        ('auto', 'Auto'),
+    ]
+    
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='closures')
+    
+    # Core Info
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='closure')
+    name = models.CharField(max_length=200, help_text='Closure Name - primary identifier')
+    image = models.URLField(max_length=500, blank=True, help_text='Closure Image URL')
+    shape = models.CharField(max_length=100, blank=True, help_text='e.g., Standard, Pour Top, Top Down, Trigger')
+    color = models.CharField(max_length=50, blank=True, help_text='e.g., White, Clear')
+    thread_type = models.CharField(max_length=50, blank=True, help_text='e.g., Non-Ratchet, Ratchet')
+    cap_size = models.CharField(max_length=50, blank=True, help_text='e.g., 38-400, 24-410, 28-410')
+    material = models.CharField(max_length=50, blank=True, help_text='e.g., P/P')
+    supplier = models.CharField(max_length=200, blank=True)
+    packaging_part_number = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    brand = models.CharField(max_length=200, blank=True, help_text='e.g., Berry, Aptar')
+    
+    # Supplier Info
+    lead_time_weeks = models.IntegerField(null=True, blank=True)
+    moq = models.IntegerField(null=True, blank=True, help_text='Minimum Order Quantity')
+    units_per_pallet = models.IntegerField(null=True, blank=True)
+    units_per_case = models.IntegerField(null=True, blank=True)
+    cases_per_pallet = models.IntegerField(null=True, blank=True)
+    
+    # Inventory
+    supplier_order_strategy = models.CharField(max_length=20, choices=SUPPLIER_ORDER_CHOICES, blank=True)
+    supplier_inventory = models.IntegerField(null=True, blank=True)
+    warehouse_inventory = models.IntegerField(null=True, blank=True)
+    max_warehouse_inventory = models.IntegerField(null=True, blank=True)
+    
+    # Metadata
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     
     class Meta:
         db_table = 'closures'
         unique_together = ['user', 'name']
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['user', 'name']),
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user', 'is_active', 'name']),
+            models.Index(fields=['cap_size']),
+            models.Index(fields=['category']),
+            models.Index(fields=['supplier']),
+            models.Index(fields=['warehouse_inventory']),
+        ]
     
     def __str__(self):
         return self.name
@@ -218,13 +368,21 @@ class ProductExtended(models.Model):
     """TPS-specific extended product fields - links to reference tables"""
     product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name='extended')
     
-    # Reference table links
+    # Reference table links (legacy - kept for backward compatibility)
     packaging = models.ForeignKey(PackagingType, on_delete=models.SET_NULL, null=True, blank=True)
-    closure = models.ForeignKey(Closure, on_delete=models.SET_NULL, null=True, blank=True)
-    formula = models.ForeignKey(Formula, on_delete=models.SET_NULL, null=True, blank=True)
-    formula_2 = models.ForeignKey(Formula, on_delete=models.SET_NULL, null=True, blank=True, related_name='products_formula2')
+    
+    # New comprehensive reference links
+    bottle = models.ForeignKey(Bottle, on_delete=models.SET_NULL, null=True, blank=True, 
+                               related_name='products', help_text='Links to BottleDatabase')
+    closure = models.ForeignKey(Closure, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='products', help_text='Links to ClosureDatabase')
+    formula = models.ForeignKey(Formula, on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='products')
+    formula_2 = models.ForeignKey(Formula, on_delete=models.SET_NULL, null=True, blank=True, 
+                                  related_name='products_formula2')
     
     # Case dimensions for pallet calculator (in inches and lbs)
+    # These can be auto-populated from Bottle if linked
     case_length = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Case length in inches')
     case_width = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Case width in inches')
     case_height = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text='Case height in inches')
@@ -233,6 +391,7 @@ class ProductExtended(models.Model):
     
     # Additional TPS fields
     label_location = models.CharField(max_length=100, blank=True)
+    label_size = models.CharField(max_length=50, blank=True, help_text='Can be derived from Bottle')
     expiration_date = models.DateField(null=True, blank=True)
     
     # Competitor tracking
@@ -260,9 +419,35 @@ class ProductExtended(models.Model):
     
     class Meta:
         db_table = 'products_extended'
+        indexes = [
+            models.Index(fields=['bottle']),
+            models.Index(fields=['closure']),
+            models.Index(fields=['formula']),
+        ]
     
     def __str__(self):
         return f"Extended: {self.product.name}"
+    
+    def populate_from_bottle(self):
+        """Populate case dimensions and label size from linked Bottle"""
+        if self.bottle:
+            if not self.case_length and self.bottle.box_length_in:
+                self.case_length = self.bottle.box_length_in
+            if not self.case_width and self.bottle.box_width_in:
+                self.case_width = self.bottle.box_width_in
+            if not self.case_height and self.bottle.box_height_in:
+                self.case_height = self.bottle.box_height_in
+            if not self.case_weight and self.bottle.box_weight_lbs:
+                self.case_weight = self.bottle.box_weight_lbs
+            if not self.units_per_case and self.bottle.units_per_case_finished:
+                self.units_per_case = self.bottle.units_per_case_finished
+            if not self.label_size and self.bottle.label_size:
+                self.label_size = self.bottle.label_size
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate from bottle if available and fields are empty
+        self.populate_from_bottle()
+        super().save(*args, **kwargs)
 
 
 class DOISettings(models.Model):

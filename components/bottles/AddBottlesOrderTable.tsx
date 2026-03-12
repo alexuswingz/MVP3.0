@@ -4,13 +4,15 @@ import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } f
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Calendar, X } from 'lucide-react';
+import { MoreVertical, Calendar, X, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SegmentedInventoryBar } from './SegmentedInventoryBar';
-import { InventoryLegend } from './InventoryLegend';
 import { InventoryTimelineModal, type TimelineBottle } from './InventoryTimelineModal';
 import { CompleteOrderModal, ExportBottleOrderModal } from './CompleteOrderModal';
 import type { BottleRow } from './bottles-table';
+import { api } from '@/lib/api';
+
+const ARCHIVED_ORDERS_KEY = 'archivedBottleOrders';
 
 export interface BottleDraftPayload {
   addedIds: string[];
@@ -36,6 +38,50 @@ interface AddBottlesOrderTableProps {
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
 const HEADER_MUTED = '#6B7280';
+
+function stripeGradient(base: string, stripe: string, size = 8): string {
+  const half = size / 2;
+  return `repeating-linear-gradient(
+    -45deg,
+    ${base} 0px,
+    ${base} ${half}px,
+    ${stripe} ${half}px,
+    ${stripe} ${size}px
+  )`;
+}
+
+function InventoryLegendInline() {
+  const items = [
+    { key: 'available', label: 'Available', type: 'solid' as const, color: '#4B5563' },
+    { key: 'allocated', label: 'Allocated', type: 'striped' as const, stripeBase: '#E96500', stripeColor: 'rgba(15,23,42,0.6)' },
+    { key: 'inbound', label: 'Inbound', type: 'striped' as const, stripeBase: '#2B7FE8', stripeColor: 'rgba(255,255,255,0.25)' },
+    { key: 'newOrder', label: 'New Order', type: 'solid' as const, color: '#2563EB' },
+  ];
+  
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {items.map((item) => (
+        <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              flexShrink: 0,
+              ...(item.type === 'solid' 
+                ? { backgroundColor: item.color }
+                : { background: stripeGradient(item.stripeBase!, item.stripeColor!, 2.5) }
+              ),
+            }}
+          />
+          <span style={{ fontSize: 10, fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap', textTransform: 'none' }}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function getCheckboxStyle(checked: boolean): React.CSSProperties {
   return {
@@ -224,14 +270,34 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
 
   const addedEntries = filteredBottles.filter((b) => addedIds.has(b.id));
   const totalProducts = addedEntries.length;
-  const totalUnits = addedEntries.reduce(
-    (acc, b) =>
-      acc +
-      (parseInt(String(qtyValues[b.id] ?? '0').replace(/,/g, ''), 10) || 0),
-    0
-  );
-  const totalBoxes = Math.ceil(totalUnits / 24);
-  const totalPalettes = totalProducts * 0.5;
+  
+  // Calculate totals using real bottle data
+  const { totalUnits, totalBoxes, totalPallets } = React.useMemo(() => {
+    let units = 0;
+    let boxes = 0;
+    let pallets = 0;
+    
+    addedEntries.forEach((b) => {
+      const qty = parseInt(String(qtyValues[b.id] ?? '0').replace(/,/g, ''), 10) || 0;
+      units += qty;
+      
+      // Use bottle's unitsPerCase if available, default to 24
+      const unitsPerCase = b.unitsPerCase ?? 24;
+      const bottleBoxes = unitsPerCase > 0 ? Math.ceil(qty / unitsPerCase) : 0;
+      boxes += bottleBoxes;
+      
+      // Use bottle's casesPerPallet if available, default to 48
+      const casesPerPallet = b.casesPerPallet ?? 48;
+      const bottlePallets = casesPerPallet > 0 ? bottleBoxes / casesPerPallet : 0;
+      pallets += bottlePallets;
+    });
+    
+    return {
+      totalUnits: units,
+      totalBoxes: boxes,
+      totalPallets: pallets,
+    };
+  }, [addedEntries, qtyValues]);
 
   const BORDER = BORDER_COLOR;
 
@@ -339,9 +405,12 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                 </th>
                 <th
                   className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px 22px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480 }}
+                  style={{ padding: '12px 12px 12px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480 }}
                 >
-                  STORAGE CAPACITY
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <span>STORAGE CAPACITY</span>
+                    <InventoryLegendInline />
+                  </div>
                 </th>
                 <th
                   style={{
@@ -405,6 +474,13 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                       ? barFillPhase === 'go' ? 100 : 0
                       : isAdded ? 100 : 0;
                   const showAsAdded = isAdded || isRemoving;
+                  
+                  // Check if storage capacity is full
+                  const maxCapacity = bottle.maxWarehouseInventory ?? (totalInventory + 10000);
+                  const currentQty = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                  const projectedInventory = bottle.warehouseInventory + currentQty;
+                  const isCapacityFull = projectedInventory >= maxCapacity;
+                  const remainingCapacity = Math.max(0, maxCapacity - bottle.warehouseInventory);
 
                   return (
                     <React.Fragment key={bottle.id}>
@@ -538,55 +614,88 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                               gap: 4,
                             }}
                           >
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={qtyDisplay}
-                              onChange={(e) => {
-                                const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
-                                setQtyValues((prev) => ({ ...prev, [bottle.id]: v }));
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                width: 115,
-                                height: 34,
-                                padding: '8px 6px',
-                                gap: 4,
-                                fontSize: 12,
-                                color: '#E5E7EB',
-                                backgroundColor: '#2C3544',
-                                border: 'none',
-                                borderRadius: 8,
-                                outline: 'none',
-                                boxSizing: 'border-box',
-                                textAlign: 'center',
-                                opacity: 1,
-                              }}
-                            />
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={qtyDisplay}
+                                disabled={isCapacityFull && !isAdded}
+                                onChange={(e) => {
+                                  const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                                  const newQty = parseInt(v, 10) || 0;
+                                  // Clamp to remaining capacity if not already added
+                                  if (!isAdded && newQty > remainingCapacity) {
+                                    setQtyValues((prev) => ({ ...prev, [bottle.id]: String(remainingCapacity) }));
+                                  } else {
+                                    setQtyValues((prev) => ({ ...prev, [bottle.id]: v }));
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                title={isCapacityFull && !isAdded ? 'Storage capacity is full' : undefined}
+                                style={{
+                                  width: 115,
+                                  height: 34,
+                                  padding: '8px 6px',
+                                  gap: 4,
+                                  fontSize: 12,
+                                  color: isCapacityFull && !isAdded ? '#6B7280' : '#E5E7EB',
+                                  backgroundColor: isCapacityFull && !isAdded ? '#1F2937' : '#2C3544',
+                                  border: isCapacityFull && !isAdded ? '1px solid #374151' : 'none',
+                                  borderRadius: 8,
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  textAlign: 'center',
+                                  opacity: isCapacityFull && !isAdded ? 0.6 : 1,
+                                  cursor: isCapacityFull && !isAdded ? 'not-allowed' : 'text',
+                                }}
+                              />
+                              {isCapacityFull && !isAdded && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: -20,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    fontSize: 9,
+                                    color: '#EF4444',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Capacity Full
+                                </div>
+                              )}
+                            </div>
                             <button
                               type="button"
+                              disabled={isCapacityFull && !isAdded}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isCapacityFull && !isAdded) return;
                                 handleAddClick(bottle, index);
                               }}
+                              title={isCapacityFull && !isAdded ? 'Storage capacity is full' : undefined}
                               style={{
                                 height: 26,
                                 padding: '0 10px',
                                 borderRadius: 6,
                                 border: 'none',
-                                backgroundColor: showAsAdded ? '#10B981' : '#2563EB',
-                                color: '#FFFFFF',
+                                backgroundColor: isCapacityFull && !isAdded 
+                                  ? '#374151' 
+                                  : showAsAdded ? '#10B981' : '#2563EB',
+                                color: isCapacityFull && !isAdded ? '#6B7280' : '#FFFFFF',
                                 fontSize: 12,
                                 fontWeight: 500,
-                                cursor: 'pointer',
+                                cursor: isCapacityFull && !isAdded ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: 4,
+                                opacity: isCapacityFull && !isAdded ? 0.6 : 1,
                               }}
                             >
                               {!showAsAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
-                              {showAsAdded ? 'Added' : 'Add'}
+                              {isCapacityFull && !isAdded ? 'Full' : showAsAdded ? 'Added' : 'Add'}
                             </button>
                           </div>
                         </td>
@@ -601,12 +710,23 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                             minWidth: 480,
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12, flexDirection: 'column', gap: 2 }}>
                             <SegmentedInventoryBar
                               fillPercent={fillPercent}
                               width={452}
                               height={19}
+                              available={bottle.warehouseInventory}
+                              allocated={bottle.allocatedInventory || 0}
+                              inbound={bottle.supplierInventory || 0}
+                              newOrder={displayAdded}
+                              capacity={maxCapacity}
+                              isFull={isCapacityFull}
                             />
+                            {isCapacityFull && !isAdded && (
+                              <span style={{ fontSize: 9, color: '#EF4444', fontWeight: 500 }}>
+                                Storage at max capacity ({maxCapacity.toLocaleString()} units)
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td
@@ -632,10 +752,13 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setTimelineBottle({
-                                    id: bottle.id,
+                                    id: String(bottle.id),
                                     name: bottle.name,
-                                    capacity: 4000,
-                                    todayInventory: bottle.warehouseInventory + bottle.supplierInventory,
+                                    capacity: bottle.maxWarehouseInventory ?? (bottle.warehouseInventory + (bottle.supplierInventory || 0) + 5000),
+                                    todayInventory: bottle.warehouseInventory,
+                                    supplierInventory: bottle.supplierInventory,
+                                    inboundQuantity: displayAdded,
+                                    allocatedQuantity: bottle.allocatedInventory || 0,
                                   });
                                 }}
                               >
@@ -736,18 +859,6 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
         />
       )}
 
-      {/* Floating legend - near footer, bottom-right */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 130,
-          right: 24,
-          zIndex: 999,
-        }}
-      >
-        <InventoryLegend />
-      </div>
-
       {/* Floating footer bar - centered */}
       <div
         style={{
@@ -782,7 +893,7 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
           {cardOrder.map((cardId, orderIdx) => {
             const cards = [
               { label: 'Products', value: String(totalProducts) },
-              { label: 'Pallets',  value: totalPalettes.toFixed(1) },
+              { label: 'Pallets',  value: totalPallets.toFixed(1) },
               { label: 'Boxes',    value: String(totalBoxes) },
             ];
             const card = cards[cardId];
@@ -1418,6 +1529,8 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
   const [editingRowIndex, setEditingRowIndex] = React.useState<number | null>(null);
   const [editedQuantityInput, setEditedQuantityInput] = React.useState('');
   const [quantityOverrides, setQuantityOverrides] = React.useState<Record<number, number>>({});
+  const [isReceiving, setIsReceiving] = React.useState(false);
+  const [receiveError, setReceiveError] = React.useState<string | null>(null);
   const dragCardIdx = React.useRef<number | null>(null);
   const editingRowRef = React.useRef<HTMLTableRowElement | null>(null);
 
@@ -1457,7 +1570,7 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
     return () => document.removeEventListener('mousedown', onMouseDown, true);
   }, [editingRowIndex, commitEdit]);
 
-  const handleConfirmReceipt = React.useCallback(() => {
+  const handleConfirmReceipt = React.useCallback(async () => {
     const doneCount = received.size;
     const totalCount = items.length;
     const isFull = doneCount >= totalCount && totalCount > 0;
@@ -1465,43 +1578,87 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
       (item, i) => (quantityOverrides[i] ?? item.qty) !== (item.qty ?? 0)
     );
 
+    setIsReceiving(true);
+    setReceiveError(null);
+
     try {
+      // Prepare items to receive - only include items that are marked as received
+      const itemsToReceive = items
+        .map((item, idx) => {
+          if (!received.has(idx)) return null;
+          const qty = quantityOverrides[idx] ?? item.qty ?? 0;
+          return {
+            id: parseInt(String(item.id), 10),
+            quantity: qty,
+          };
+        })
+        .filter((item): item is { id: number; quantity: number } => item !== null);
+
+      // Call API to update bottle inventory
+      if (itemsToReceive.length > 0) {
+        await api.receiveBottleInventory(itemsToReceive);
+      }
+
+      // Get the order from completedOrders
       const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
         orderName: string;
         completedAt: string;
+        supplier?: string;
         receivePOStatus?: 'none' | 'partial' | 'full';
         receivedCount?: number;
         totalCount?: number;
         edited?: boolean;
+        receivedAt?: string;
         items: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }[];
       }[];
 
-      const updated = orders.map((o) => {
-        if (o.orderName !== orderName) return o;
-        const updatedItems = o.items.map((it: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }, idx: number) => {
-          const override = quantityOverrides[idx];
-          if (override !== undefined) {
-            return { ...it, qty: override };
-          }
-          return it;
-        });
-        return {
-          ...o,
-          items: updatedItems,
-          receivePOStatus: isFull ? 'full' : 'partial',
+      // Find the order being received
+      const orderToArchive = orders.find((o) => o.orderName === orderName);
+      
+      if (orderToArchive) {
+        // Update the order with receive info
+        const updatedOrder = {
+          ...orderToArchive,
+          items: orderToArchive.items.map((it, idx) => {
+            const override = quantityOverrides[idx];
+            if (override !== undefined) {
+              return { ...it, qty: override };
+            }
+            return it;
+          }),
+          receivePOStatus: isFull ? 'full' as const : 'partial' as const,
           receivedCount: doneCount,
           totalCount,
           edited: hasQuantityEdits,
           receivedAt: new Date().toISOString(),
         };
-      });
-      sessionStorage.setItem('completedOrders', JSON.stringify(updated));
-      sessionStorage.setItem('bottleOrderToast', JSON.stringify({ orderName }));
-    } catch (_) {}
 
-    setShowReceiveModal(false);
-    router.push('/dashboard/bottles?tab=Orders');
-  }, [items, orderName, quantityOverrides, received.size, router]);
+        // Remove from completedOrders
+        const remainingOrders = orders.filter((o) => o.orderName !== orderName);
+        sessionStorage.setItem('completedOrders', JSON.stringify(remainingOrders));
+
+        // Add to archived orders
+        const archivedOrders = JSON.parse(sessionStorage.getItem(ARCHIVED_ORDERS_KEY) ?? '[]');
+        archivedOrders.push(updatedOrder);
+        sessionStorage.setItem(ARCHIVED_ORDERS_KEY, JSON.stringify(archivedOrders));
+      }
+
+      sessionStorage.setItem('bottleOrderToast', JSON.stringify({ 
+        orderName, 
+        message: 'Order received and archived successfully' 
+      }));
+
+      setShowReceiveModal(false);
+      setShowPartialModal(false);
+      setShowBottleAmountChangedModal(false);
+      router.push('/dashboard/bottles?tab=Archive');
+    } catch (err) {
+      console.error('Failed to receive inventory:', err);
+      setReceiveError(err instanceof Error ? err.message : 'Failed to update inventory');
+    } finally {
+      setIsReceiving(false);
+    }
+  }, [items, orderName, quantityOverrides, received, router]);
 
   const toggleReceived = (i: number) => {
     setReceived((prev) => {
@@ -1577,8 +1734,11 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                 QUANTITY
               </th>
               <th className="text-center text-xs font-semibold uppercase tracking-wider"
-                style={{ padding: '22px 12px 22px 0px', color: HEADER_MUTED, whiteSpace: 'nowrap', width: 480, minWidth: 480, boxSizing: 'border-box', verticalAlign: 'middle' }}>
-                STORAGE CAPACITY
+                style={{ padding: '12px 12px 12px 0px', color: HEADER_MUTED, whiteSpace: 'nowrap', width: 480, minWidth: 480, boxSizing: 'border-box', verticalAlign: 'middle' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <span>STORAGE CAPACITY</span>
+                  <InventoryLegendInline />
+                </div>
               </th>
             </tr>
             <tr style={{ height: 1, backgroundColor: ROW_BG }}>
@@ -1961,9 +2121,9 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
             {/* Receive Order — primary */}
             <button
               type="button"
-              disabled={totalDone === 0}
+              disabled={totalDone === 0 || isReceiving}
               onClick={() => {
-                if (totalDone === 0) return;
+                if (totalDone === 0 || isReceiving) return;
                 const changedCount = items.reduce((n, item, i) => {
                   const orig = item.qty ?? 0;
                   const display = quantityOverrides[i] ?? orig;
@@ -1980,15 +2140,26 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
               style={{
                 height: 32, padding: '0 16px', borderRadius: 8,
                 fontSize: 12, fontWeight: 600,
-                color: totalDone === 0 ? 'rgba(255,255,255,0.3)' : '#FFFFFF',
-                backgroundColor: totalDone === 0 ? 'rgba(59,130,246,0.25)' : '#3B82F6',
+                color: (totalDone === 0 || isReceiving) ? 'rgba(255,255,255,0.3)' : '#FFFFFF',
+                backgroundColor: (totalDone === 0 || isReceiving) ? 'rgba(59,130,246,0.25)' : '#3B82F6',
                 border: 'none',
-                cursor: totalDone === 0 ? 'not-allowed' : 'pointer',
+                cursor: (totalDone === 0 || isReceiving) ? 'not-allowed' : 'pointer',
                 transition: 'background-color 200ms, color 200ms',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
-              Receive Order
+              {isReceiving && (
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              )}
+              {isReceiving ? 'Receiving...' : 'Receive Order'}
             </button>
+            {receiveError && (
+              <span style={{ fontSize: 11, color: '#EF4444', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {receiveError}
+              </span>
+            )}
             <button
               type="button"
               aria-label="More options"

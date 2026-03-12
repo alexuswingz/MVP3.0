@@ -6,10 +6,21 @@ import { MoreVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export interface BottleRow {
-  id: string;
+  id: string | number;
   name: string;
   warehouseInventory: number;
   supplierInventory: number;
+  allocatedInventory?: number;
+  sizeOz?: number | null;
+  shape?: string;
+  color?: string;
+  material?: string;
+  supplier?: string;
+  labelSize?: string;
+  boxSize?: string;
+  unitsPerCase?: number | null;
+  maxWarehouseInventory?: number | null;
+  casesPerPallet?: number | null;
 }
 
 interface BottlesTableProps {

@@ -597,6 +597,133 @@ class ExtendedApiClient extends ApiClient {
   async getAmazonSyncStatus(id: number): Promise<SyncStatusResponse> {
     return this.request<SyncStatusResponse>(`/amazon/accounts/${id}/sync_status/`);
   }
+
+  // Bottle API methods
+  async getBottles(params?: {
+    search?: string;
+    size_oz?: number;
+    shape?: string;
+    supplier?: string;
+    is_active?: boolean;
+    ordering?: string;
+  }): Promise<BottleListResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.size_oz) searchParams.set('size_oz', params.size_oz.toString());
+    if (params?.shape) searchParams.set('shape', params.shape);
+    if (params?.supplier) searchParams.set('supplier', params.supplier);
+    if (params?.is_active !== undefined) searchParams.set('is_active', String(params.is_active));
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+    
+    const query = searchParams.toString();
+    const response = await this.request<BottleListResponse[] | { results: BottleListResponse[] }>(
+      `/bottles/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async getBottle(id: number): Promise<BottleDetailResponse> {
+    return this.request<BottleDetailResponse>(`/bottles/${id}/`);
+  }
+
+  async createBottle(data: BottleCreateInput): Promise<BottleDetailResponse> {
+    return this.request<BottleDetailResponse>('/bottles/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBottle(id: number, data: Partial<BottleCreateInput>): Promise<BottleDetailResponse> {
+    return this.request<BottleDetailResponse>(`/bottles/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBottle(id: number): Promise<void> {
+    return this.request(`/bottles/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getBottleInventory(): Promise<BottleInventorySummary> {
+    return this.request<BottleInventorySummary>('/bottles/inventory/');
+  }
+
+  async getBottleProducts(id: number): Promise<{ id: number; name: string; asin: string; sku: string; status: string }[]> {
+    return this.request(`/bottles/${id}/products/`);
+  }
+
+  async getBottleSuppliers(): Promise<string[]> {
+    return this.request<string[]>('/bottles/suppliers/');
+  }
+
+  async receiveBottleInventory(items: { id: number; quantity: number }[]): Promise<{
+    updated: { id: number; name: string; previous_inventory: number; added: number; new_inventory: number }[];
+    errors: { id?: number; error: string }[];
+    total_updated: number;
+  }> {
+    return this.request('/bottles/receive_inventory/', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  // Closure API methods
+  async getClosures(params?: {
+    search?: string;
+    category?: string;
+    cap_size?: string;
+    supplier?: string;
+    is_active?: boolean;
+    ordering?: string;
+  }): Promise<ClosureListResponse[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.cap_size) searchParams.set('cap_size', params.cap_size);
+    if (params?.supplier) searchParams.set('supplier', params.supplier);
+    if (params?.is_active !== undefined) searchParams.set('is_active', String(params.is_active));
+    if (params?.ordering) searchParams.set('ordering', params.ordering);
+    
+    const query = searchParams.toString();
+    const response = await this.request<ClosureListResponse[] | { results: ClosureListResponse[] }>(
+      `/closures/${query ? '?' + query : ''}`
+    );
+    return Array.isArray(response) ? response : response.results || [];
+  }
+
+  async getClosure(id: number): Promise<ClosureDetailResponse> {
+    return this.request<ClosureDetailResponse>(`/closures/${id}/`);
+  }
+
+  async createClosure(data: ClosureCreateInput): Promise<ClosureDetailResponse> {
+    return this.request<ClosureDetailResponse>('/closures/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateClosure(id: number, data: Partial<ClosureCreateInput>): Promise<ClosureDetailResponse> {
+    return this.request<ClosureDetailResponse>(`/closures/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteClosure(id: number): Promise<void> {
+    return this.request(`/closures/${id}/`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getClosureInventory(): Promise<ClosureInventorySummary> {
+    return this.request<ClosureInventorySummary>('/closures/inventory/');
+  }
+
+  async getClosureProducts(id: number): Promise<{ id: number; name: string; asin: string; sku: string; status: string }[]> {
+    return this.request(`/closures/${id}/products/`);
+  }
 }
 
 interface SyncStatusResponse {
@@ -996,6 +1123,140 @@ interface SyncTriggerResponse {
   sync_log_id: number;
 }
 
+// Bottle types
+interface BottleListResponse {
+  id: number;
+  name: string;
+  size_oz: number | null;
+  shape: string;
+  color: string;
+  material: string;
+  supplier: string;
+  label_size: string;
+  box_size: string;
+  units_per_case: number | null;
+  warehouse_inventory: number | null;
+  supplier_inventory: number | null;
+  allocated_inventory: number | null;
+  max_warehouse_inventory: number | null;
+  cases_per_pallet: number | null;
+  is_active: boolean;
+}
+
+interface BottleDetailResponse extends BottleListResponse {
+  image: string;
+  thread_type: string;
+  cap_size: string;
+  packaging_part_number: string;
+  description: string;
+  brand: string;
+  lead_time_weeks: number | null;
+  moq: number | null;
+  units_per_pallet: number | null;
+  cases_per_pallet: number | null;
+  box_length_in: number | null;
+  box_width_in: number | null;
+  box_height_in: number | null;
+  units_per_case_finished: number | null;
+  units_per_gallon: number | null;
+  box_weight_lbs: number | null;
+  max_boxes_per_pallet: number | null;
+  single_box_pallet_share: number | null;
+  replenishment_strategy: string;
+  packaging_bpm: number | null;
+  length_in: number | null;
+  width_in: number | null;
+  height_in: number | null;
+  weight_lbs: number | null;
+  supplier_order_strategy: string;
+  supplier_inventory: number | null;
+  max_warehouse_inventory: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface BottleInventorySummary {
+  total_bottles: number;
+  low_inventory: number;
+  total_warehouse_inventory: number;
+}
+
+interface BottleCreateInput {
+  name: string;
+  size_oz?: number | null;
+  shape?: string;
+  color?: string;
+  material?: string;
+  supplier?: string;
+  label_size?: string;
+  box_size?: string;
+  units_per_case?: number | null;
+  warehouse_inventory?: number | null;
+  supplier_inventory?: number | null;
+  max_warehouse_inventory?: number | null;
+  lead_time_weeks?: number | null;
+  moq?: number | null;
+  packaging_part_number?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
+// Closure types
+interface ClosureListResponse {
+  id: number;
+  name: string;
+  category: string;
+  shape: string;
+  color: string;
+  cap_size: string;
+  supplier: string;
+  warehouse_inventory: number | null;
+  supplier_inventory: number | null;
+  is_active: boolean;
+}
+
+interface ClosureDetailResponse extends ClosureListResponse {
+  image: string;
+  thread_type: string;
+  material: string;
+  packaging_part_number: string;
+  description: string;
+  brand: string;
+  lead_time_weeks: number | null;
+  moq: number | null;
+  units_per_pallet: number | null;
+  units_per_case: number | null;
+  cases_per_pallet: number | null;
+  supplier_order_strategy: string;
+  supplier_inventory: number | null;
+  max_warehouse_inventory: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ClosureInventorySummary {
+  total_closures: number;
+  low_inventory: number;
+  total_warehouse_inventory: number;
+}
+
+interface ClosureCreateInput {
+  name: string;
+  category?: string;
+  shape?: string;
+  color?: string;
+  cap_size?: string;
+  supplier?: string;
+  warehouse_inventory?: number | null;
+  supplier_inventory?: number | null;
+  max_warehouse_inventory?: number | null;
+  lead_time_weeks?: number | null;
+  moq?: number | null;
+  packaging_part_number?: string;
+  description?: string;
+  is_active?: boolean;
+}
+
 export const api = new ExtendedApiClient();
 export type {
   UserResponse,
@@ -1031,4 +1292,12 @@ export type {
   ActionItemResponse,
   ActionItemCreateInput,
   ActionItemUpdateInput,
+  BottleListResponse,
+  BottleDetailResponse,
+  BottleInventorySummary,
+  BottleCreateInput,
+  ClosureListResponse,
+  ClosureDetailResponse,
+  ClosureInventorySummary,
+  ClosureCreateInput,
 };
