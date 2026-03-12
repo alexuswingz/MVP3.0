@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Search, ChevronDown, Tag, Settings } from 'lucide-react';
+import { MoreVertical, Search, ChevronDown, Tag } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useUIStore } from '@/stores/ui-store';
 import { NewLabelOrderModal, type NewLabelOrderForm } from '../components/NewLabelOrderModal';
@@ -296,11 +296,12 @@ export default function LabelsPage() {
             aria-label="Labels section"
             className="flex items-center overflow-hidden"
             style={{
-              height: 32,
+              height: 31,
               borderRadius: 6,
               border: '1px solid #334155',
-              backgroundColor: '#1E293B',
-              padding: 2,
+              backgroundColor: '#0B111E',
+              padding: 4,
+              gap: 4,
             }}
           >
             {LABEL_TABS.map((tab) => {
@@ -339,8 +340,15 @@ export default function LabelsPage() {
           {/* Cycle Counts */}
           <button
             type="button"
-            className="flex items-center justify-center shrink-0 text-sm font-medium rounded-md transition-opacity hover:opacity-90"
-            style={{ height: 32, paddingLeft: 14, paddingRight: 14, backgroundColor: '#EAB308', color: '#1F2937' }}
+            className="flex items-center justify-center shrink-0 text-xs font-medium rounded-md transition-opacity hover:opacity-90"
+            style={{
+              height: 23,
+              minWidth: 101,
+              padding: '4px 10px',
+              borderRadius: 4,
+              backgroundColor: '#FFD000',
+              color: '#111827',
+            }}
           >
             Cycle Counts
           </button>
@@ -372,7 +380,14 @@ export default function LabelsPage() {
             type="button"
             onClick={() => setNewOrderModalOpen(true)}
             className="flex items-center justify-center gap-2 shrink-0 text-sm font-medium rounded-md transition-opacity hover:opacity-90"
-            style={{ height: 32, paddingLeft: 14, paddingRight: 14, backgroundColor: '#3B82F6', color: '#FFFFFF' }}
+            style={{
+              height: 32,
+              minWidth: 118,
+              padding: '0 14px',
+              borderRadius: 4,
+              backgroundColor: '#007AFF',
+              color: '#FFFFFF',
+            }}
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
             New Order
@@ -390,7 +405,11 @@ export default function LabelsPage() {
               aria-haspopup="true"
               style={{ color: '#9CA3AF' }}
             >
-              <Settings className="w-5 h-5" />
+              <img
+                src="/assets/Icon%20Button.png"
+                alt="Settings"
+                style={{ width: 20, height: 20, display: 'block' }}
+              />
             </button>
             {settingsDropdownOpen && (
               <div
@@ -542,15 +561,35 @@ export default function LabelsPage() {
                                     gap: 8,
                                   }}
                                 >
-                                  <span
-                                    style={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: '50%',
-                                      backgroundColor: st.dot,
-                                      flexShrink: 0,
-                                    }}
-                                  />
+                                  {order.status === 'Partially Received' ? (
+                                    <img
+                                      src="/assets/partial.png"
+                                      alt="Partially received"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Submitted' ? (
+                                    <img
+                                      src="/assets/submitted.png"
+                                      alt="Submitted"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Draft' ? (
+                                    <img
+                                      src="/assets/drafts.png"
+                                      alt="Draft"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : (
+                                    <span
+                                      style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        backgroundColor: st.dot,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  )}
                                   <span
                                     style={{
                                       fontSize: 12,
@@ -594,7 +633,11 @@ export default function LabelsPage() {
                                     try {
                                       sessionStorage.setItem('resume_label_order_id', order.id);
                                     } catch (_) {}
-                                    router.push('/dashboard/supply-chain/labels/orders/new?tab=receive-po');
+                                    const targetTab =
+                                      order.addProducts === 'completed' ? 'receive-po' : 'add-products';
+                                    router.push(
+                                      `/dashboard/supply-chain/labels/orders/new?tab=${targetTab}`,
+                                    );
                                   }}
                                   style={{
                                     fontSize: 14,
@@ -911,15 +954,35 @@ export default function LabelsPage() {
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span
-                                    style={{
-                                      width: 8,
-                                      height: 8,
-                                      borderRadius: '50%',
-                                      backgroundColor: st.dot,
-                                      flexShrink: 0,
-                                    }}
-                                  />
+                                  {order.status === 'Partially Received' ? (
+                                    <img
+                                      src="/assets/partial.png"
+                                      alt="Partially received"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Submitted' ? (
+                                    <img
+                                      src="/assets/submitted.png"
+                                      alt="Submitted"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Draft' ? (
+                                    <img
+                                      src="/assets/drafts.png"
+                                      alt="Draft"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : (
+                                    <span
+                                      style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        backgroundColor: st.dot,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  )}
                                   <span
                                     style={{
                                       fontSize: 12,
@@ -1130,15 +1193,23 @@ export default function LabelsPage() {
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                    <span
-                                      style={{
-                                        width: 7,
-                                        height: 7,
-                                        borderRadius: '50%',
-                                        backgroundColor: st.dot,
-                                        flexShrink: 0,
-                                      }}
-                                    />
+                                    {label.labelStatus === 'Up to Date' ? (
+                                      <img
+                                        src="/assets/complete.png"
+                                        alt="Up to date"
+                                        style={{ width: 12, height: 12, flexShrink: 0 }}
+                                      />
+                                    ) : (
+                                      <span
+                                        style={{
+                                          width: 7,
+                                          height: 7,
+                                          borderRadius: '50%',
+                                          backgroundColor: st.dot,
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    )}
                                     <span style={{ fontSize: 12, fontWeight: 500, color: st.color, whiteSpace: 'nowrap' }}>
                                       {label.labelStatus}
                                     </span>
