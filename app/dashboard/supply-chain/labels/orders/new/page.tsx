@@ -9,12 +9,29 @@ import ProductsFilterDropdown, { type ColumnFilterData } from '@/app/dashboard/s
 import { InventoryTimelineModal, type TimelineBottle } from '@/components/bottles/InventoryTimelineModal';
 
 const PAGE_BG = '#0B111E';
+const HEADER_BG = '#1A2235';
 const HEADER_BORDER = '#334155';
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
 
 type LabelStatus = 'Up to Date' | 'Needs Update' | 'Outdated';
 type WorkflowTab = 'add-products' | 'submit-po' | 'receive-po';
+
+type StepStatus = 'not-started' | 'in-progress' | 'completed';
+type OrderStatus = 'Submitted' | 'Draft' | 'Partially Received';
+
+interface LabelOrderRow {
+  id: string;
+  date: string;
+  supplier: string;
+  status: OrderStatus;
+  addProducts: StepStatus;
+  submitPO: StepStatus;
+  receivePO: StepStatus;
+  archive: boolean;
+  productIds?: string[];
+  productQuantities?: Record<string, string>;
+}
 
 interface LabelProductRow {
   id: string;
@@ -194,6 +211,7 @@ export default function LabelOrderNewPage() {
   const [footerMenuOpen, setFooterMenuOpen] = useState(false);
   const [completeOrderModalOpen, setCompleteOrderModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [dontRemindAgain, setDontRemindAgain] = useState(false);
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [inventorySummaryOpen, setInventorySummaryOpen] = useState(false);
   const [inventorySummaryRowId, setInventorySummaryRowId] = useState<string | null>(null);
@@ -206,14 +224,29 @@ export default function LabelOrderNewPage() {
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, ColumnFilterData | null>>({});
+  const [receivedIds, setReceivedIds] = useState<Set<string>>(new Set());
+  const [resumeOrderId, setResumeOrderId] = useState<string | null>(null);
+  const [receivePoProductIds, setReceivePoProductIds] = useState<string[]>([]);
+  const [receivePoQuantities, setReceivePoQuantities] = useState<Record<string, string>>({});
+  const [receivePoBarPopupAnchor, setReceivePoBarPopupAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [receivePoBarPopupRowId, setReceivePoBarPopupRowId] = useState<string | null>(null);
 
   const [orderData, setOrderData] = useState<{ orderNumber: string; supplier: string } | null>(null);
+
+  const receivePoRows = useMemo(
+    () => {
+      const ids = receivePoProductIds.length > 0 ? new Set(receivePoProductIds) : addedIds;
+      return MOCK_LABEL_ROWS.filter((r) => ids.has(r.id));
+    },
+    [receivePoProductIds, addedIds]
+  );
 
   const headerMenuRef = useRef<HTMLDivElement>(null);
   const footerMenuRef = useRef<HTMLDivElement>(null);
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const inventorySummaryRef = useRef<HTMLDivElement>(null);
   const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const receivePoBarPopupLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -227,6 +260,29 @@ export default function LabelOrderNewPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') === 'submit-po') setActiveTab('submit-po');
     if (params.get('tab') === 'receive-po') setActiveTab('receive-po');
+
+    // If coming from Orders table, resume that order and load its products for Receive PO
+    try {
+      const id = window.sessionStorage.getItem('resume_label_order_id');
+      if (id) {
+        setResumeOrderId(id);
+        window.sessionStorage.removeItem('resume_label_order_id');
+        const saved: LabelOrderRow[] = JSON.parse(window.localStorage.getItem('label_orders') || '[]');
+        const order = saved.find((o) => o.id === id);
+        if (order?.productIds) setReceivePoProductIds(order.productIds);
+        if (order?.productQuantities) {
+          setReceivePoQuantities(order.productQuantities);
+          setQuantities(order.productQuantities);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const skipPrompt = window.localStorage.getItem('label_skip_complete_order_prompt');
+      if (skipPrompt === '1') {
+        setDontRemindAgain(true);
+      }
+    } catch (_) {}
   }, []);
 
   useEffect(() => {
@@ -415,11 +471,43 @@ export default function LabelOrderNewPage() {
   };
 
   const handleCompleteOrder = () => {
+    if (typeof window !== 'undefined') {
+      const today = new Date();
+      const date = orderData?.orderNumber || `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(
+        today.getDate(),
+      ).padStart(2, '0')}`;
+      const supplier = orderData?.supplier || supplierShort;
+      const newOrder: LabelOrderRow = {
+        id: resumeOrderId || String(Date.now()),
+        date,
+        supplier,
+        status: 'Submitted',
+        addProducts: 'completed',
+        submitPO: 'completed',
+        receivePO: 'not-started',
+        archive: false,
+        productIds: Array.from(addedIds),
+        productQuantities: quantities,
+      };
+      saveOrderToStorage(newOrder);
+      try {
+        window.sessionStorage.setItem('last_label_order_complete_date', date);
+      } catch (_) {}
+    }
     router.push('/dashboard/supply-chain/labels?tab=Orders');
   };
 
   const palletsCount = productCount > 0 ? Math.ceil(productCount * 2.4) : 0;
   const boxesCount = productCount > 0 ? productCount * 6 : 0;
+
+  const saveOrderToStorage = (order: LabelOrderRow) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const existing: LabelOrderRow[] = JSON.parse(window.localStorage.getItem('label_orders') || '[]');
+      const updated = [order, ...existing.filter((o) => o.id !== order.id)];
+      window.localStorage.setItem('label_orders', JSON.stringify(updated));
+    } catch (_) {}
+  };
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden -m-4 lg:-m-6" style={{ backgroundColor: PAGE_BG }}>
@@ -432,7 +520,7 @@ export default function LabelOrderNewPage() {
           justifyContent: 'space-between',
           padding: '12px 24px',
           borderBottom: `1px solid ${HEADER_BORDER}`,
-          backgroundColor: PAGE_BG,
+          backgroundColor: HEADER_BG,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -550,7 +638,7 @@ export default function LabelOrderNewPage() {
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '0 24px',
           borderBottom: `1px solid ${HEADER_BORDER}`,
-          backgroundColor: PAGE_BG,
+          backgroundColor: HEADER_BG,
         }}
       >
         {([
@@ -672,22 +760,205 @@ export default function LabelOrderNewPage() {
         </div>
       </div>
 
-      {/* ── Table + floating footer ── */}
-      <div style={{ flex: 1, minHeight: 0, position: 'relative', padding: '0 24px 16px' }}>
-
-        {/* Table card — absolutely fills the padding box */}
+      {/* ── Table + footer ── */}
+      <div style={{ padding: '0 24px 16px' }}>
         <div
           style={{
-            position: 'absolute',
-            top: 0, bottom: 16, left: 24, right: 24,
-            borderRadius: 12, border: `1px solid ${BORDER_COLOR}`,
-            backgroundColor: ROW_BG, overflow: 'hidden',
-            display: 'flex', flexDirection: 'column',
+            borderRadius: 12,
+            border: `1px solid ${BORDER_COLOR}`,
+            backgroundColor: ROW_BG,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-
-        {/* Scrollable table area */}
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 80 }}>
+        {/* Scrollable table area (height hugs content – no forced fill) */}
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          {activeTab === 'receive-po' ? (
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '4%' }} />
+                <col style={{ width: '42%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '28%' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ backgroundColor: '#272A38', height: 56 }}>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 8px 12px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
+                    <input type="checkbox" style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  </th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>PRODUCTS</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>INVENTORY</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>QUANTITY</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: '#272A38', borderBottom: `1px solid ${BORDER_COLOR}`, padding: '12px 16px', textAlign: 'left', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase' }}>STORAGE CAPACITY</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+                        {[
+                          { label: 'Available', color: '#4B5563', pattern: false },
+                          { label: 'Allocated', color: '#EA580C', pattern: true },
+                          { label: 'Inbound', color: '#3B82F6', pattern: true },
+                          { label: 'New Order', color: '#93C5FD', pattern: false },
+                        ].map(({ label, color, pattern }) => (
+                          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 500, color: '#9CA3AF' }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 2, flexShrink: 0, backgroundColor: color, backgroundImage: pattern ? `repeating-linear-gradient(45deg, ${color}, ${color} 2px, transparent 2px, transparent 4px)` : undefined }} />
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {receivePoRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: 48, textAlign: 'center', color: '#9CA3AF', fontSize: 14 }}>
+                      No products in this order. Add products in the Add Products step first.
+                    </td>
+                  </tr>
+                ) : (
+                  receivePoRows.map((row) => {
+                    const segments = getBarSegments();
+                    const isReceived = receivedIds.has(row.id);
+                    return (
+                      <tr
+                        key={row.id}
+                        style={{ backgroundColor: ROW_BG, borderTop: `1px solid ${BORDER_COLOR}`, height: 73 }}
+                        onMouseEnter={() => setHoveredRowId(row.id)}
+                        onMouseLeave={() => setHoveredRowId(null)}
+                      >
+                        <td style={{ padding: '12px 8px 12px 16px', verticalAlign: 'middle' }}>
+                          <input type="checkbox" style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                        </td>
+                        <td style={{ padding: '12px 16px', verticalAlign: 'middle', overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <button
+                              type="button"
+                              onClick={() => setReceivedIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; })}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                minWidth: 64, height: 24, padding: '0 8px', borderRadius: 6, border: 'none',
+                                fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                                backgroundColor: isReceived ? '#16A34A' : '#3B82F6', color: '#FFFFFF',
+                              }}
+                            >
+                              {isReceived ? 'Done' : 'Receive'}
+                            </button>
+                            <ProductThumbnail color={row.imageColor} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                              <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 600, lineHeight: '100%', color: '#F9FAFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{row.productName}</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'nowrap' }}>
+                                <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, fontWeight: 400, color: '#64758B' }}>{row.asin}</span>
+                                <button type="button" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(row.asin).then(() => setCopyToast('ASIN copied')).catch(() => {}); setTimeout(() => setCopyToast(null), 1500); }} aria-label="Copy ASIN" style={{ width: 16, height: 16, borderRadius: 4, border: 'none', background: 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, cursor: 'pointer' }}>
+                                  <img src="/assets/Copy%20icon.png" alt="" width={12} height={12} style={{ display: 'block' }} />
+                                </button>
+                                <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, color: '#64758B' }}>•</span>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, color: '#64758B' }}>
+                                  <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#8B5CF6', flexShrink: 0 }} />
+                                  {row.category}
+                                </span>
+                                <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, color: '#64758B' }}>•</span>
+                                <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: 12, color: '#64758B' }}>{row.size}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 600, color: '#F9FAFB', verticalAlign: 'middle' }}>24,869</td>
+                        <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                          <input
+                            type="text"
+                            value={quantities[row.id] ?? ''}
+                            onChange={(e) => setQuantities((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                            style={{ width: 115, height: 34, padding: '8px 6px', borderRadius: 8, backgroundColor: '#2C3544', border: '1px solid #2C3544', color: '#F9FAFB', fontFamily: '"IBM Plex Mono", ui-monospace, sans-serif', fontSize: 14, fontWeight: 500, textAlign: 'center', outline: 'none', boxSizing: 'border-box' }}
+                          />
+                        </td>
+                        <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}>
+                            {/* Bar on the left — hover shows popup */}
+                            <div
+                              onMouseEnter={(e) => {
+                                if (receivePoBarPopupLeaveTimeoutRef.current) {
+                                  clearTimeout(receivePoBarPopupLeaveTimeoutRef.current);
+                                  receivePoBarPopupLeaveTimeoutRef.current = null;
+                                }
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setReceivePoBarPopupAnchor({ top: rect.bottom, left: rect.left, width: rect.width });
+                                setReceivePoBarPopupRowId(row.id);
+                              }}
+                              onMouseLeave={() => {
+                                if (receivePoBarPopupLeaveTimeoutRef.current) clearTimeout(receivePoBarPopupLeaveTimeoutRef.current);
+                                receivePoBarPopupLeaveTimeoutRef.current = setTimeout(() => {
+                                  setReceivePoBarPopupAnchor(null);
+                                  setReceivePoBarPopupRowId(null);
+                                  receivePoBarPopupLeaveTimeoutRef.current = null;
+                                }, 150);
+                              }}
+                              style={{ flex: 1, minWidth: 80, maxWidth: '100%', height: 19, borderRadius: 4, overflow: 'hidden', backgroundColor: '#1F2937', display: 'flex', flexDirection: 'row', cursor: 'default' }}
+                            >
+                              {segments.map((seg, i) => (seg.width > 0 ? (
+                                <div key={i} style={{ width: `${seg.width}%`, minWidth: 4, backgroundColor: seg.pattern ? undefined : seg.color, backgroundImage: seg.pattern ? `repeating-linear-gradient(45deg, ${seg.color}, ${seg.color} 2px, transparent 2px, transparent 4px)` : undefined }} />
+                              ) : null))}
+                            </div>
+                            {/* Calendar + vertical ellipsis on the right – no overlap */}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                flexShrink: 0,
+                                opacity: hoveredRowId === row.id ? 1 : 0,
+                                transition: 'opacity 0.15s ease',
+                              }}
+                            >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setTimelineLabel({
+                                  id: row.id,
+                                  name: row.productName,
+                                  capacity: 4000,
+                                  todayInventory: 2160,
+                                })
+                              }
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                width: 28, height: 28, borderRadius: 6,
+                                backgroundColor: 'transparent', border: 'none',
+                                cursor: 'pointer', color: '#6C7280',
+                              }}
+                              aria-label="Calendar"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                width: 28, height: 28, borderRadius: 6,
+                                backgroundColor: 'transparent', border: 'none',
+                                cursor: 'pointer', color: '#6C7280',
+                              }}
+                              aria-label="More options"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '3%' }} />
@@ -1414,28 +1685,37 @@ export default function LabelOrderNewPage() {
               })}
             </tbody>
           </table>
+          )}
         </div>{/* end scroll area */}
 
-        {/* ── Footer — floats inside the card at the bottom ── */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 'calc(100% - 32px)',
-            maxWidth: 741,
-            zIndex: 20,
-          }}
-        >
+        </div>{/* end table card */}
+      </div>
+
+      {/* ── Footer: stats + actions (separate from table card) ── */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: 900,
+          padding: '0 24px',
+          boxSizing: 'border-box',
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          zIndex: 40,
+        }}
+      >
         <footer
           style={{
+            pointerEvents: 'auto',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'flex-start',
-            width: '100%',
-            height: 59,
+            justifyContent: 'space-between',
+            width: 'fit-content',
             padding: '8px 10px',
             columnGap: 64,
             borderRadius: 16,
@@ -1451,14 +1731,13 @@ export default function LabelOrderNewPage() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              backgroundColor: 'transparent',
             }}
           >
             {[
               { label: 'PRODUCTS', value: String(productCount) },
               { label: 'PALETTES', value: String(palletsCount) },
-              { label: 'BOXES',    value: String(boxesCount) },
-            ].map(({ label, value }, idx, arr) => (
+              { label: 'BOXES', value: String(boxesCount) },
+            ].map(({ label, value }) => (
               <div
                 key={label}
                 style={{
@@ -1494,7 +1773,10 @@ export default function LabelOrderNewPage() {
             {/* Clear */}
             <button
               type="button"
-              onClick={() => { setAddedIds(new Set()); setSelectedIds(new Set()); }}
+              onClick={() => {
+                setAddedIds(new Set());
+                setSelectedIds(new Set());
+              }}
               style={{
                 height: 36,
                 padding: 0,
@@ -1527,7 +1809,16 @@ export default function LabelOrderNewPage() {
                 cursor: 'pointer',
               }}
             >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width={14}
+                height={14}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
@@ -1535,14 +1826,62 @@ export default function LabelOrderNewPage() {
               Export
             </button>
 
+            {/* Edit Order — only on Receive PO tab */}
+            {activeTab === 'receive-po' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('add-products');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 36,
+                  padding: '0 16px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#9CA3AF',
+                  backgroundColor: '#374151',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                Edit Order
+              </button>
+            )}
+
             {/* Complete Order */}
             <button
               type="button"
-              onClick={() => setCompleteOrderModalOpen(true)}
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  try {
+                    const skipPrompt = window.localStorage.getItem('label_skip_complete_order_prompt');
+                    if (skipPrompt === '1') {
+                      handleCompleteOrder();
+                      return;
+                    }
+                  } catch (_) {}
+                }
+                setCompleteOrderModalOpen(true);
+              }}
               style={{
-                height: 36, padding: '0 20px', fontSize: 14, fontWeight: 600,
-                color: '#FFFFFF', backgroundColor: '#3B82F6',
-                border: 'none', borderRadius: 10, cursor: 'pointer',
+                height: 36,
+                padding: '0 20px',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#FFFFFF',
+                backgroundColor: '#3B82F6',
+                border: 'none',
+                borderRadius: 10,
+                cursor: 'pointer',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -1572,10 +1911,17 @@ export default function LabelOrderNewPage() {
               {footerMenuOpen && (
                 <div
                   style={{
-                    position: 'absolute', bottom: '100%', right: 0, marginBottom: 4,
-                    minWidth: 160, backgroundColor: '#1E293B',
-                    border: `1px solid ${BORDER_COLOR}`, borderRadius: 8,
-                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)', zIndex: 50, padding: 4,
+                    position: 'absolute',
+                    bottom: '100%',
+                    right: 0,
+                    marginBottom: 4,
+                    minWidth: 160,
+                    backgroundColor: '#1E293B',
+                    border: `1px solid ${BORDER_COLOR}`,
+                    borderRadius: 8,
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.2)',
+                    zIndex: 50,
+                    padding: 4,
                   }}
                 >
                   {['Submit PO', 'Save as Draft', 'Cancel Order'].map((item) => (
@@ -1584,9 +1930,15 @@ export default function LabelOrderNewPage() {
                       type="button"
                       onClick={() => setFooterMenuOpen(false)}
                       style={{
-                        width: '100%', padding: '8px 12px', textAlign: 'left',
-                        fontSize: 14, color: item === 'Cancel Order' ? '#EF4444' : '#F9FAFB',
-                        background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: 4,
+                        width: '100%',
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        fontSize: 14,
+                        color: item === 'Cancel Order' ? '#EF4444' : '#F9FAFB',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderRadius: 4,
                       }}
                     >
                       {item}
@@ -1597,9 +1949,7 @@ export default function LabelOrderNewPage() {
             </div>
           </div>
         </footer>
-        </div>{/* end floating footer wrapper */}
-        </div>{/* end table card */}
-      </div>{/* end relative container */}
+      </div>
 
       {/* ── Inventory Summary popover — portal, anchored below the bar ── */}
       {inventorySummaryOpen && inventorySummaryAnchor && inventorySummaryRowId &&
@@ -1699,6 +2049,81 @@ export default function LabelOrderNewPage() {
               <div style={{ height: 1, backgroundColor: BORDER_COLOR, margin: '4px 0' }} />
 
               {/* Capacity */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, color: '#FFFFFF' }}>Capacity</span>
+                <span style={{ fontSize: 14, color: '#FFFFFF', fontWeight: 500 }}>4,000</span>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {/* ── Receive PO: bar hover popup (Storage capacity legend) ── */}
+      {activeTab === 'receive-po' && receivePoBarPopupAnchor && receivePoBarPopupRowId && typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="tooltip"
+            aria-label="Storage capacity"
+            onMouseEnter={() => {
+              if (receivePoBarPopupLeaveTimeoutRef.current) {
+                clearTimeout(receivePoBarPopupLeaveTimeoutRef.current);
+                receivePoBarPopupLeaveTimeoutRef.current = null;
+              }
+            }}
+            onMouseLeave={() => { setReceivePoBarPopupAnchor(null); setReceivePoBarPopupRowId(null); }}
+            style={{
+              position: 'fixed',
+              top: receivePoBarPopupAnchor.top + 8,
+              left: receivePoBarPopupAnchor.left + receivePoBarPopupAnchor.width / 2 - 132,
+              transform: 'translateX(-50%)',
+              zIndex: 9999,
+              width: 264,
+              borderRadius: 8,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              boxShadow: '0px 4px 4px 0px rgba(21,21,21,0.20)',
+              padding: 0,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '12px 16px', borderBottom: '1px solid #334155', gap: 4 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}>Storage capacity</h2>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: '#4B5563', flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, color: '#FFFFFF' }}>Available</span>
+                </div>
+                <span style={{ fontSize: 14, color: '#FFFFFF', fontWeight: 500 }}>2,160</span>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: '#EA580C', backgroundImage: 'repeating-linear-gradient(45deg,#EA580C,#EA580C 2px,transparent 2px,transparent 4px)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, color: '#FFFFFF' }}>Allocated</span>
+                  </div>
+                  <span style={{ fontSize: 14, color: '#EA580C', fontWeight: 500 }}>-1,180</span>
+                </div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: '#3B82F6', backgroundImage: 'repeating-linear-gradient(45deg,#3B82F6,#3B82F6 2px,transparent 2px,transparent 4px)', flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, color: '#FFFFFF' }}>Inbound</span>
+                  </div>
+                  <span style={{ fontSize: 14, color: '#3B82F6', fontWeight: 500 }}>+1,080</span>
+                </div>
+              </div>
+              <div style={{ height: 1, backgroundColor: BORDER_COLOR, margin: '4px 0' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: '#93C5FD', flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, color: '#FFFFFF' }}>New Order</span>
+                </div>
+                <span style={{ fontSize: 14, color: '#93C5FD', fontWeight: 500 }}>+720</span>
+              </div>
+              <div style={{ height: 1, backgroundColor: BORDER_COLOR, margin: '4px 0' }} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 14, color: '#FFFFFF' }}>Capacity</span>
                 <span style={{ fontSize: 14, color: '#FFFFFF', fontWeight: 500 }}>4,000</span>
@@ -2014,36 +2439,332 @@ export default function LabelOrderNewPage() {
         />
       )}
 
-      {/* ── Complete Order modal ── */}
-      {completeOrderModalOpen && (
+      {/* ── Receive Label Order modal (Receive PO step) ── */}
+      {completeOrderModalOpen && activeTab === 'receive-po' && (
         <div
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 3000,
+            padding: 24,
+          }}
           onClick={() => setCompleteOrderModalOpen(false)}
         >
           <div
-            style={{ width: 420, maxWidth: '90vw', backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: 12, overflow: 'hidden' }}
+            style={{
+              width: 458,
+              maxWidth: '90vw',
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#111827',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              padding: 24,
+              boxSizing: 'border-box',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 24,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #334155' }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#F9FAFB' }}>Complete Order?</h3>
-            </div>
-            <div style={{ padding: '20px 24px' }}>
-              <p style={{ margin: 0, fontSize: 14, color: '#D1D5DB', lineHeight: 1.6 }}>
-                This will mark the label order as complete and add it to your orders list. You added <strong style={{ color: '#F9FAFB' }}>{productCount}</strong> product{productCount !== 1 ? 's' : ''}.
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setCompleteOrderModalOpen(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                borderRadius: 6,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Content */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {/* Warning icon */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 32,
+                  backgroundColor: '#F97316',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>!</span>
+              </div>
+
+              {/* Title */}
+              <h2
+                style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#FFFFFF', textAlign: 'center' }}
+              >
+                Receive Label Order?
+              </h2>
+
+              {/* Subtitle */}
+              <p style={{ margin: 0, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 1.5 }}>
+                Confirm all packages are delivered before receiving this order.
               </p>
             </div>
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #334155', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
               <button
                 type="button"
                 onClick={() => setCompleteOrderModalOpen(false)}
-                style={{ padding: '9px 20px', borderRadius: 6, border: '1px solid #4B5563', backgroundColor: '#374151', fontSize: 14, fontWeight: 500, color: '#E5E7EB', cursor: 'pointer' }}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: '1px solid #4B5563',
+                  backgroundColor: '#111827',
+                  color: '#E5E7EB',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
               >
-                Cancel
+                Go back
               </button>
               <button
                 type="button"
-                onClick={handleCompleteOrder}
-                style={{ padding: '9px 20px', borderRadius: 6, border: 'none', fontSize: 14, fontWeight: 500, backgroundColor: '#3B82F6', color: '#FFFFFF', cursor: 'pointer' }}
+                onClick={() => {
+                  const today = new Date();
+                  const dateStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(
+                    today.getDate(),
+                  ).padStart(2, '0')}`;
+                  const supplier = orderData?.supplier || supplierShort;
+                  const updatedOrder: LabelOrderRow = {
+                    id: resumeOrderId || String(Date.now()),
+                    date: orderData?.orderNumber || dateStr,
+                    supplier,
+                    status: 'Partially Received',
+                    addProducts: 'completed',
+                    submitPO: 'completed',
+                    receivePO: 'completed',
+                    archive: true,
+                    productIds: receivePoProductIds.length > 0 ? receivePoProductIds : Array.from(addedIds),
+                    productQuantities: quantities,
+                  };
+                  saveOrderToStorage(updatedOrder);
+                  setCompleteOrderModalOpen(false);
+                  router.push('/dashboard/supply-chain/labels?tab=Archive');
+                }}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: '#007AFF',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Complete Order modal (Add Products / Submit PO steps) ── */}
+      {completeOrderModalOpen && activeTab !== 'receive-po' && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 3000,
+            padding: 24,
+          }}
+          onClick={() => setCompleteOrderModalOpen(false)}
+        >
+          <div
+            style={{
+              width: 458,
+              maxWidth: '90vw',
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#1A2235',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              padding: 24,
+              boxSizing: 'border-box',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 24,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setCompleteOrderModalOpen(false)}
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                borderRadius: 6,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Content: icon + title + subtitle + checkbox */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {/* Warning icon */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  padding: 8,
+                  gap: 10,
+                  borderRadius: 32,
+                  backgroundColor: '#EA580C',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>!</span>
+              </div>
+
+              {/* Title */}
+              <h2
+                style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#FFFFFF', textAlign: 'center' }}
+              >
+                Complete Order?
+              </h2>
+
+              {/* Subtitle */}
+              <p style={{ margin: 0, fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 1.5 }}>
+                Confirm the order has been exported and sent to the supplier.
+              </p>
+
+              {/* Don't remind me checkbox */}
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: '#6B7280',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={dontRemindAgain}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setDontRemindAgain(checked);
+                    if (typeof window !== 'undefined') {
+                      try {
+                        window.localStorage.setItem('label_skip_complete_order_prompt', checked ? '1' : '0');
+                      } catch (_) {}
+                    }
+                  }}
+                  style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#3B82F6' }}
+                />
+                Don&apos;t remind me again
+              </label>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setCompleteOrderModalOpen(false);
+                  setExportModalOpen(true);
+                }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  height: 31,
+                  padding: '0 8px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#007AFF',
+                  backgroundColor: 'transparent',
+                  border: '1px solid #007AFF',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                }}
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCompleteOrderModalOpen(false);
+                  handleCompleteOrder();
+                }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  height: 31,
+                  padding: '0 8px',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: '#FFFFFF',
+                  backgroundColor: '#007AFF',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  boxSizing: 'border-box',
+                }}
               >
                 Complete Order
               </button>
@@ -2051,6 +2772,209 @@ export default function LabelOrderNewPage() {
           </div>
         </div>
       )}
+
+      {/* Export Label Order modal */}
+      {exportModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 3100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              padding: 24,
+            }}
+            onClick={() => setExportModalOpen(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="export-label-order-title"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 600,
+                maxWidth: '95vw',
+                borderRadius: 12,
+                border: '1px solid #334155',
+                backgroundColor: '#1A2235',
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '16px 20px',
+                  borderBottom: '1px solid #334155',
+                }}
+              >
+                <h2
+                  id="export-label-order-title"
+                  style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#FFFFFF' }}
+                >
+                  Export Label Order
+                </h2>
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setExportModalOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 28,
+                    height: 28,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#9CA3AF',
+                    borderRadius: 6,
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '20px 20px 0' }}>
+                {/* Filename field */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #3B82F6',
+                    backgroundColor: 'rgba(59,130,246,0.08)',
+                    marginBottom: 14,
+                  }}
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#3B82F6"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <span style={{ fontSize: 14, color: '#3B82F6', fontWeight: 500 }}>
+                    {`TPS_LabelOrder_${new Date().getFullYear()}-${String(
+                      new Date().getMonth() + 1,
+                    ).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}.csv`}
+                  </span>
+                </div>
+
+                {/* Info line */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 20 }}>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="#3B82F6"
+                    style={{ flexShrink: 0, marginTop: 1 }}
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="8" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="12" y1="12" x2="12" y2="16" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <p style={{ margin: 0, fontSize: 13, color: '#9CA3AF', lineHeight: 1.5 }}>
+                    After submitting to your supplier, click <strong style={{ color: '#FFFFFF' }}>Complete Order</strong> to
+                    finalize.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '16px 24px',
+                  borderRight: '1px solid #334155',
+                  borderBottom: '1px solid #334155',
+                  borderLeft: '1px solid #334155',
+                  borderTop: 'none',
+                  borderRadius: '0 0 12px 12px',
+                  backgroundColor: '#0F172A',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#3B82F6',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Export as CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportModalOpen(false);
+                    handleCompleteOrder();
+                  }}
+                  style={{
+                    padding: '8px 24px',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: '#FFFFFF',
+                    backgroundColor: '#3B82F6',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Complete
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -12,6 +12,22 @@ type LabelTabId = (typeof LABEL_TABS)[number];
 
 type LabelStatus = 'Up to Date' | 'Needs Update' | 'Outdated';
 
+type StepStatus = 'not-started' | 'in-progress' | 'completed';
+type OrderStatus = 'Submitted' | 'Draft' | 'Partially Received';
+
+interface LabelOrderRow {
+  id: string;
+  date: string;
+  supplier: string;
+  status: OrderStatus;
+  addProducts: StepStatus;
+  submitPO: StepStatus;
+  receivePO: StepStatus;
+  archive: boolean;
+  productIds?: string[];
+  productQuantities?: Record<string, string>;
+}
+
 interface LabelRow {
   id: string;
   labelStatus: LabelStatus;
@@ -45,6 +61,56 @@ const STATUS_STYLE: Record<LabelStatus, { color: string; dot: string }> = {
   'Needs Update': { color: '#F9FAFB', dot: '#F59E0B' },
   'Outdated':     { color: '#F9FAFB', dot: '#EF4444' },
 };
+
+const ORDER_STATUS_STYLES: Record<OrderStatus, { bg: string; color: string; dot: string }> = {
+  Submitted: { bg: '#1E293B', color: '#9CA3AF', dot: '#6B7280' },
+  Draft: { bg: '#1E293B', color: '#9CA3AF', dot: '#3B82F6' },
+  'Partially Received': { bg: '#1E293B', color: '#9CA3AF', dot: '#F59E0B' },
+};
+
+function StepCircle({ status }: { status: StepStatus }) {
+  if (status === 'completed') {
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          backgroundColor: '#22C55E',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  if (status === 'in-progress') {
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          backgroundColor: '#3B82F6',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: '50%',
+        border: '2px solid #4B5563',
+        display: 'inline-block',
+        boxSizing: 'border-box',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 function ProductThumbnail({ color, size = 36 }: { color: string; size?: number }) {
   return (
@@ -83,6 +149,9 @@ export default function LabelsPage() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
+  const [orders, setOrders] = useState<LabelOrderRow[]>([]);
+  const [completionToastDate, setCompletionToastDate] = useState<string | null>(null);
+
   useEffect(() => {
     if (!settingsDropdownOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -106,6 +175,42 @@ export default function LabelsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [actionMenuOpenId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const raw = window.localStorage.getItem('label_orders');
+      if (raw) {
+        const saved = JSON.parse(raw) as LabelOrderRow[];
+        setOrders(saved);
+      }
+    } catch (_) {}
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'Orders') {
+      setActiveTab('Orders');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    try {
+      const lastDate = window.sessionStorage.getItem('last_label_order_complete_date');
+      if (lastDate) {
+        setCompletionToastDate(lastDate);
+        window.sessionStorage.removeItem('last_label_order_complete_date');
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    if (!completionToastDate) return;
+    const id = window.setTimeout(() => {
+      setCompletionToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [completionToastDate]);
+
   const filteredLabels = useMemo(() => {
     const base = MOCK_LABELS.filter((l) =>
       activeTab === 'Archive' ? false : true
@@ -126,6 +231,9 @@ export default function LabelsPage() {
 
   const ROW_BG = '#1A2235';
   const BORDER_COLOR = '#374151';
+
+  const ordersList = useMemo(() => orders.filter((o) => !o.archive), [orders]);
+  const archivedOrders = useMemo(() => orders.filter((o) => o.archive), [orders]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 pt-9 px-4 pb-0 lg:-m-6 lg:pt-11 lg:px-6 lg:pb-0">
@@ -273,34 +381,499 @@ export default function LabelsPage() {
       {/* ── Content ── */}
       <div className="mt-[60px]">
         {activeTab === 'Orders' ? (
-          /* ── Orders placeholder ── */
-          <div
-            style={{
-              borderRadius: 12,
-              border: '1px solid #1A2235',
-              backgroundColor: '#1A2235',
-              padding: '48px',
-              textAlign: 'center',
-              color: '#9CA3AF',
-              fontSize: 14,
-            }}
-          >
-            No label orders yet. Click &quot;+ New Order&quot; to create one.
+          <div style={{ position: 'relative' }}>
+            {ordersList.length === 0 ? (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  backgroundColor: '#1A2235',
+                  padding: '48px',
+                  textAlign: 'center',
+                  color: '#9CA3AF',
+                  fontSize: 14,
+                }}
+              >
+                No label orders yet. Click &quot;+ New Order&quot; to create one.
+              </div>
+            ) : (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  overflow: 'hidden',
+                  backgroundColor: '#1A2235',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10,
+                      backgroundColor: '#1A2235',
+                    }}
+                  >
+                    <tr>
+                      {['STATUS', 'LABEL ORDER #', 'SUPPLIER', 'ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].map(
+                        (col) => {
+                          const centered = ['ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].includes(col);
+                          return (
+                            <th
+                              key={col}
+                              style={{
+                                padding: '16px 20px',
+                                textAlign: centered ? 'center' : 'left',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#9CA3AF',
+                                letterSpacing: '0.06em',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {col}
+                            </th>
+                          );
+                        },
+                      )}
+                      <th style={{ padding: '16px 20px', width: 48 }} />
+                    </tr>
+                    <tr style={{ height: 1 }}>
+                      <td colSpan={7} style={{ padding: 0 }}>
+                        <div
+                          style={{
+                            marginLeft: 20,
+                            marginRight: 20,
+                            height: 1,
+                            backgroundColor: '#374151',
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersList.map((order, i) => {
+                      const st = ORDER_STATUS_STYLES[order.status];
+                      return (
+                        <React.Fragment key={order.id}>
+                          {i > 0 && (
+                            <tr style={{ height: 1 }}>
+                              <td colSpan={7} style={{ padding: 0 }}>
+                                <div
+                                  style={{
+                                    marginLeft: 20,
+                                    marginRight: 20,
+                                    height: 1,
+                                    backgroundColor: '#374151',
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            style={{
+                              backgroundColor: '#1A2235',
+                              cursor: 'pointer',
+                              height: 56,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1A2636')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1A2235')}
+                          >
+                            {/* STATUS */}
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: 170,
+                                  minWidth: 170,
+                                  padding: '4px 12px',
+                                  gap: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: st.bg,
+                                  border: '1px solid #334155',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      backgroundColor: st.dot,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: 500,
+                                      color: st.color,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="#9CA3AF"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                              </div>
+                            </td>
+
+                            {/* LABEL ORDER # */}
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                }}
+                              >
+                                <a
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      sessionStorage.setItem('resume_label_order_id', order.id);
+                                    } catch (_) {}
+                                    router.push('/dashboard/supply-chain/labels/orders/new?tab=receive-po');
+                                  }}
+                                  style={{
+                                    fontSize: 14,
+                                    color: '#3B82F6',
+                                    textDecoration: 'underline',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {order.date}
+                                </a>
+                                {order.archive && (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: '#FFFFFF',
+                                      backgroundColor: '#3B82F6',
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    Archive
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* SUPPLIER */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                fontSize: 14,
+                                color: '#F9FAFB',
+                                fontWeight: 500,
+                                verticalAlign: 'middle',
+                              }}
+                            >
+                              {order.supplier}
+                            </td>
+
+                            {/* ADD PRODUCTS */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.addProducts} />
+                            </td>
+
+                            {/* SUBMIT PO */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.submitPO} />
+                            </td>
+
+                            {/* RECEIVE PO */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.receivePO} />
+                            </td>
+
+                            {/* Menu placeholder */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'right',
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#9CA3AF',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: 6,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : activeTab === 'Archive' ? (
-          /* ── Archive placeholder ── */
-          <div
-            style={{
-              borderRadius: 12,
-              border: '1px solid #1A2235',
-              backgroundColor: '#1A2235',
-              padding: '48px',
-              textAlign: 'center',
-              color: '#9CA3AF',
-              fontSize: 14,
-            }}
-          >
-            No archived labels found.
+          <div style={{ position: 'relative' }}>
+            {archivedOrders.length === 0 ? (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  backgroundColor: '#1A2235',
+                  padding: '48px',
+                  textAlign: 'center',
+                  color: '#9CA3AF',
+                  fontSize: 14,
+                }}
+              >
+                No archived labels found.
+              </div>
+            ) : (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  overflow: 'hidden',
+                  backgroundColor: '#1A2235',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10,
+                      backgroundColor: '#1A2235',
+                    }}
+                  >
+                    <tr>
+                      {['STATUS', 'LABEL ORDER #', 'SUPPLIER', 'ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].map(
+                        (col) => {
+                          const centered = ['ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].includes(col);
+                          return (
+                            <th
+                              key={col}
+                              style={{
+                                padding: '16px 20px',
+                                textAlign: centered ? 'center' : 'left',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#9CA3AF',
+                                letterSpacing: '0.06em',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {col}
+                            </th>
+                          );
+                        },
+                      )}
+                      <th style={{ padding: '16px 20px', width: 48 }} />
+                    </tr>
+                    <tr style={{ height: 1 }}>
+                      <td colSpan={7} style={{ padding: 0 }}>
+                        <div
+                          style={{
+                            marginLeft: 20,
+                            marginRight: 20,
+                            height: 1,
+                            backgroundColor: '#374151',
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archivedOrders.map((order, i) => {
+                      const st = ORDER_STATUS_STYLES[order.status];
+                      return (
+                        <React.Fragment key={order.id}>
+                          {i > 0 && (
+                            <tr style={{ height: 1 }}>
+                              <td colSpan={7} style={{ padding: 0 }}>
+                                <div
+                                  style={{
+                                    marginLeft: 20,
+                                    marginRight: 20,
+                                    height: 1,
+                                    backgroundColor: '#374151',
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            style={{
+                              backgroundColor: '#1A2235',
+                              cursor: 'pointer',
+                              height: 56,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1A2636')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1A2235')}
+                          >
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: 170,
+                                  minWidth: 170,
+                                  padding: '4px 12px',
+                                  gap: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: st.bg,
+                                  border: '1px solid #334155',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      backgroundColor: st.dot,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: 500,
+                                      color: st.color,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="#9CA3AF"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    color: '#F9FAFB',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {order.date}
+                                </span>
+                              </div>
+                            </td>
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                fontSize: 14,
+                                color: '#F9FAFB',
+                                fontWeight: 500,
+                                verticalAlign: 'middle',
+                              }}
+                            >
+                              {order.supplier}
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.addProducts} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.submitPO} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.receivePO} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#9CA3AF',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: 6,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           /* ── Inventory Table ── */
@@ -653,11 +1226,95 @@ export default function LabelsPage() {
         onCreate={(data: NewLabelOrderForm) => {
           setNewOrderModalOpen(false);
           if (typeof window !== 'undefined') {
-            try { sessionStorage.setItem('label_order_created', JSON.stringify(data)); } catch (_) {}
+            try {
+              sessionStorage.setItem('label_order_created', JSON.stringify(data));
+            } catch (_) {}
           }
           router.push('/dashboard/supply-chain/labels/orders/new');
         }}
       />
+
+      {/* ── Completion toast ── */}
+      {completionToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{completionToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order complete.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setCompletionToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
