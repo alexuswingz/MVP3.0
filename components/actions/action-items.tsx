@@ -332,6 +332,9 @@ function DueDateCalendarGrid({
   const nextDaysCount = totalCells - firstDay - daysInMonth;
   const nextDays = Array.from({ length: Math.max(0, nextDaysCount) }, (_, i) => i + 1);
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const isSelected = (day: number, isCurrent: boolean) =>
     isCurrent && selectedDate &&
     selectedDate.getDate() === day &&
@@ -345,15 +348,24 @@ function DueDateCalendarGrid({
       ))}
       {currentDays.map((day) => {
         const selected = isSelected(day, true);
+        const date = new Date(year, month, day);
+        date.setHours(0, 0, 0, 0);
+        const isPast = date < today;
         return (
           <button
             key={day}
             type="button"
-            onClick={() => onSelect(new Date(year, month, day))}
+            onClick={() => {
+              if (isPast) return;
+              onSelect(new Date(year, month, day));
+            }}
+            disabled={isPast}
             className={`w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors ${
               selected
                 ? 'bg-gray-600 text-white'
-                : 'text-white hover:bg-white/10'
+                : isPast
+                  ? 'text-gray-500 cursor-not-allowed'
+                  : 'text-white hover:bg-white/10'
             }`}
           >
             {day}
