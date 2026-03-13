@@ -336,10 +336,7 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
   }, [filteredBottles, addedIds, qtyValues, onOrderComplete]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
+    <div
       className="flex flex-col w-full"
       style={{
         marginTop: '0.75rem',
@@ -1021,7 +1018,7 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
         </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 });
 

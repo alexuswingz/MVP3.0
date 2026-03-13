@@ -721,7 +721,6 @@ class ExtendedApiClient extends ApiClient {
     return this.request<ClosureInventorySummary>('/closures/inventory/');
   }
 
-<<<<<<< Updated upstream
   async getClosureSuppliers(): Promise<string[]> {
     return this.request<string[]>('/closures/suppliers/');
   }
@@ -737,8 +736,6 @@ class ExtendedApiClient extends ApiClient {
     });
   }
 
-=======
->>>>>>> Stashed changes
   async getClosureProducts(id: number): Promise<{ id: number; name: string; asin: string; sku: string; status: string }[]> {
     return this.request(`/closures/${id}/products/`);
   }
@@ -1227,7 +1224,6 @@ interface ClosureListResponse {
   shape: string;
   color: string;
   cap_size: string;
-<<<<<<< Updated upstream
   material: string;
   supplier: string;
   units_per_case: number | null;
@@ -1236,36 +1232,24 @@ interface ClosureListResponse {
   supplier_inventory: number | null;
   allocated_inventory: number | null;
   max_warehouse_inventory: number | null;
-=======
-  supplier: string;
-  warehouse_inventory: number | null;
-  supplier_inventory: number | null;
->>>>>>> Stashed changes
   is_active: boolean;
 }
 
 interface ClosureDetailResponse extends ClosureListResponse {
   image: string;
   thread_type: string;
-<<<<<<< Updated upstream
-=======
   material: string;
->>>>>>> Stashed changes
   packaging_part_number: string;
   description: string;
   brand: string;
   lead_time_weeks: number | null;
   moq: number | null;
   units_per_pallet: number | null;
-<<<<<<< Updated upstream
-  supplier_order_strategy: string;
-=======
   units_per_case: number | null;
   cases_per_pallet: number | null;
   supplier_order_strategy: string;
   supplier_inventory: number | null;
   max_warehouse_inventory: number | null;
->>>>>>> Stashed changes
   created_at: string;
   updated_at: string;
 }
