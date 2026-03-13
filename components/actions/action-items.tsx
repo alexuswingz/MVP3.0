@@ -527,7 +527,9 @@ function DetailModal({
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const attachments = item.attachments ?? [];
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null);
   const [dueDateCalendarOpen, setDueDateCalendarOpen] = useState(false);
+  const dueDateCalendarRef = useRef<HTMLDivElement>(null);
   const [dueDateCalendarMonth, setDueDateCalendarMonth] = useState(() => {
     const parsed = parseDueDate(item.dueDate || '');
     return parsed ?? new Date();
@@ -540,11 +542,10 @@ function DetailModal({
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
         setStatusDropdownOpen(false);
       }
-      if (assigneeDropdownOpen) {
-        // Close assignee dropdown when clicking anywhere outside its trigger; simple heuristic is fine
+      if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(target)) {
         setAssigneeDropdownOpen(false);
       }
-      if (dueDateCalendarOpen) {
+      if (dueDateCalendarRef.current && !dueDateCalendarRef.current.contains(target)) {
         setDueDateCalendarOpen(false);
       }
     };
@@ -825,7 +826,7 @@ function DetailModal({
                   <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 72, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#12B981', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#182A2C' }}>{item.category}</span>
                 )}
               </div>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} ref={assigneeDropdownRef}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Assigned To</p>
                 <button
                   type="button"
@@ -855,7 +856,7 @@ function DetailModal({
                   </div>
                 )}
               </div>
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative' }} ref={dueDateCalendarRef}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Due Date</p>
                 <button
                   type="button"
