@@ -230,6 +230,7 @@ export default function LabelOrderNewPage() {
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   const [columnFilters, setColumnFilters] = useState<Record<string, ColumnFilterData | null>>({});
   const [receivedIds, setReceivedIds] = useState<Set<string>>(new Set());
+  const [receiveSelectionIds, setReceiveSelectionIds] = useState<Set<string>>(new Set());
   const [resumeOrderId, setResumeOrderId] = useState<string | null>(null);
   const [receivePoProductIds, setReceivePoProductIds] = useState<string[]>([]);
   const [receivePoQuantities, setReceivePoQuantities] = useState<Record<string, string>>({});
@@ -265,7 +266,7 @@ export default function LabelOrderNewPage() {
     [receivePoProductIds, addedIds]
   );
 
-  // How many rows are being received on the Receive PO step
+  // How many rows are marked as received (Done) on the Receive PO step
   const receivedCount = useMemo(
     () => receivePoRows.filter((r) => receivedIds.has(r.id)).length,
     [receivePoRows, receivedIds]
@@ -925,16 +926,14 @@ export default function LabelOrderNewPage() {
                       type="checkbox"
                       checked={
                         receivePoRows.length > 0 &&
-                        receivePoRows.every((r) => receivedIds.has(r.id))
+                        receivePoRows.every((r) => receiveSelectionIds.has(r.id))
                       }
                       onChange={(e) => {
                         const checked = e.target.checked;
-                        setReceivedIds((prev) => {
-                          const next = new Set(prev);
+                        setReceiveSelectionIds(() => {
+                          const next = new Set<string>();
                           if (checked) {
                             receivePoRows.forEach((r) => next.add(r.id));
-                          } else {
-                            receivePoRows.forEach((r) => next.delete(r.id));
                           }
                           return next;
                         });
@@ -986,10 +985,10 @@ export default function LabelOrderNewPage() {
                         <td style={{ padding: '12px 8px 12px 16px', verticalAlign: 'middle' }}>
                           <input
                             type="checkbox"
-                            checked={receivedIds.has(row.id)}
+                            checked={receiveSelectionIds.has(row.id)}
                             onChange={(e) => {
                               const checked = e.target.checked;
-                              setReceivedIds((prev) => {
+                              setReceiveSelectionIds((prev) => {
                                 const next = new Set(prev);
                                 if (checked) next.add(row.id);
                                 else next.delete(row.id);
@@ -1007,19 +1006,31 @@ export default function LabelOrderNewPage() {
                               <button
                                 type="button"
                                 onClick={() => {
+                                  const hasSelectionForRow =
+                                    receiveSelectionIds.size > 0 &&
+                                    receiveSelectionIds.has(row.id);
+                                  const targetIds = hasSelectionForRow
+                                    ? Array.from(receiveSelectionIds)
+                                    : [row.id];
                                   if (editableQuantityRowId === row.id) {
                                     setEditableQuantityRowId(null);
                                     setEditableQuantityOriginal(null);
                                     setReceivedIds((prev) => {
                                       const next = new Set(prev);
-                                      next.add(row.id);
+                                      targetIds.forEach((id) => next.add(id));
                                       return next;
                                     });
                                   } else {
                                     setReceivedIds((prev) => {
                                       const next = new Set(prev);
-                                      if (next.has(row.id)) next.delete(row.id);
-                                      else next.add(row.id);
+                                      const allSelectedAlreadyReceived = targetIds.every((id) =>
+                                        next.has(id),
+                                      );
+                                      if (allSelectedAlreadyReceived) {
+                                        targetIds.forEach((id) => next.delete(id));
+                                      } else {
+                                        targetIds.forEach((id) => next.add(id));
+                                      }
                                       return next;
                                     });
                                   }
