@@ -235,6 +235,25 @@ export default function LabelOrderNewPage() {
   const [receivePoQuantities, setReceivePoQuantities] = useState<Record<string, string>>({});
   const [receivePoBarPopupAnchor, setReceivePoBarPopupAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
   const [receivePoBarPopupRowId, setReceivePoBarPopupRowId] = useState<string | null>(null);
+  const pageRootRef = useRef<HTMLDivElement | null>(null);
+
+  // When on Add Products tab, hide the outer page scrollbar (html/body)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const html = document.documentElement;
+    const body = document.body;
+    if (activeTab === 'add-products') {
+      html.style.overflowY = 'hidden';
+      body.style.overflowY = 'hidden';
+    } else {
+      html.style.overflowY = '';
+      body.style.overflowY = '';
+    }
+    return () => {
+      html.style.overflowY = '';
+      body.style.overflowY = '';
+    };
+  }, [activeTab]);
 
   const [orderData, setOrderData] = useState<{ orderNumber: string; supplier: string } | null>(null);
 
@@ -275,6 +294,40 @@ export default function LabelOrderNewPage() {
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   const inventorySummaryRef = useRef<HTMLDivElement>(null);
   const filterIconRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // When on Add Products tab, hide outer scrollbars (dashboard shell and page)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const pageRoot = pageRootRef.current;
+    const shellScrollContainer = pageRoot?.parentElement ?? null;
+
+    const enableOuterScroll = () => {
+      html.style.overflowY = '';
+      body.style.overflowY = '';
+      if (shellScrollContainer) {
+        shellScrollContainer.style.overflowY = '';
+        // Clear any scrollbar-hiding styles
+        (shellScrollContainer.style as any).scrollbarWidth = '';
+      }
+    };
+
+    if (activeTab === 'add-products') {
+      html.style.overflowY = 'hidden';
+      body.style.overflowY = 'hidden';
+      if (shellScrollContainer) {
+        shellScrollContainer.style.overflowY = 'hidden';
+        // Hide visual scrollbar track on supporting browsers
+        (shellScrollContainer.style as any).scrollbarWidth = 'none';
+      }
+    } else {
+      enableOuterScroll();
+    }
+
+    return enableOuterScroll;
+  }, [activeTab]);
   const receivePoBarPopupLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const estimatedDeliveryInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -548,8 +601,16 @@ export default function LabelOrderNewPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden -m-4 lg:-m-6" style={{ backgroundColor: PAGE_BG }}>
-
+    <div
+      ref={pageRootRef}
+      className={`flex flex-col h-full min-h-0 min-w-0 -m-4 lg:-m-6 flex-1 overflow-x-hidden${
+        activeTab === 'add-products' ? ' labels-page-root-no-scroll' : ''
+      }`}
+      style={{
+        backgroundColor: PAGE_BG,
+        overflowY: activeTab === 'add-products' ? 'hidden' : undefined,
+      }}
+    >
       {/* ── Top navigation bar ── */}
       <header
         style={{
@@ -674,6 +735,17 @@ export default function LabelOrderNewPage() {
           />
         </button>
       </header>
+
+      {/* CSS: hide outer page scrollbar on Add Products so only inner table scrolls */}
+      <style>{`
+        .labels-page-root-no-scroll {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .labels-page-root-no-scroll::-webkit-scrollbar {
+          display: none !important;
+        }
+      `}</style>
 
       {/* ── Workflow tabs ── */}
       <div
@@ -806,7 +878,15 @@ export default function LabelOrderNewPage() {
       </div>
 
       {/* ── Table + footer ── */}
-      <div style={{ padding: '0 24px 16px' }}>
+      <div
+        style={{
+          padding: '0 24px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
         <div
           style={{
             borderRadius: 12,
@@ -815,10 +895,20 @@ export default function LabelOrderNewPage() {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            flex: 1,
+            minHeight: 0,
           }}
         >
-        {/* Scrollable table area (height hugs content – no forced fill) */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
+        {/* Scrollable table area – fill available height to bottom */}
+        <div
+          style={{
+            width: '100%',
+            flex: 1,
+            minHeight: 0,
+            overflowX: 'auto',
+            overflowY: 'auto',
+          }}
+        >
           {activeTab === 'receive-po' ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
@@ -2111,9 +2201,18 @@ export default function LabelOrderNewPage() {
             {/* Complete Order */}
             <button
               type="button"
-              disabled={activeTab === 'receive-po' && receivedIds.size === 0}
+              disabled={
+                (activeTab === 'receive-po' && receivedIds.size === 0) ||
+                ((activeTab === 'add-products' || activeTab === 'submit-po') && addedIds.size === 0)
+              }
               onClick={() => {
-                if (activeTab === 'receive-po' && receivedIds.size === 0) return;
+                // Guard: no products/rows in current step, do nothing.
+                if (
+                  (activeTab === 'receive-po' && receivedIds.size === 0) ||
+                  ((activeTab === 'add-products' || activeTab === 'submit-po') && addedIds.size === 0)
+                ) {
+                  return;
+                }
 
                 // On Receive PO we always show the "Receive Label Order" / "Label Amount Changed" modal.
                 if (activeTab === 'receive-po') {
@@ -2121,7 +2220,13 @@ export default function LabelOrderNewPage() {
                   return;
                 }
 
-                // For Add Products / Submit PO, respect the "don't remind me" setting.
+                // On Add Products: go directly to Export Label Order modal (no intermediate confirm).
+                if (activeTab === 'add-products') {
+                  setExportModalOpen(true);
+                  return;
+                }
+
+                // On Submit PO, respect the "don't remind me" setting.
                 if (typeof window !== 'undefined') {
                   try {
                     const skipPrompt = window.localStorage.getItem('label_skip_complete_order_prompt');
@@ -2140,13 +2245,24 @@ export default function LabelOrderNewPage() {
                 fontWeight: 600,
                 color: '#FFFFFF',
                 backgroundColor:
-                  activeTab === 'receive-po' && receivedIds.size === 0 ? '#4B5563' : '#3B82F6',
+                  activeTab === 'receive-po' && receivedIds.size === 0
+                    ? '#4B5563'
+                    : (activeTab === 'add-products' || activeTab === 'submit-po') && addedIds.size === 0
+                    ? '#4B5563'
+                    : '#3B82F6',
                 border: 'none',
                 borderRadius: 10,
                 cursor:
-                  activeTab === 'receive-po' && receivedIds.size === 0 ? 'not-allowed' : 'pointer',
+                  (activeTab === 'receive-po' && receivedIds.size === 0) ||
+                  ((activeTab === 'add-products' || activeTab === 'submit-po') && addedIds.size === 0)
+                    ? 'not-allowed'
+                    : 'pointer',
                 whiteSpace: 'nowrap',
-                opacity: activeTab === 'receive-po' && receivedIds.size === 0 ? 0.7 : 1,
+                opacity:
+                  (activeTab === 'receive-po' && receivedIds.size === 0) ||
+                  ((activeTab === 'add-products' || activeTab === 'submit-po') && addedIds.size === 0)
+                    ? 0.7
+                    : 1,
               }}
             >
               Complete Order
