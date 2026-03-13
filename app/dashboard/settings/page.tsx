@@ -31,7 +31,7 @@ const TABS = [
   { id: 'amazon', label: 'Amazon Connection', icon: ShoppingCart },
   { id: 'doi', label: 'DOI', icon: Target },
   { id: 'forecast', label: 'Forecast', icon: TrendingUp },
-  { id: 'workflow', label: 'Workflow Overview', icon: Factory },
+  { id: 'workflow', label: 'Workflow Overview', icon: Factory, iconSrc: '/assets/workflow%20icon.png' },
 ];
 
 function SettingsContent() {
@@ -393,6 +393,7 @@ function SettingsContent() {
               {TABS.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
+                const iconSrc = 'iconSrc' in tab ? (tab as { iconSrc?: string }).iconSrc : undefined;
 
                 return (
                   <button
@@ -404,12 +405,20 @@ function SettingsContent() {
                       isActive && 'bg-[#0F172A] text-slate-50'
                     )}
                   >
-                    <Icon
-                      className={cn(
-                        'w-4 h-4',
-                        isActive ? 'text-slate-50' : 'text-slate-500'
-                      )}
-                    />
+                    {iconSrc ? (
+                      <img
+                        src={iconSrc}
+                        alt=""
+                        className={cn('w-4 h-4 flex-shrink-0 object-contain', isActive ? 'opacity-100' : 'opacity-70')}
+                      />
+                    ) : (
+                      <Icon
+                        className={cn(
+                          'w-4 h-4',
+                          isActive ? 'text-slate-50' : 'text-slate-500'
+                        )}
+                      />
+                    )}
                     <span className="font-medium tracking-tight">
                       {tab.label}
                     </span>

@@ -34,6 +34,16 @@ import {
   MoreVertical,
   Plus,
   ChevronDown,
+  FlaskConical,
+  Pill,
+  Shirt,
+  Gem,
+  Sparkles,
+  Package,
+  Sprout,
+  Wrench,
+  Type,
+  Link2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkflowTemplateModal } from './WorkflowTemplateModal';
@@ -169,6 +179,7 @@ function SortableStepCard({
   const [formType, setFormType] = useState<'unlocks' | 'unlocked_by'>('unlocks');
   const [formCompletion, setFormCompletion] = useState('full completion');
   const [formTargets, setFormTargets] = useState<string[]>([]);
+  const [showTargets, setShowTargets] = useState(false);
 
   const otherSteps = allStepLabels.filter(l => l !== step.label);
 
@@ -183,6 +194,7 @@ function SortableStepCard({
     setFormType('unlocks');
     setFormCompletion('full completion');
     setFormTargets([]);
+    setShowTargets(false);
     setShowForm(false);
   };
 
@@ -232,31 +244,57 @@ function SortableStepCard({
       </div>
 
       {/* Trigger pills + Add Trigger */}
-      <div className="flex flex-wrap gap-2">
-        {step.triggers.map((trigger, tIdx) => (
-          <div
-            key={tIdx}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#22C55E]/40 bg-[#22C55E]/10 text-xs font-medium"
-          >
-            <span className="text-[#4ADE80]">
-              {trigger.type === 'unlocks' ? 'Unlocks' : 'Unlocked by'}
-            </span>
-            <span className="text-slate-400">•</span>
-            <span className="text-slate-400">({trigger.completion})</span>
-            <ArrowRight className="w-3 h-3 text-slate-400" />
-            <span className="font-semibold text-slate-100">{trigger.targets.join(', ')}</span>
-            <button
-              onClick={() => onRemoveTrigger(step.id, tIdx)}
-              className="text-slate-500 hover:text-red-400 transition-colors ml-0.5"
+      <div className="flex flex-col gap-2">
+        {step.triggers.map((trigger, tIdx) => {
+          const isUnlocks = trigger.type === 'unlocks';
+          const targetsLabel = trigger.targets.join(', ');
+
+          return (
+            <div
+              key={tIdx}
+              className="inline-flex self-start items-center gap-2 px-3.5 py-1.5 rounded-lg border border-[#22C55E] bg-[#22C55E]/5 text-xs font-medium"
             >
-              ×
-            </button>
-          </div>
-        ))}
+              {/* Type label */}
+              <span className="text-[#22C55E] font-semibold">
+                {isUnlocks ? 'Unlocks' : 'Unlocked by'}
+              </span>
+
+              {/* Layout:
+                  Unlocks:  Type • (completion) → Targets
+                  Unlocked by: Type → Targets • (completion) */}
+              {isUnlocks ? (
+                <>
+                  <span className="text-[#22C55E]">•</span>
+                  <span className="text-[#22C55E]">({trigger.completion})</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#22C55E]" />
+                  <span className="font-medium text-slate-50">
+                    {targetsLabel}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="w-3.5 h-3.5 text-[#22C55E]" />
+                  <span className="font-medium text-slate-50">
+                    {targetsLabel}
+                  </span>
+                  <span className="text-[#22C55E]">•</span>
+                  <span className="text-[#22C55E]">({trigger.completion})</span>
+                </>
+              )}
+
+              <button
+                onClick={() => onRemoveTrigger(step.id, tIdx)}
+                className="ml-2 w-5 h-5 rounded-full bg-[#020617] flex items-center justify-center text-[11px] text-slate-100 hover:bg-slate-900 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
 
         <button
           onClick={() => setShowForm(v => !v)}
-          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           Add Trigger
@@ -265,91 +303,195 @@ function SortableStepCard({
 
       {/* Inline Add Trigger form */}
       {showForm && (
-        <div className="mt-1 rounded-xl border border-[#334155] bg-[#0F172A] p-4 flex flex-col gap-4">
-          {/* Type */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Type</p>
-            <div className="flex gap-2">
-              {(['unlocks', 'unlocked_by'] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setFormType(t)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                    formType === t
-                      ? 'bg-[#3B82F6] border-[#3B82F6] text-white'
-                      : 'bg-transparent border-[#334155] text-slate-400 hover:text-slate-200'
-                  )}
+        <div className="mt-1 flex flex-col gap-3">
+          {/* Top row with dropdown chips + actions */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4 flex-1">
+              {/* Type dropdown (always first) */}
+              <div className="relative">
+                <select
+                  value={formType}
+                  onChange={(e) =>
+                    setFormType(e.target.value === 'unlocks' ? 'unlocks' : 'unlocked_by')
+                  }
+                  className="h-8 pl-4 pr-7 rounded-md bg-[#4B5563] border border-[#334155] text-sm text-[#C7C7CC] focus:outline-none focus:ring-0 appearance-none"
                 >
-                  {t === 'unlocks' ? 'Unlocks' : 'Unlocked by'}
-                </button>
-              ))}
-            </div>
-          </div>
+                  <option value="unlocks">Unlocks</option>
+                  <option value="unlocked_by">Unlocked by</option>
+                </select>
+                <ChevronDown className="pointer-events-none w-3.5 h-3.5 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
+              </div>
 
-          {/* Completion */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">On completion</p>
-            <div className="flex flex-wrap gap-2">
-              {COMPLETION_OPTIONS.map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setFormCompletion(opt)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
-                    formCompletion === opt
-                      ? 'bg-[#22C55E]/20 border-[#22C55E]/50 text-[#4ADE80]'
-                      : 'bg-transparent border-[#334155] text-slate-400 hover:text-slate-200'
-                  )}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
+              {/* Order changes based on type:
+                  - Unlocks:  Type • Targets • "upon" • Completion
+                  - Unlocked by: Type • Completion • "of" • Targets */}
+              {formType === 'unlocks' ? (
+                <>
+                  {/* Targets dropdown-style container */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowTargets((v) => !v)}
+                      className="h-8 min-w-0 px-4 rounded-md bg-[#4B5563] border border-[#334155] text-sm text-[#C7C7CC] flex items-center justify-between gap-2 hover:border-[#475569] transition-colors w-auto"
+                    >
+                      <span className="whitespace-nowrap">
+                        {formTargets.length === 0 && 'Multiple Selected'}
+                        {formTargets.length === 1 && formTargets[0]}
+                        {formTargets.length > 1 && 'Multiple Selected'}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'w-3.5 h-3.5 text-slate-400 transition-transform',
+                          showTargets ? 'rotate-180' : ''
+                        )}
+                      />
+                    </button>
 
-          {/* Target steps */}
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Target steps</p>
-            <div className="flex flex-col gap-1.5">
-              {otherSteps.map(label => (
-                <label
-                  key={label}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#1A2235] border border-[#334155] cursor-pointer hover:border-[#3B82F6]/50 transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formTargets.includes(label)}
-                    onChange={() => toggleTarget(label)}
-                    className="w-3.5 h-3.5 rounded accent-[#3B82F6]"
-                  />
-                  <span className="text-sm text-slate-300">{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+                    {/* Target steps list as dropdown menu */}
+                    {showTargets && (
+                      <div className="absolute left-0 right-0 mt-1 rounded-lg bg-[#020617] border border-[#1F2937] shadow-lg z-20 max-h-48 overflow-y-auto">
+                        {otherSteps.map((label) => (
+                          <button
+                            type="button"
+                            key={label}
+                            onClick={() => toggleTarget(label)}
+                            className={cn(
+                              'w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-[#111827] flex items-center gap-2',
+                              formTargets.includes(label) && 'bg-[#111827]'
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              readOnly
+                              checked={formTargets.includes(label)}
+                              className="w-3.5 h-3.5 rounded accent-[#3B82F6]"
+                            />
+                            <span className="truncate">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={handleAdd}
-              disabled={formTargets.length === 0}
-              className={cn(
-                'px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors',
-                formTargets.length > 0
-                  ? 'bg-[#3B82F6] text-white hover:bg-[#2563EB]'
-                  : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                  <span className="text-xs text-slate-400 whitespace-nowrap">upon</span>
+
+                  {/* Completion dropdown */}
+                  <div className="relative">
+                    <select
+                      value={formCompletion}
+                      onChange={(e) => setFormCompletion(e.target.value)}
+                      className="h-8 pl-4 pr-7 rounded-md bg-[#4B5563] border border-[#334155] text-sm text-[#C7C7CC] focus:outline-none focus:ring-0 appearance-none"
+                    >
+                      {COMPLETION_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none w-3.5 h-3.5 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Completion dropdown */}
+                  <div className="relative">
+                    <select
+                      value={formCompletion}
+                      onChange={(e) => setFormCompletion(e.target.value)}
+                      className="h-8 pl-4 pr-7 rounded-md bg-[#4B5563] border border-[#334155] text-sm text-[#C7C7CC] focus:outline-none focus:ring-0 appearance-none"
+                    >
+                      {COMPLETION_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none w-3.5 h-3.5 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2" />
+                  </div>
+
+                  <span className="text-xs text-slate-400 whitespace-nowrap">of</span>
+
+                  {/* Targets dropdown-style container */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowTargets((v) => !v)}
+                      className="h-8 min-w-0 px-4 rounded-md bg-[#4B5563] border border-[#334155] text-sm text-[#C7C7CC] flex items-center justify-between gap-2 hover:border-[#475569] transition-colors w-auto"
+                    >
+                      <span className="whitespace-nowrap">
+                        {formTargets.length === 0 && 'Multiple Selected'}
+                        {formTargets.length === 1 && formTargets[0]}
+                        {formTargets.length > 1 && 'Multiple Selected'}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'w-3.5 h-3.5 text-slate-400 transition-transform',
+                          showTargets ? 'rotate-180' : ''
+                        )}
+                      />
+                    </button>
+
+                    {/* Target steps list as dropdown menu */}
+                    {showTargets && (
+                      <div className="absolute left-0 right-0 mt-1 rounded-lg bg-[#020617] border border-[#1F2937] shadow-lg z-20 max-h-48 overflow-y-auto">
+                        {otherSteps.map((label) => (
+                          <button
+                            type="button"
+                            key={label}
+                            onClick={() => toggleTarget(label)}
+                            className={cn(
+                              'w-full px-3 py-2 text-left text-xs text-slate-200 hover:bg-[#111827] flex items-center gap-2',
+                              formTargets.includes(label) && 'bg-[#111827]'
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              readOnly
+                              checked={formTargets.includes(label)}
+                              className="w-3.5 h-3.5 rounded accent-[#3B82F6]"
+                            />
+                            <span className="truncate">{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
-            >
-              Add Trigger
-            </button>
-            <button
-              onClick={() => { setShowForm(false); setFormTargets([]); }}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium text-slate-400 border border-[#334155] hover:text-slate-200 transition-colors"
-            >
-              Cancel
-            </button>
+            </div>
+
+            {/* Cancel / Save */}
+            <div className="flex items-center gap-1 ml-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setShowTargets(false);
+                  setFormTargets([]);
+                  setFormType('unlocks');
+                  setFormCompletion('full completion');
+                }}
+                className="w-[64px] h-6 rounded-md text-xs font-medium text-slate-200 bg-[#252F42] border border-[#334155] flex items-center justify-center hover:bg-[#111827] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={formTargets.length === 0}
+                className={cn(
+                  'w-[52px] h-6 rounded-md text-xs font-semibold flex items-center justify-center transition-colors',
+                  formTargets.length > 0
+                    ? 'bg-[#007AFF] text-white hover:bg-[#1D4ED8]'
+                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                )}
+              >
+                Save
+              </button>
+            </div>
           </div>
+
+          {/* (Targets dropdown list now lives inside the targets container above) */}
         </div>
       )}
     </div>
@@ -497,13 +639,20 @@ export function WorkflowOverview({
   const [workflowName, setWorkflowName] = useState(INITIAL_WORKFLOW_NAME);
   const [workflowDesc, setWorkflowDesc] = useState(INITIAL_WORKFLOW_DESC);
   const [workflowAccentColor, setWorkflowAccentColor] = useState(INITIAL_WORKFLOW_ACCENT);
+  const [workflowIcon, setWorkflowIcon] = useState('flask');
 
   // Saved state snapshot for unsaved-changes tracking
   const savedStateRef = useRef({
     workflowName: INITIAL_WORKFLOW_NAME,
     workflowDesc: INITIAL_WORKFLOW_DESC,
     workflowAccentColor: INITIAL_WORKFLOW_ACCENT,
-    productionSteps: INITIAL_STEPS.map(s => ({ id: s.id, enabled: s.enabled })),
+    workflowIcon: 'flask' as string,
+    // Track both enabled state and triggers so changes to triggers count as unsaved
+    productionSteps: INITIAL_STEPS.map(s => ({
+      id: s.id,
+      enabled: s.enabled,
+      triggers: s.triggers,
+    })),
     sidebarNavItems: INITIAL_NAV_ITEMS.map(i => ({
       id: i.id, enabled: i.enabled,
       children: i.children.map(c => ({ id: c.id, enabled: c.enabled })),
@@ -522,13 +671,36 @@ export function WorkflowOverview({
     if (workflowName !== saved.workflowName) identity++;
     if (workflowDesc !== saved.workflowDesc) identity++;
     if (workflowAccentColor !== saved.workflowAccentColor) identity++;
+    if (workflowIcon !== saved.workflowIcon) identity++;
 
     let steps = 0;
     const currentOrder = productionSteps.map(s => s.id);
     currentOrder.forEach((id, i) => { if (saved.stepOrder[i] !== id) steps++; });
     productionSteps.forEach(step => {
       const savedStep = saved.productionSteps.find(s => s.id === step.id);
-      if (savedStep && savedStep.enabled !== step.enabled) steps++;
+      if (!savedStep) {
+        steps++;
+        return;
+      }
+      if (savedStep.enabled !== step.enabled) steps++;
+      // Count trigger changes (added, removed, or edited)
+      const currentTriggers = step.triggers ?? [];
+      const savedTriggers = savedStep.triggers ?? [];
+      if (currentTriggers.length !== savedTriggers.length) {
+        steps++;
+      } else {
+        currentTriggers.forEach((t, idx) => {
+          const savedT = savedTriggers[idx];
+          if (
+            !savedT ||
+            savedT.type !== t.type ||
+            savedT.completion !== t.completion ||
+            savedT.targets.join('|') !== t.targets.join('|')
+          ) {
+            steps++;
+          }
+        });
+      }
     });
 
     let navigation = 0;
@@ -578,14 +750,19 @@ export function WorkflowOverview({
     ];
     const total = identity + steps + navigation + supply;
     return { sections, total };
-  }, [workflowName, workflowDesc, workflowAccentColor, productionSteps, sidebarNavItems, supplyChainItems]);
+  }, [workflowName, workflowDesc, workflowAccentColor, workflowIcon, productionSteps, sidebarNavItems, supplyChainItems]);
 
   const handleSaveChanges = () => {
     savedStateRef.current = {
       workflowName,
       workflowDesc,
       workflowAccentColor,
-      productionSteps: productionSteps.map(s => ({ id: s.id, enabled: s.enabled })),
+      workflowIcon,
+      productionSteps: productionSteps.map(s => ({
+        id: s.id,
+        enabled: s.enabled,
+        triggers: s.triggers,
+      })),
       sidebarNavItems: sidebarNavItems.map(i => ({
         id: i.id, enabled: i.enabled,
         children: i.children.map(c => ({ id: c.id, enabled: c.enabled })),
@@ -605,13 +782,16 @@ export function WorkflowOverview({
     setWorkflowName(saved.workflowName);
     setWorkflowDesc(saved.workflowDesc);
     setWorkflowAccentColor(saved.workflowAccentColor);
+    setWorkflowIcon(saved.workflowIcon);
     setProductionSteps(prev => {
       const reordered = saved.stepOrder
         .map(id => prev.find(s => s.id === id))
         .filter(Boolean) as ProductionStep[];
       return reordered.map(step => {
         const savedStep = saved.productionSteps.find(s => s.id === step.id);
-        return savedStep ? { ...step, enabled: savedStep.enabled } : step;
+        return savedStep
+          ? { ...step, enabled: savedStep.enabled, triggers: savedStep.triggers ?? [] }
+          : step;
       });
     });
     setSidebarNavItems(prev => prev.map(item => {
@@ -683,16 +863,16 @@ export function WorkflowOverview({
   };
 
   const WORKFLOW_ROWS = [
-    { id: 'identity',   icon: Network,       label: 'Workflow Identity',   sub: 'Name, icon, color' },
+    { id: 'identity',   icon: Type,          label: 'Workflow Identity',   sub: 'Name, icon, color' },
     { id: 'navigation', icon: LayoutList,     label: 'Sidebar Navigation',  sub: '5 primary  •  7 secondary' },
-    { id: 'steps',      icon: Layers,         label: 'Production Steps',    sub: '6 steps  •  3 active triggers' },
+    { id: 'steps',      icon: Box,            label: 'Production Steps',    sub: '6 steps  •  3 active triggers' },
     { id: 'supply',     icon: PackageSearch,  label: 'Supply Chain',        sub: '4 materials tracked' },
   ];
 
   const CONFIG_TABS = [
-    { id: 'identity',   icon: Tag,           label: 'Workflow Identity' },
+    { id: 'identity',   icon: Type,          label: 'Workflow Identity' },
     { id: 'navigation', icon: AlignJustify,  label: 'Sidebar Navigation' },
-    { id: 'steps',      icon: Layers,        label: 'Production Steps' },
+    { id: 'steps',      icon: Box,            label: 'Production Steps' },
     { id: 'supply',     icon: PackageSearch, label: 'Supply Chain' },
   ];
 
@@ -701,6 +881,18 @@ export function WorkflowOverview({
     '#8B5CF6', '#F472B6', '#38BDF8', '#D946EF',
     '#F97316', '#14B8A6',
   ];
+
+  const WORKFLOW_ICONS = [
+    { id: 'flask', Icon: FlaskConical },
+    { id: 'capsule', Icon: Pill },
+    { id: 'shirt', Icon: Shirt },
+    { id: 'ring', Icon: Gem },
+    { id: 'lipstick', Icon: Sparkles },
+    { id: 'can', Icon: Package },
+    { id: 'sprout', Icon: Sprout },
+    { id: 'tools', Icon: Wrench },
+    { id: 'factory', Icon: Factory },
+  ] as const;
 
   // ── Configure detail view ──────────────────────────────────────────
   if (workflowConfigTab !== null) {
@@ -758,7 +950,10 @@ export function WorkflowOverview({
             >
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-lg bg-[#1D4ED8]/30 border border-[#007AFF]/40 flex items-center justify-center">
-                  <Pencil className="w-4 h-4 text-[#60A5FA]" />
+                  {(() => {
+                    const { Icon } = WORKFLOW_ICONS.find(w => w.id === workflowIcon) ?? WORKFLOW_ICONS[0];
+                    return <Icon className="w-4 h-4 text-[#60A5FA]" />;
+                  })()}
                 </div>
                 <div>
                   <p className="font-semibold text-slate-50">{workflowName}</p>
@@ -802,12 +997,26 @@ export function WorkflowOverview({
             {/* Workflow Icon */}
             <div className="rounded-xl bg-[#1A2235] border border-[#334155] p-4 space-y-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Workflow Icon</p>
-              <button
-                className="w-10 h-10 rounded-lg border border-[#007AFF] flex items-center justify-center hover:bg-[#0B1120] transition-colors"
-                style={{ boxShadow: `0 0 0 1px ${workflowAccentColor}33` }}
-              >
-                <Pencil className="w-4 h-4 text-[#60A5FA]" />
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {WORKFLOW_ICONS.map(({ id, Icon }) => {
+                  const isSelected = workflowIcon === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setWorkflowIcon(id)}
+                      className={cn(
+                        'w-10 h-10 rounded-lg flex items-center justify-center transition-colors',
+                        isSelected
+                          ? 'border-2 border-[#60A5FA] bg-[#1E3A5F]/40 text-[#60A5FA]'
+                          : 'border border-[#334155] bg-[#0F172A] text-slate-400 hover:border-[#475569] hover:text-slate-300'
+                      )}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Accent Color */}
