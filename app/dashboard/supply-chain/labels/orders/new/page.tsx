@@ -975,10 +975,15 @@ export default function LabelOrderNewPage() {
                   receivePoRows.map((row) => {
                     const segments = getBarSegments();
                     const isReceived = receivedIds.has(row.id);
+                    const isHovered = hoveredRowId === row.id;
                     return (
                       <tr
                         key={row.id}
-                        style={{ backgroundColor: ROW_BG, borderTop: `1px solid ${BORDER_COLOR}`, height: 73 }}
+                        style={{
+                          backgroundColor: isHovered ? '#1A2636' : ROW_BG,
+                          borderTop: `1px solid ${BORDER_COLOR}`,
+                          height: 73,
+                        }}
                         onMouseEnter={() => setHoveredRowId(row.id)}
                         onMouseLeave={() => setHoveredRowId(null)}
                       >
@@ -1665,12 +1670,17 @@ export default function LabelOrderNewPage() {
             <tbody>
               {filteredRows.map((row) => {
                 const segments = getBarSegments();
+                const isHovered = hoveredRowId === row.id;
                 return (
                   <tr
                     key={row.id}
                     onMouseEnter={() => setHoveredRowId(row.id)}
                     onMouseLeave={() => setHoveredRowId(null)}
-                    style={{ backgroundColor: ROW_BG, borderTop: `1px solid ${BORDER_COLOR}`, height: 73 }}
+                    style={{
+                      backgroundColor: isHovered ? '#1A2636' : ROW_BG,
+                      borderTop: `1px solid ${BORDER_COLOR}`,
+                      height: 73,
+                    }}
                   >
                     {/* Checkbox */}
                     <td style={{ padding: '12px 8px 12px 16px', verticalAlign: 'middle' }}>
