@@ -20,6 +20,9 @@ import {
   LogOut,
   Bell,
   Pencil,
+  Check,
+  Plus,
+  Network,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
@@ -153,6 +156,21 @@ export function Sidebar() {
     'supply-chain': true,
   });
 
+  // Workflow dropdown state
+  const [workflowOpen, setWorkflowOpen] = useState(false);
+  const workflowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!workflowOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (workflowRef.current && !workflowRef.current.contains(e.target as Node)) {
+        setWorkflowOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [workflowOpen]);
+
   // Flyout state for collapsed sidebar
   const [flyout, setFlyout] = useState<{ itemId: string; anchorY: number } | null>(null);
   const flyoutCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -285,9 +303,10 @@ export function Sidebar() {
 
       {/* Workflow Selector */}
       {!sidebarCollapsed ? (
-        <div className="px-3 py-2.5 shrink-0">
+        <div className="px-3 py-2.5 shrink-0 relative" ref={workflowRef}>
           <button
             type="button"
+            onClick={() => setWorkflowOpen(prev => !prev)}
             className="w-full flex items-center hover:brightness-110 transition-all"
             style={{ height: 45, borderRadius: 8, border: '1px solid #334155', backgroundColor: '#1A2235', padding: 8, gap: 8 }}
           >
@@ -298,17 +317,65 @@ export function Sidebar() {
               <div className="text-sm font-semibold text-white leading-tight truncate">Bottling</div>
               <div className="text-xs text-white/50 leading-tight">Switch workflow</div>
             </div>
-            <ChevronDown className="w-4 h-4 text-white/50 shrink-0" />
+            <ChevronDown className={cn('w-4 h-4 text-white/50 shrink-0 transition-transform duration-200', workflowOpen && 'rotate-180')} />
           </button>
+
+          <AnimatePresence>
+            {workflowOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="absolute left-3 right-3 top-full mt-1 rounded-xl py-1.5 shadow-2xl z-50 overflow-hidden"
+                style={{ backgroundColor: '#1A2A3F', border: '1px solid #2D4060' }}
+              >
+                {/* Active workflow */}
+                <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg mx-1.5 mb-0.5" style={{ backgroundColor: '#243347' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-white leading-tight">Bottling</div>
+                    <div className="text-xs text-white/50 leading-tight mt-0.5">Liquid fill &amp; seal operations</div>
+                  </div>
+                  <Check className="w-4 h-4 text-blue-400 shrink-0" />
+                </div>
+
+                <div className="h-px bg-[#2D4060] mx-1.5 my-1" aria-hidden />
+
+                {/* Add Workflow */}
+                <button
+                  type="button"
+                  onClick={() => setWorkflowOpen(false)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors rounded-lg mx-1.5"
+                  style={{ width: 'calc(100% - 12px)' }}
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>Add Workflow</span>
+                </button>
+
+                {/* Workflow Settings */}
+                <button
+                  type="button"
+                  onClick={() => setWorkflowOpen(false)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors rounded-lg mx-1.5"
+                  style={{ width: 'calc(100% - 12px)' }}
+                >
+                  <Network className="w-4 h-4 shrink-0" />
+                  <span>Workflow Settings</span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       ) : (
         <div className="px-2 py-2 shrink-0 flex justify-center">
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center"
+          <button
+            type="button"
+            onClick={() => setWorkflowOpen(prev => !prev)}
+            className="w-9 h-9 rounded-lg flex items-center justify-center hover:brightness-110 transition-all"
             style={{ border: '1px solid #334155', backgroundColor: '#1A2235' }}
           >
             <Pencil className="w-4 h-4 text-blue-400" />
-          </div>
+          </button>
         </div>
       )}
 

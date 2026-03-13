@@ -31,7 +31,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
       {/* Main Content - margin transitions in sync with sidebar width (0.3s ease-in-out) */}
       <main
         className={cn(
-          'overflow-hidden flex flex-col min-h-0 bg-[#0B111E]',
+          'flex flex-col min-h-0 bg-[#0B111E] overflow-x-hidden',
           'transition-[margin-left] duration-300 ease-in-out'
         )}
         style={{
@@ -40,7 +40,9 @@ export function DashboardShell({ children }: DashboardShellProps) {
           marginLeft,
         }}
       >
-        <div className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden bg-[#0B111E]">
+        <div
+          className="px-4 pt-4 pb-0 lg:px-6 lg:pt-6 lg:pb-0 flex-1 min-h-0 min-w-0 flex flex-col bg-[#0B111E] overflow-y-auto"
+        >
           {children}
         </div>
       </main>
