@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ChevronDown, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 interface NewBottleOrderModalProps {
   isOpen: boolean;
@@ -27,6 +28,22 @@ export function NewBottleOrderModal({
   const [bottleOrderNumber, setBottleOrderNumber] = useState('');
   const [supplier, setSupplier] = useState('');
   const [supplierOpen, setSupplierOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && suppliers.length === 0) {
+      setLoadingSuppliers(true);
+      api.getBottleSuppliers()
+        .then((data) => {
+          setSuppliers(data.length > 0 ? data : ['Rhino Container', 'TricorBraun']);
+        })
+        .catch(() => {
+          setSuppliers(['Rhino Container', 'TricorBraun']);
+        })
+        .finally(() => setLoadingSuppliers(false));
+    }
+  }, [isOpen, suppliers.length]);
 
   const handleCancel = () => {
     setBottleOrderNumber('');
@@ -249,38 +266,51 @@ export function NewBottleOrderModal({
                       borderRadius: 8,
                       zIndex: 10000,
                       boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                      maxHeight: 200,
+                      overflowY: 'auto',
                     }}
                   >
-                    {['Rhino Container', 'Tricor Braun'].map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => {
-                          setSupplier(opt);
-                          setSupplierOpen(false);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          textAlign: 'left',
-                          fontSize: 14,
-                          color: TEXT_WHITE,
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor =
-                            'rgba(255,255,255,0.08)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        {opt}
-                      </button>
-                    ))}
+                    {loadingSuppliers ? (
+                      <div style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                        <span style={{ fontSize: 14, color: TEXT_MUTED }}>Loading...</span>
+                      </div>
+                    ) : suppliers.length === 0 ? (
+                      <div style={{ padding: '12px', fontSize: 14, color: TEXT_MUTED, textAlign: 'center' }}>
+                        No suppliers found
+                      </div>
+                    ) : (
+                      suppliers.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            setSupplier(opt);
+                            setSupplierOpen(false);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            textAlign: 'left',
+                            fontSize: 14,
+                            color: TEXT_WHITE,
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              'rgba(255,255,255,0.08)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
+                        >
+                          {opt}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </>
               )}

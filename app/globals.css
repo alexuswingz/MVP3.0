@@ -130,18 +130,21 @@
   transform: rotate(45deg);
 }
 
-/* No scroll on main page: hide scrollbar and disable overflow */
-html, body {
-  overflow: hidden;
-  scrollbar-width: none;
+/* Global scroll behaviour – allow page scroll, hide default scrollbar chrome */
+html,
+body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
   -ms-overflow-style: none;
 }
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  display: none;
+  width: 8px;
+  height: 8px;
 }
 
-/* Custom scrollbar for webkit browsers (inner elements only) */
+/* Custom scrollbar for webkit browsers (inner elements and page) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

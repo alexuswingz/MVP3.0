@@ -40,6 +40,7 @@ type TicketDetail = {
   ticketId: string;
   productName: string;
   productId: string;
+  productImageUrl?: string;
   brand: string;
   unit: string;
   subject: string;
@@ -94,6 +95,7 @@ type TableRow = {
   status: string;
   productName: string;
   productId: string;
+  productImageUrl?: string;
   productBrand?: string;
   productSize?: string;
   category: string;
@@ -273,6 +275,7 @@ function actionItemToTableRow(a: ActionItemResponse): TableRow {
     status: apiStatusToUi(a.status),
     productName: productName.length > SHORT_PRODUCT_NAME_MAX ? `${productName.slice(0, SHORT_PRODUCT_NAME_MAX - 1)}…` : productName,
     productId: (a.product_asin ?? '').trim() || '—',
+    productImageUrl: (a as any).product_image_url || undefined,
     productBrand: (a.product_brand ?? '').trim() || undefined,
     productSize: (a.product_size ?? '').trim() || undefined,
     category: apiCategoryToUi(a.category),
@@ -283,12 +286,13 @@ function actionItemToTableRow(a: ActionItemResponse): TableRow {
   };
 }
 
-function actionItemToTicketDetail(a: ActionItemResponse): TicketDetail {
+function actionItemToTicketDetail(a: ActionItemResponse, overrides?: { productImageUrl?: string }): TicketDetail {
   const productName = (a.product_name ?? '').trim() || '—';
   return {
     ticketId: `I-${a.id}`,
     productName,
     productId: (a.product_asin ?? '').trim() || '—',
+    productImageUrl: overrides?.productImageUrl || (a as any).product_image_url || undefined,
     brand: (a.product_brand ?? '').trim() || '—',
     unit: (a.product_size ?? '').trim() || '—',
     subject: (a.subject ?? '').trim() || '—',
@@ -330,6 +334,9 @@ function DueDateCalendarGrid({
   const nextDaysCount = totalCells - firstDay - daysInMonth;
   const nextDays = Array.from({ length: Math.max(0, nextDaysCount) }, (_, i) => i + 1);
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const isSelected = (day: number, isCurrent: boolean) =>
     isCurrent && selectedDate &&
     selectedDate.getDate() === day &&
@@ -343,15 +350,24 @@ function DueDateCalendarGrid({
       ))}
       {currentDays.map((day) => {
         const selected = isSelected(day, true);
+        const date = new Date(year, month, day);
+        date.setHours(0, 0, 0, 0);
+        const isPast = date < today;
         return (
           <button
             key={day}
             type="button"
-            onClick={() => onSelect(new Date(year, month, day))}
+            onClick={() => {
+              if (isPast) return;
+              onSelect(new Date(year, month, day));
+            }}
+            disabled={isPast}
             className={`w-8 h-8 flex items-center justify-center rounded-full text-sm transition-colors ${
               selected
                 ? 'bg-gray-600 text-white'
-                : 'text-white hover:bg-white/10'
+                : isPast
+                  ? 'text-gray-500 cursor-not-allowed'
+                  : 'text-white hover:bg-white/10'
             }`}
           >
             {day}
@@ -398,10 +414,10 @@ function DetailModalRow({ label, children, valueAlign = 'right', vertical = fals
   );
 }
 
-/** Status icons: In progress = progress.png, In review = time.png */
+/** Status icons: In Progress = progress.png, In Review = time.png (keys must match apiStatusToUi output) */
 const STATUS_ICONS: Record<string, string> = {
-  'In progress': '/assets/progress.png',
-  'In review': '/assets/time.png',
+  'In Progress': '/assets/progress.png',
+  'In Review': '/assets/time.png',
 };
 
 function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
@@ -448,6 +464,7 @@ type Product = {
   id: number;
   asin: string;
   name: string;
+  imageUrl?: string;
   brand: string;
   unit: string;
 };
@@ -486,6 +503,8 @@ function DetailModal({
   onDescriptionSave,
   onStatusChange,
   onAttachmentsChange,
+  onAssigneeChange,
+  onDueDateChange,
 }: {
   item: TicketDetail;
   onClose: () => void;
@@ -497,6 +516,8 @@ function DetailModal({
   onDescriptionSave: (html: string) => void;
   onStatusChange: (status: string) => void;
   onAttachmentsChange: (attachments: { name: string; url: string; type?: string; uploadedAt: string }[]) => void;
+  onAssigneeChange: (assignee: { name: string; initials: string }) => void;
+  onDueDateChange: (date: Date) => void;
 }) {
   const descriptionEditorRef = useRef<RichTextEditorHandle | null>(null);
   /** Capture editor content on Save mousedown (before blur) so we don't lose content to re-renders. */
@@ -505,17 +526,32 @@ function DetailModal({
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const attachments = item.attachments ?? [];
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+  const [dueDateCalendarOpen, setDueDateCalendarOpen] = useState(false);
+  const dueDateCalendarRef = useRef<HTMLDivElement>(null);
+  const [dueDateCalendarMonth, setDueDateCalendarMonth] = useState(() => {
+    const parsed = parseDueDate(item.dueDate || '');
+    return parsed ?? new Date();
+  });
 
   useEffect(() => {
-    if (!statusDropdownOpen) return;
+    if (!statusDropdownOpen && !assigneeDropdownOpen && !dueDateCalendarOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
         setStatusDropdownOpen(false);
+      }
+      if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(target)) {
+        setAssigneeDropdownOpen(false);
+      }
+      if (dueDateCalendarRef.current && !dueDateCalendarRef.current.contains(target)) {
+        setDueDateCalendarOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [statusDropdownOpen]);
+  }, [statusDropdownOpen, assigneeDropdownOpen, dueDateCalendarOpen]);
 
   return (
     <div
@@ -552,8 +588,12 @@ function DetailModal({
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'row', background: '#1A2235' }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 16, overflow: 'visible', overflowX: 'hidden' }} className="scrollbar-hide">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', flexShrink: 0 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                {item.productImageUrl ? (
+                  <Image src={item.productImageUrl} alt={item.productName} width={40} height={40} style={{ objectFit: 'cover' }} />
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#22c55e' }}><path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" /></svg>
+                )}
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <p
@@ -739,19 +779,19 @@ function DetailModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { onStatusChange('In progress'); setStatusDropdownOpen(false); }}
+                      onClick={() => { onStatusChange('In Progress'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                     >
-                      <StatusIcon status="In progress" size={12} />
-                      In progress
+                      <StatusIcon status="In Progress" size={12} />
+                      In Progress
                     </button>
                     <button
                       type="button"
-                      onClick={() => { onStatusChange('In review'); setStatusDropdownOpen(false); }}
+                      onClick={() => { onStatusChange('In Review'); setStatusDropdownOpen(false); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer', textAlign: 'left', borderTop: '1px solid #404040' }}
                     >
-                      <StatusIcon status="In review" size={12} />
-                      In review
+                      <StatusIcon status="In Review" size={12} />
+                      In Review
                     </button>
                     <button
                       type="button"
@@ -786,19 +826,93 @@ function DetailModal({
                   <span className="inline-flex items-center justify-center box-border truncate" style={{ minWidth: 72, height: 23, borderRadius: 4, padding: '4px 8px', gap: 10, color: '#12B981', fontSize: 12, fontWeight: 600, lineHeight: '100%', background: '#182A2C' }}>{item.category}</span>
                 )}
               </div>
-              <div>
+              <div style={{ position: 'relative' }} ref={assigneeDropdownRef}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Assigned To</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', width: '100%', maxWidth: 232 }}>
+                <button
+                  type="button"
+                  onClick={() => setAssigneeDropdownOpen((v) => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 6, border: '1px solid #404040', background: 'linear-gradient(90deg, #1A2235 0%, #1C2634 100%)', width: '100%', maxWidth: 232, cursor: 'pointer' }}
+                >
                   <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1e40af', color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.assigneeInitials}</span>
                   <span style={{ fontSize: 12, color: '#fff' }}>{item.assignee || 'Unassigned'}</span>
-                </div>
+                  <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {assigneeDropdownOpen && (
+                  <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: 4, minWidth: 232, borderRadius: 6, border: '1px solid #404040', background: '#0F172A', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 60, maxHeight: 260, overflowY: 'auto' }}>
+                    {MOCK_ASSIGNEES.map((assignee) => (
+                      <button
+                        key={assignee.name}
+                        type="button"
+                        onClick={() => {
+                          onAssigneeChange({ name: assignee.name, initials: assignee.initials });
+                          setAssigneeDropdownOpen(false);
+                        }}
+                        style={{ width: '100%', padding: '8px 12px', border: 'none', background: 'transparent', color: '#E5E7EB', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <span style={{ width: 20, height: 20, borderRadius: '50%', background: assignee.color, color: '#fff', fontSize: 10, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{assignee.initials}</span>
+                        <span style={{ fontSize: 12 }}>{assignee.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div>
+              <div style={{ position: 'relative' }} ref={dueDateCalendarRef}>
                 <p style={{ fontSize: 12, color: '#9ca3af', margin: '0 0 4px' }}>Due Date</p>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232 }}>
+                <button
+                  type="button"
+                  onClick={() => setDueDateCalendarOpen((v) => !v)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 4, border: '1px solid #404040', background: '#1A2235', width: '100%', maxWidth: 232, cursor: 'pointer' }}
+                >
                   <svg style={{ width: 14, height: 14, color: '#9ca3af', flexShrink: 0 }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   <span style={{ fontSize: 12, color: '#fff' }}>{item.dueDate || 'Select date'}</span>
-                </div>
+                  <svg style={{ width: 12, height: 12, marginLeft: 'auto', color: '#9ca3af' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {dueDateCalendarOpen && (
+                  <div
+                    className="absolute left-0 top-full mt-2 z-50 overflow-hidden shadow-xl box-border"
+                    style={{
+                      width: 304,
+                      padding: 16,
+                      borderRadius: 8,
+                      background: '#0F172A',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                        {MONTH_NAMES[dueDateCalendarMonth.getMonth()]} {dueDateCalendarMonth.getFullYear()}
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDueDateCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1))}
+                          className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDueDateCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1))}
+                          className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:bg白/10 hover:text-white transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {DAY_NAMES.map((d) => (
+                        <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
+                      ))}
+                    </div>
+                    <DueDateCalendarGrid
+                      currentMonth={dueDateCalendarMonth}
+                      selectedDate={parseDueDate(item.dueDate || '')}
+                      onSelect={(date) => {
+                        onDueDateChange(date);
+                        setDueDateCalendarOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ height: 1, background: '#404040', marginTop: 12, marginBottom: 12 }} />
@@ -932,6 +1046,7 @@ export function ActionItems() {
             id: p.id,
             asin: p.asin,
             name: p.name,
+            imageUrl: p.image_url || undefined,
             brand: p.brand_name ?? '',
             unit: p.size ?? '',
           }))
@@ -946,11 +1061,21 @@ export function ActionItems() {
     setItemsError(null);
     try {
       const list = await api.getActionItems({ ordering: '-created_at' });
-      const rows: TableRow[] = list.map(actionItemToTableRow);
+      let rows: TableRow[] = list.map(actionItemToTableRow);
       const details: Record<number, TicketDetail> = {};
       list.forEach((a) => {
-        details[a.id] = actionItemToTicketDetail(a);
+        const product = productsList.find((p) => p.asin === (a.product_asin ?? '').trim());
+        const productImageUrl = (a as any).product_image_url || product?.imageUrl || undefined;
+        details[a.id] = actionItemToTicketDetail(a, { productImageUrl });
       });
+      if (productsList.length > 0) {
+        rows = rows.map((row) => {
+          if (row.productImageUrl) return row;
+          const product = productsList.find((p) => p.asin === row.productId);
+          const imageUrl = product?.imageUrl || details[row.id]?.productImageUrl;
+          return imageUrl ? { ...row, productImageUrl: imageUrl } : row;
+        });
+      }
       setTableItems(rows);
       setTicketDetails(details);
     } catch (e) {
@@ -961,7 +1086,7 @@ export function ActionItems() {
     } finally {
       setItemsLoading(false);
     }
-  }, []);
+  }, [productsList]);
 
   useEffect(() => {
     fetchActionItems();
@@ -1134,7 +1259,7 @@ export function ActionItems() {
     if (checkedAssignees.length > 0) {
       list = list.filter((row) => checkedAssignees.includes(row.assignee ?? ''));
     }
-    const statusOrder = ['To Do', 'In progress', 'In review', 'Blocked', 'Completed'];
+    const statusOrder = ['To Do', 'In Progress', 'In Review', 'Blocked', 'Completed'];
     const categoryOrder = ['Ads', 'Inventory', 'PDP', 'Price'];
     if (appliedStatusFilter.sortOrder) {
       list = [...list].sort((a, b) => {
@@ -1250,7 +1375,7 @@ export function ActionItems() {
 
   const hasActiveStatusFilter = useMemo(() => {
     const { sortOrder, selectedStatuses } = appliedStatusFilter;
-    const allChecked = ['To Do', 'In progress', 'In review', 'Completed'].every(
+    const allChecked = ['To Do', 'In Progress', 'In Review', 'Completed'].every(
       (s) => selectedStatuses[s]
     );
     return sortOrder != null || !allChecked;
@@ -1898,18 +2023,45 @@ export function ActionItems() {
                         <span
                           role="checkbox"
                           aria-checked={checkedRowIds.has(row.id)}
-                          onClick={(e) => { e.stopPropagation(); setCheckedRowIds((prev) => { const next = new Set(prev); if (next.has(row.id)) next.delete(row.id); else next.add(row.id); return next; }); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCheckedRowIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(row.id)) next.delete(row.id);
+                              else next.add(row.id);
+                              return next;
+                            });
+                          }}
                           className="flex-shrink-0 w-4 h-4 rounded flex items-center justify-center border-2 cursor-pointer"
                           style={{ borderColor: checkedRowIds.has(row.id) ? '#3B82F6' : '#6b7280', background: checkedRowIds.has(row.id) ? '#3B82F6' : 'transparent' }}
                         >
                           {checkedRowIds.has(row.id) && (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
                           )}
                         </span>
-                        <div className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}>
-                          <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                          </svg>
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            minWidth: 36,
+                            borderRadius: 3,
+                            overflow: 'hidden',
+                            backgroundColor: '#374151',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            color: '#6B7280',
+                            fontSize: 12,
+                          }}
+                        >
+                          {row.productImageUrl ? (
+                            <Image src={row.productImageUrl} alt={row.productName} width={36} height={36} style={{ objectFit: 'cover' }} />
+                          ) : (
+                            'No img'
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p
@@ -2242,6 +2394,43 @@ export function ActionItems() {
               });
             }
           }}
+          onAssigneeChange={({ name, initials }) => {
+            if (selectedDetailId == null) return;
+            const id = selectedDetailId;
+            setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, assignee: name, assigneeInitials: initials } : r)));
+            setTicketDetails((prev) => {
+              const existing = prev[id];
+              const row = tableItems.find((r) => r.id === id);
+              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+              if (!base) return prev;
+              return { ...prev, [id]: { ...base, assignee: name, assigneeInitials: initials } };
+            });
+            api.updateActionItem(id, {
+              assignee_name: name,
+              assignee_initials: initials,
+            }).catch((e) =>
+              toast.error('Failed to update assignee', { description: e instanceof Error ? e.message : 'Unknown error' })
+            );
+          }}
+          onDueDateChange={(date) => {
+            if (selectedDetailId == null) return;
+            const id = selectedDetailId;
+            const display = formatDueDateTable(date);
+            const iso = formatDueDateIso(date);
+            setTableItems((prev) => prev.map((r) => (r.id === id ? { ...r, dueDate: display } : r)));
+            setTicketDetails((prev) => {
+              const existing = prev[id];
+              const row = tableItems.find((r) => r.id === id);
+              const base = existing ?? (row ? ticketDetailFromRow(row, { createdBy: createdByDisplay, createdByInitials: createdByInitialsDisplay }) : null);
+              if (!base) return prev;
+              return { ...prev, [id]: { ...base, dueDate: display } };
+            });
+            api.updateActionItem(id, {
+              due_date: iso,
+            }).catch((e) =>
+              toast.error('Failed to update due date', { description: e instanceof Error ? e.message : 'Unknown error' })
+            );
+          }}
         />
       )}
 
@@ -2356,7 +2545,7 @@ export function ActionItems() {
                               product.asin.toLowerCase().includes(q) ||
                               (product.brand && product.brand.toLowerCase().includes(q))
                             );
-                          });
+                          }).sort((a, b) => a.name.localeCompare(b.name));
                           if (filtered.length === 0) {
                             return (
                               <div className="px-4 py-3 text-sm text-gray-500" style={{ background: '#0F172A' }}>
@@ -2365,45 +2554,59 @@ export function ActionItems() {
                             );
                           }
                           return filtered.map((product) => (
-                          <button
-                            key={product.asin}
-                            type="button"
-                            onClick={() => {
-                              setNewItem((p) => ({
-                                ...p,
-                                product: product.name,
-                                productId: product.asin,
-                                productBrand: product.brand,
-                                productUnit: product.unit,
-                              }));
-                              setProductSearch(product.name);
-                              setIsProductDropdownOpen(false);
-                            }}
-                            className="w-full text-left border-b border-[#111827] last:border-b-0 hover:bg-white/5 transition-colors"
-                            style={{ padding: '10px 14px', background: '#0F172A' }}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 overflow-hidden"
-                                style={{ background: 'linear-gradient(135deg, #19212E 0%, #223042 50%, #11161D 100%)' }}
-                              >
-                                <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M12 22s8-4 8-10c0-3.5-2.5-6-5.5-6.5.5-1.5 0-3.5-1.5-4.5-1.5-1-3.5-.5-4.5 1.5C10.5 6 8 8.5 8 12c0 6 8 10 8 10z" />
-                                </svg>
+                            <button
+                              key={product.asin}
+                              type="button"
+                              onClick={() => {
+                                setNewItem((p) => ({
+                                  ...p,
+                                  product: product.name,
+                                  productId: product.asin,
+                                  productBrand: product.brand,
+                                  productUnit: product.unit,
+                                }));
+                                setProductSearch(product.name);
+                                setIsProductDropdownOpen(false);
+                              }}
+                              className="w-full text-left border-b border-[#111827] last:border-b-0 hover:bg-white/5 transition-colors"
+                              style={{ padding: '10px 14px', background: '#0F172A' }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    minWidth: 36,
+                                    borderRadius: 3,
+                                    overflow: 'hidden',
+                                    backgroundColor: '#374151',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    color: '#6B7280',
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  {product.imageUrl ? (
+                                    <Image src={product.imageUrl} alt={product.name} width={36} height={36} style={{ objectFit: 'cover' }} />
+                                  ) : (
+                                    'No img'
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-white truncate">{product.name}</p>
+                                  <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    <span>{product.asin}</span>
+                                    <span>•</span>
+                                    <span>{product.brand}</span>
+                                    <span>•</span>
+                                    <span>{product.unit}</span>
+                                  </p>
+                                </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-white truncate">{product.name}</p>
-                                <p className="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span>{product.asin}</span>
-                                  <span>•</span>
-                                  <span>{product.brand}</span>
-                                  <span>•</span>
-                                  <span>{product.unit}</span>
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        ));
+                            </button>
+                          ));
                         })()}
                       </div>
                     </div>
@@ -2731,8 +2934,12 @@ export function ActionItems() {
 
                   try {
                     const created = await api.createActionItem(payload);
-                    setTableItems((prev) => [actionItemToTableRow(created), ...prev]);
-                    setTicketDetails((prev) => ({ ...prev, [created.id]: actionItemToTicketDetail(created) }));
+                    const createdRow = actionItemToTableRow(created);
+                    const product = productsList.find((p) => p.asin === createdRow.productId);
+                    const productImageUrl = createdRow.productImageUrl || product?.imageUrl || undefined;
+                    const createdDetail = actionItemToTicketDetail(created, { productImageUrl });
+                    setTableItems((prev) => [createdRow, ...prev]);
+                    setTicketDetails((prev) => ({ ...prev, [created.id]: createdDetail }));
                     setShowNewActionModal(false);
                     setShowActionCreatedToast(true);
                     setNewItem({

@@ -12,23 +12,37 @@ import {
   Shield,
   Save,
   Check,
-  Clock,
   Factory,
   Ship,
   ShoppingCart,
+<<<<<<< Updated upstream
+  ClipboardList,
+  Search,
+=======
+  GitBranch,
+>>>>>>> Stashed changes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { AmazonAccountConnect } from '@/components/settings/AmazonAccountConnect';
+import { WorkflowOverview, type UnsavedInfo } from '@/components/settings/WorkflowOverview';
 
 const TABS = [
+<<<<<<< Updated upstream
+  { id: 'account', label: 'My Account', icon: User },
+=======
   { id: 'amazon', label: 'Amazon Accounts', icon: ShoppingCart },
   { id: 'doi', label: 'DOI Settings', icon: Target },
   { id: 'forecast', label: 'Forecast', icon: TrendingUp },
+  { id: 'workflow-overview', label: 'Workflow Overview', icon: GitBranch },
+>>>>>>> Stashed changes
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'account', label: 'Account', icon: User },
   { id: 'security', label: 'Security', icon: Shield },
+  { id: 'amazon', label: 'Amazon Connection', icon: ShoppingCart },
+  { id: 'doi', label: 'DOI', icon: Target },
+  { id: 'forecast', label: 'Forecast', icon: TrendingUp },
+  { id: 'workflow', label: 'Workflow Overview', icon: Factory, iconSrc: '/assets/workflow%20icon.png' },
 ];
 
 function SettingsContent() {
@@ -37,12 +51,21 @@ function SettingsContent() {
   const [activeTab, setActiveTab] = useState(tabFromUrl || 'amazon');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-
   useEffect(() => {
     if (tabFromUrl) {
       setActiveTab(tabFromUrl);
     }
   }, [tabFromUrl]);
+
+  // Clear workflow unsaved panel when navigating away from workflow tab
+  useEffect(() => {
+    if (activeTab !== 'workflow') {
+      setWorkflowUnsaved(null);
+    }
+  }, [activeTab]);
+
+  const [workflowUnsaved, setWorkflowUnsaved] = useState<UnsavedInfo | null>(null);
+  const [workflowSearch, setWorkflowSearch] = useState('');
 
   const [doiSettings, setDoiSettings] = useState({
     amazonDOIGoal: 120,
@@ -69,7 +92,7 @@ function SettingsContent() {
     switch (activeTab) {
       case 'amazon':
         return <AmazonAccountConnect />;
-        
+
       case 'doi':
         return (
           <div className="space-y-6">
@@ -302,6 +325,14 @@ function SettingsContent() {
           </div>
         );
 
+      case 'workflow':
+        return (
+          <WorkflowOverview
+            onUnsavedChangesChange={setWorkflowUnsaved}
+            searchQuery={workflowSearch}
+          />
+        );
+
       default:
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -316,7 +347,7 @@ function SettingsContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full min-h-0 space-y-6">
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -329,35 +360,165 @@ function SettingsContent() {
             Configure your inventory management preferences
           </p>
         </div>
+
+        {/* Global search (always visible, filters Workflow steps when on Workflow tab) */}
+        <div className="flex items-center">
+          <div className="relative" style={{ width: 204 }}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+            <input
+              type="text"
+              placeholder="Search workflow steps…"
+              value={workflowSearch}
+              onChange={(e) => setWorkflowSearch(e.target.value)}
+              style={{
+                height: 32,
+                borderRadius: 6,
+                border: '1px solid #334155',
+                paddingLeft: 8 + 10 + 8, // icon (approx) + gap + inner padding
+                paddingRight: 8,
+                paddingTop: 8,
+                paddingBottom: 8,
+                backgroundColor: '#4B5563',
+              }}
+              className="w-full text-sm text-slate-50 placeholder:text-slate-300 focus:outline-none focus:border-[#3B82F6] focus:ring-1 focus:ring-[#3B82F6]/40"
+            />
+          </div>
+        </div>
       </motion.div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="w-full lg:w-64 flex-shrink-0"
+          className="w-[224px] flex-shrink-0 flex flex-col gap-3 lg:sticky lg:top-4 self-start"
         >
-          <div className="bg-background-secondary border border-border rounded-xl p-2">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all',
-                    activeTab === tab.id
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{tab.label}</span>
-                </button>
-              );
-            })}
+<<<<<<< Updated upstream
+          <div
+            className={cn(
+              'rounded-xl p-4 border',
+              'bg-[#1A2235] border-[#334155] shadow-[0_18px_45px_rgba(15,23,42,0.9)]'
+            )}
+          >
+            <div className="space-y-2">
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                const iconSrc = 'iconSrc' in tab ? (tab as { iconSrc?: string }).iconSrc : undefined;
+
+=======
+          <div className="space-y-0">
+            <div className="bg-background-secondary border border-border rounded-xl p-2">
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+>>>>>>> Stashed changes
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+<<<<<<< Updated upstream
+                      'w-full h-8 flex items-center gap-2 px-3 rounded text-left text-sm transition-colors',
+                      'text-slate-400 hover:bg-white/5 hover:text-slate-50',
+                      isActive && 'bg-[#0F172A] text-slate-50'
+                    )}
+                  >
+                    {iconSrc ? (
+                      <img
+                        src={iconSrc}
+                        alt=""
+                        className={cn('w-4 h-4 flex-shrink-0 object-contain', isActive ? 'opacity-100' : 'opacity-70')}
+                      />
+                    ) : (
+                      <Icon
+                        className={cn(
+                          'w-4 h-4',
+                          isActive ? 'text-slate-50' : 'text-slate-500'
+                        )}
+                      />
+                    )}
+                    <span className="font-medium tracking-tight">
+                      {tab.label}
+                    </span>
+=======
+                      'w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all',
+                      activeTab === tab.id
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-foreground-secondary hover:bg-background-tertiary hover:text-foreground-primary'
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{tab.label}</span>
+>>>>>>> Stashed changes
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Unsaved changes panel — shown below sidebar when workflow has changes */}
+          {workflowUnsaved && activeTab === 'workflow' && (
+            <div className="flex flex-col gap-2">
+              {/* Save Changes button */}
+              <button
+                onClick={workflowUnsaved.onSave}
+                className="w-full flex items-center justify-center gap-[10px] rounded text-sm font-semibold text-white transition-colors"
+                style={{
+                  height: 31,
+                  backgroundColor: '#007AFF',
+                  borderRadius: 4,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0062CC')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#007AFF')}
+              >
+                Save Changes
+              </button>
+
+              {/* Cancel button */}
+              <button
+                onClick={workflowUnsaved.onCancel}
+                className="w-full flex items-center justify-center gap-[10px] text-sm font-medium text-slate-300 transition-colors"
+                style={{
+                  height: 31,
+                  borderRadius: 4,
+                  backgroundColor: '#252F42',
+                  border: '1px solid #334155',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#2d3a52')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#252F42')}
+              >
+                Cancel
+              </button>
+
+              {/* Unsaved Changes info card */}
+              <div
+                style={{
+                  backgroundColor: '#1A2235',
+                  border: '1px solid #334155',
+                  borderRadius: 12,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-slate-200">
+                    Unsaved Changes ({workflowUnsaved.total})
+                  </p>
+                </div>
+                <ul className="flex flex-col gap-1.5 pl-1">
+                  {workflowUnsaved.sections.map(sec => (
+                    <li key={sec.label} className="flex items-center gap-2 text-xs text-slate-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] flex-shrink-0" />
+                      {sec.label} ({sec.count})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Content */}
@@ -365,7 +526,8 @@ function SettingsContent() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex-1"
+          className="flex-1 min-h-0 overflow-y-auto pr-2"
+          style={{ scrollbarGutter: 'stable' }}
         >
           {renderContent()}
         </motion.div>

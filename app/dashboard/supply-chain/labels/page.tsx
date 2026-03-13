@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Search, ChevronDown, Tag, Settings } from 'lucide-react';
+import { MoreVertical, Search, ChevronDown, Tag } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useUIStore } from '@/stores/ui-store';
 import { NewLabelOrderModal, type NewLabelOrderForm } from '../components/NewLabelOrderModal';
@@ -11,6 +11,22 @@ const LABEL_TABS = ['Inventory', 'Orders', 'Archive'] as const;
 type LabelTabId = (typeof LABEL_TABS)[number];
 
 type LabelStatus = 'Up to Date' | 'Needs Update' | 'Outdated';
+
+type StepStatus = 'not-started' | 'in-progress' | 'completed';
+type OrderStatus = 'Submitted' | 'Draft' | 'Partially Received';
+
+interface LabelOrderRow {
+  id: string;
+  date: string;
+  supplier: string;
+  status: OrderStatus;
+  addProducts: StepStatus;
+  submitPO: StepStatus;
+  receivePO: StepStatus;
+  archive: boolean;
+  productIds?: string[];
+  productQuantities?: Record<string, string>;
+}
 
 interface LabelRow {
   id: string;
@@ -45,6 +61,56 @@ const STATUS_STYLE: Record<LabelStatus, { color: string; dot: string }> = {
   'Needs Update': { color: '#F9FAFB', dot: '#F59E0B' },
   'Outdated':     { color: '#F9FAFB', dot: '#EF4444' },
 };
+
+const ORDER_STATUS_STYLES: Record<OrderStatus, { bg: string; color: string; dot: string }> = {
+  Submitted: { bg: '#1E293B', color: '#9CA3AF', dot: '#6B7280' },
+  Draft: { bg: '#1E293B', color: '#9CA3AF', dot: '#3B82F6' },
+  'Partially Received': { bg: '#1E293B', color: '#9CA3AF', dot: '#F59E0B' },
+};
+
+function StepCircle({ status }: { status: StepStatus }) {
+  if (status === 'completed') {
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          backgroundColor: '#22C55E',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  if (status === 'in-progress') {
+    return (
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          backgroundColor: '#3B82F6',
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: '50%',
+        border: '2px solid #4B5563',
+        display: 'inline-block',
+        boxSizing: 'border-box',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 function ProductThumbnail({ color, size = 36 }: { color: string; size?: number }) {
   return (
@@ -83,6 +149,15 @@ export default function LabelsPage() {
   const theme = useUIStore((s) => s.theme);
   const isDarkMode = theme !== 'light';
 
+  const [orders, setOrders] = useState<LabelOrderRow[]>([]);
+  const [completionToastDate, setCompletionToastDate] = useState<string | null>(null);
+<<<<<<< Updated upstream
+  const [receivedToastDate, setReceivedToastDate] = useState<string | null>(null);
+  const [archivedToastDate, setArchivedToastDate] = useState<string | null>(null);
+  const [archiveConfirmOrderId, setArchiveConfirmOrderId] = useState<string | null>(null);
+=======
+>>>>>>> Stashed changes
+
   useEffect(() => {
     if (!settingsDropdownOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -106,6 +181,86 @@ export default function LabelsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [actionMenuOpenId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const raw = window.localStorage.getItem('label_orders');
+      if (raw) {
+        const saved = JSON.parse(raw) as LabelOrderRow[];
+        setOrders(saved);
+      }
+    } catch (_) {}
+
+    const params = new URLSearchParams(window.location.search);
+<<<<<<< Updated upstream
+    const tab = params.get('tab');
+    if (tab === 'Orders' || tab === 'Archive') {
+      setActiveTab(tab as LabelTabId);
+=======
+    if (params.get('tab') === 'Orders') {
+      setActiveTab('Orders');
+>>>>>>> Stashed changes
+      const url = new URL(window.location.href);
+      url.searchParams.delete('tab');
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    try {
+      const lastDate = window.sessionStorage.getItem('last_label_order_complete_date');
+      if (lastDate) {
+        setCompletionToastDate(lastDate);
+        window.sessionStorage.removeItem('last_label_order_complete_date');
+      }
+    } catch (_) {}
+<<<<<<< Updated upstream
+
+    try {
+      const lastReceived = window.sessionStorage.getItem('last_label_order_received_date');
+      if (lastReceived) {
+        setReceivedToastDate(lastReceived);
+        window.sessionStorage.removeItem('last_label_order_received_date');
+      }
+    } catch (_) {}
+
+    try {
+      const lastArchived = window.sessionStorage.getItem('last_label_order_archived_date');
+      if (lastArchived) {
+        setArchivedToastDate(lastArchived);
+        window.sessionStorage.removeItem('last_label_order_archived_date');
+      }
+    } catch (_) {}
+=======
+>>>>>>> Stashed changes
+  }, []);
+
+  useEffect(() => {
+    if (!completionToastDate) return;
+    const id = window.setTimeout(() => {
+      setCompletionToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [completionToastDate]);
+
+<<<<<<< Updated upstream
+  useEffect(() => {
+    if (!receivedToastDate) return;
+    const id = window.setTimeout(() => {
+      setReceivedToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [receivedToastDate]);
+
+  useEffect(() => {
+    if (!archivedToastDate) return;
+    const id = window.setTimeout(() => {
+      setArchivedToastDate(null);
+    }, 4000);
+    return () => window.clearTimeout(id);
+  }, [archivedToastDate]);
+
+=======
+>>>>>>> Stashed changes
   const filteredLabels = useMemo(() => {
     const base = MOCK_LABELS.filter((l) =>
       activeTab === 'Archive' ? false : true
@@ -126,6 +281,9 @@ export default function LabelsPage() {
 
   const ROW_BG = '#1A2235';
   const BORDER_COLOR = '#374151';
+
+  const ordersList = useMemo(() => orders.filter((o) => !o.archive), [orders]);
+  const archivedOrders = useMemo(() => orders.filter((o) => o.archive), [orders]);
 
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-6 bg-[#0B111E] -m-4 pt-9 px-4 pb-0 lg:-m-6 lg:pt-11 lg:px-6 lg:pb-0">
@@ -152,11 +310,12 @@ export default function LabelsPage() {
             aria-label="Labels section"
             className="flex items-center overflow-hidden"
             style={{
-              height: 32,
+              height: 31,
               borderRadius: 6,
               border: '1px solid #334155',
-              backgroundColor: '#1E293B',
-              padding: 2,
+              backgroundColor: '#0B111E',
+              padding: 4,
+              gap: 4,
             }}
           >
             {LABEL_TABS.map((tab) => {
@@ -195,8 +354,15 @@ export default function LabelsPage() {
           {/* Cycle Counts */}
           <button
             type="button"
-            className="flex items-center justify-center shrink-0 text-sm font-medium rounded-md transition-opacity hover:opacity-90"
-            style={{ height: 32, paddingLeft: 14, paddingRight: 14, backgroundColor: '#EAB308', color: '#1F2937' }}
+            className="flex items-center justify-center shrink-0 text-xs font-medium rounded-md transition-opacity hover:opacity-90"
+            style={{
+              height: 23,
+              minWidth: 101,
+              padding: '4px 10px',
+              borderRadius: 4,
+              backgroundColor: '#FFD000',
+              color: '#111827',
+            }}
           >
             Cycle Counts
           </button>
@@ -228,7 +394,14 @@ export default function LabelsPage() {
             type="button"
             onClick={() => setNewOrderModalOpen(true)}
             className="flex items-center justify-center gap-2 shrink-0 text-sm font-medium rounded-md transition-opacity hover:opacity-90"
-            style={{ height: 32, paddingLeft: 14, paddingRight: 14, backgroundColor: '#3B82F6', color: '#FFFFFF' }}
+            style={{
+              height: 32,
+              minWidth: 118,
+              padding: '0 14px',
+              borderRadius: 4,
+              backgroundColor: '#007AFF',
+              color: '#FFFFFF',
+            }}
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
             New Order
@@ -246,7 +419,11 @@ export default function LabelsPage() {
               aria-haspopup="true"
               style={{ color: '#9CA3AF' }}
             >
-              <Settings className="w-5 h-5" />
+              <img
+                src="/assets/Icon%20Button.png"
+                alt="Settings"
+                style={{ width: 20, height: 20, display: 'block' }}
+              />
             </button>
             {settingsDropdownOpen && (
               <div
@@ -273,34 +450,698 @@ export default function LabelsPage() {
       {/* ── Content ── */}
       <div className="mt-[60px]">
         {activeTab === 'Orders' ? (
-          /* ── Orders placeholder ── */
-          <div
-            style={{
-              borderRadius: 12,
-              border: '1px solid #1A2235',
-              backgroundColor: '#1A2235',
-              padding: '48px',
-              textAlign: 'center',
-              color: '#9CA3AF',
-              fontSize: 14,
-            }}
-          >
-            No label orders yet. Click &quot;+ New Order&quot; to create one.
+          <div style={{ position: 'relative' }}>
+            {ordersList.length === 0 ? (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  backgroundColor: '#1A2235',
+                  padding: '48px',
+                  textAlign: 'center',
+                  color: '#9CA3AF',
+                  fontSize: 14,
+                }}
+              >
+                No label orders yet. Click &quot;+ New Order&quot; to create one.
+              </div>
+            ) : (
+<<<<<<< Updated upstream
+              <div>
+=======
+>>>>>>> Stashed changes
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  overflow: 'hidden',
+                  backgroundColor: '#1A2235',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+<<<<<<< Updated upstream
+              <div style={{ maxHeight: 620, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+=======
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+>>>>>>> Stashed changes
+                  <thead
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10,
+                      backgroundColor: '#1A2235',
+                    }}
+                  >
+                    <tr>
+                      {['STATUS', 'LABEL ORDER #', 'SUPPLIER', 'ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].map(
+                        (col) => {
+                          const centered = ['ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].includes(col);
+                          return (
+                            <th
+                              key={col}
+                              style={{
+                                padding: '16px 20px',
+                                textAlign: centered ? 'center' : 'left',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#9CA3AF',
+                                letterSpacing: '0.06em',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {col}
+                            </th>
+                          );
+                        },
+                      )}
+                      <th style={{ padding: '16px 20px', width: 48 }} />
+                    </tr>
+                    <tr style={{ height: 1 }}>
+                      <td colSpan={7} style={{ padding: 0 }}>
+                        <div
+                          style={{
+                            marginLeft: 20,
+                            marginRight: 20,
+                            height: 1,
+                            backgroundColor: '#374151',
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersList.map((order, i) => {
+                      const st = ORDER_STATUS_STYLES[order.status];
+                      return (
+                        <React.Fragment key={order.id}>
+                          {i > 0 && (
+                            <tr style={{ height: 1 }}>
+                              <td colSpan={7} style={{ padding: 0 }}>
+                                <div
+                                  style={{
+                                    marginLeft: 20,
+                                    marginRight: 20,
+                                    height: 1,
+                                    backgroundColor: '#374151',
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            style={{
+                              backgroundColor: '#1A2235',
+                              cursor: 'pointer',
+                              height: 56,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1A2636')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1A2235')}
+                          >
+                            {/* STATUS */}
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: 170,
+                                  minWidth: 170,
+                                  padding: '4px 12px',
+                                  gap: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: st.bg,
+                                  border: '1px solid #334155',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
+                                >
+<<<<<<< Updated upstream
+                                  {order.status === 'Partially Received' ? (
+                                    <img
+                                      src="/assets/partial.png"
+                                      alt="Partially received"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Submitted' ? (
+                                    <img
+                                      src="/assets/submitted.png"
+                                      alt="Submitted"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Draft' ? (
+                                    <img
+                                      src="/assets/drafts.png"
+                                      alt="Draft"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : (
+                                    <span
+                                      style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        backgroundColor: st.dot,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  )}
+=======
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      backgroundColor: st.dot,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+>>>>>>> Stashed changes
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: 500,
+                                      color: st.color,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="#9CA3AF"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                              </div>
+                            </td>
+
+                            {/* LABEL ORDER # */}
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                }}
+                              >
+                                <a
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    try {
+                                      sessionStorage.setItem('resume_label_order_id', order.id);
+                                    } catch (_) {}
+<<<<<<< Updated upstream
+                                    const targetTab =
+                                      order.addProducts === 'completed' ? 'receive-po' : 'add-products';
+                                    router.push(
+                                      `/dashboard/supply-chain/labels/orders/new?tab=${targetTab}`,
+                                    );
+=======
+                                    router.push('/dashboard/supply-chain/labels/orders/new?tab=receive-po');
+>>>>>>> Stashed changes
+                                  }}
+                                  style={{
+                                    fontSize: 14,
+                                    color: '#3B82F6',
+                                    textDecoration: 'underline',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {order.date}
+                                </a>
+<<<<<<< Updated upstream
+                                {order.receivePO === 'completed' && !order.archive && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (order.status === 'Partially Received') {
+                                        setArchiveConfirmOrderId(order.id);
+                                      } else {
+                                        setOrders((prev) => {
+                                          const updated = prev.map((o) =>
+                                            o.id === order.id ? { ...o, archive: true } : o,
+                                          );
+                                          try {
+                                            if (typeof window !== 'undefined') {
+                                              window.localStorage.setItem('label_orders', JSON.stringify(updated));
+                                              window.sessionStorage.setItem(
+                                                'last_label_order_archived_date',
+                                                order.date,
+                                              );
+                                              const url = new URL(window.location.href);
+                                              url.searchParams.set('tab', 'Archive');
+                                              window.history.replaceState({}, '', url.toString());
+                                            }
+                                          } catch (_) {}
+                                          return updated;
+                                        });
+                                        setActiveTab('Archive');
+                                        setArchivedToastDate(order.date);
+                                      }
+                                    }}
+                                    style={{
+                                      marginLeft: 8,
+                                      padding: '2px 10px',
+                                      borderRadius: 999,
+                                      border: 'none',
+                                      backgroundColor: '#3B82F6',
+                                      color: '#FFFFFF',
+                                      fontSize: 11,
+                                      fontWeight: 500,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Archive
+                                  </button>
+=======
+                                {order.archive && (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: '#FFFFFF',
+                                      backgroundColor: '#3B82F6',
+                                      padding: '2px 8px',
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    Archive
+                                  </span>
+>>>>>>> Stashed changes
+                                )}
+                              </div>
+                            </td>
+
+                            {/* SUPPLIER */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                fontSize: 14,
+                                color: '#F9FAFB',
+                                fontWeight: 500,
+                                verticalAlign: 'middle',
+                              }}
+                            >
+                              {order.supplier}
+                            </td>
+
+                            {/* ADD PRODUCTS */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.addProducts} />
+                            </td>
+
+                            {/* SUBMIT PO */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.submitPO} />
+                            </td>
+
+                            {/* RECEIVE PO */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'center',
+                              }}
+                            >
+                              <StepCircle status={order.receivePO} />
+                            </td>
+
+                            {/* Menu placeholder */}
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                verticalAlign: 'middle',
+                                textAlign: 'right',
+                              }}
+                            >
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#9CA3AF',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: 6,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+<<<<<<< Updated upstream
+              </div>
+
+              {/* Workflow legend */}
+              <div
+                style={{
+                  marginTop: 12,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                }}
+              >
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 24,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #334155',
+                  backgroundColor: '#0F172A',
+                  opacity: 0.9,
+                  boxShadow: '0 4px 4px rgba(0,0,0,0.2)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      border: '2px solid #9CA3AF',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>Not Started</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: '#3B82F6',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>In Progress</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: '50%',
+                      backgroundColor: '#16A34A',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: '#E5E7EB' }}>Completed</span>
+                </div>
+              </div>
+              </div>
+              </div>
+=======
+>>>>>>> Stashed changes
+            )}
           </div>
         ) : activeTab === 'Archive' ? (
-          /* ── Archive placeholder ── */
-          <div
-            style={{
-              borderRadius: 12,
-              border: '1px solid #1A2235',
-              backgroundColor: '#1A2235',
-              padding: '48px',
-              textAlign: 'center',
-              color: '#9CA3AF',
-              fontSize: 14,
-            }}
-          >
-            No archived labels found.
+          <div style={{ position: 'relative' }}>
+            {archivedOrders.length === 0 ? (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  backgroundColor: '#1A2235',
+                  padding: '48px',
+                  textAlign: 'center',
+                  color: '#9CA3AF',
+                  fontSize: 14,
+                }}
+              >
+                No archived labels found.
+              </div>
+            ) : (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: '1px solid #1A2235',
+                  overflow: 'hidden',
+                  backgroundColor: '#1A2235',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+<<<<<<< Updated upstream
+                <div style={{ maxHeight: 620, overflowY: 'auto' }}>
+=======
+>>>>>>> Stashed changes
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 10,
+                      backgroundColor: '#1A2235',
+                    }}
+                  >
+                    <tr>
+                      {['STATUS', 'LABEL ORDER #', 'SUPPLIER', 'ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].map(
+                        (col) => {
+                          const centered = ['ADD PRODUCTS', 'SUBMIT PO', 'RECEIVE PO'].includes(col);
+                          return (
+                            <th
+                              key={col}
+                              style={{
+                                padding: '16px 20px',
+                                textAlign: centered ? 'center' : 'left',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: '#9CA3AF',
+                                letterSpacing: '0.06em',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {col}
+                            </th>
+                          );
+                        },
+                      )}
+                      <th style={{ padding: '16px 20px', width: 48 }} />
+                    </tr>
+                    <tr style={{ height: 1 }}>
+                      <td colSpan={7} style={{ padding: 0 }}>
+                        <div
+                          style={{
+                            marginLeft: 20,
+                            marginRight: 20,
+                            height: 1,
+                            backgroundColor: '#374151',
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archivedOrders.map((order, i) => {
+                      const st = ORDER_STATUS_STYLES[order.status];
+                      return (
+                        <React.Fragment key={order.id}>
+                          {i > 0 && (
+                            <tr style={{ height: 1 }}>
+                              <td colSpan={7} style={{ padding: 0 }}>
+                                <div
+                                  style={{
+                                    marginLeft: 20,
+                                    marginRight: 20,
+                                    height: 1,
+                                    backgroundColor: '#374151',
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                          <tr
+                            style={{
+                              backgroundColor: '#1A2235',
+                              cursor: 'pointer',
+                              height: 56,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1A2636')}
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#1A2235')}
+                          >
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: 170,
+                                  minWidth: 170,
+                                  padding: '4px 12px',
+                                  gap: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: st.bg,
+                                  border: '1px solid #334155',
+                                  boxSizing: 'border-box',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+<<<<<<< Updated upstream
+                                  {order.status === 'Partially Received' ? (
+                                    <img
+                                      src="/assets/partial.png"
+                                      alt="Partially received"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Submitted' ? (
+                                    <img
+                                      src="/assets/submitted.png"
+                                      alt="Submitted"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : order.status === 'Draft' ? (
+                                    <img
+                                      src="/assets/drafts.png"
+                                      alt="Draft"
+                                      style={{ width: 12, height: 12, flexShrink: 0 }}
+                                    />
+                                  ) : (
+                                    <span
+                                      style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        backgroundColor: st.dot,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  )}
+=======
+                                  <span
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      backgroundColor: st.dot,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+>>>>>>> Stashed changes
+                                  <span
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: 500,
+                                      color: st.color,
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {order.status}
+                                  </span>
+                                </div>
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="#9CA3AF"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ flexShrink: 0 }}
+                                >
+                                  <polyline points="6 9 12 15 18 9" />
+                                </svg>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    color: '#F9FAFB',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {order.date}
+                                </span>
+                              </div>
+                            </td>
+                            <td
+                              style={{
+                                padding: '12px 20px',
+                                fontSize: 14,
+                                color: '#F9FAFB',
+                                fontWeight: 500,
+                                verticalAlign: 'middle',
+                              }}
+                            >
+                              {order.supplier}
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.addProducts} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.submitPO} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'center' }}>
+                              <StepCircle status={order.receivePO} />
+                            </td>
+                            <td style={{ padding: '12px 20px', verticalAlign: 'middle', textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#9CA3AF',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: 6,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+<<<<<<< Updated upstream
+                </div>
+=======
+>>>>>>> Stashed changes
+              </div>
+            )}
           </div>
         ) : (
           /* ── Inventory Table ── */
@@ -426,15 +1267,23 @@ export default function LabelsPage() {
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                    <span
-                                      style={{
-                                        width: 7,
-                                        height: 7,
-                                        borderRadius: '50%',
-                                        backgroundColor: st.dot,
-                                        flexShrink: 0,
-                                      }}
-                                    />
+                                    {label.labelStatus === 'Up to Date' ? (
+                                      <img
+                                        src="/assets/complete.png"
+                                        alt="Up to date"
+                                        style={{ width: 12, height: 12, flexShrink: 0 }}
+                                      />
+                                    ) : (
+                                      <span
+                                        style={{
+                                          width: 7,
+                                          height: 7,
+                                          borderRadius: '50%',
+                                          backgroundColor: st.dot,
+                                          flexShrink: 0,
+                                        }}
+                                      />
+                                    )}
                                     <span style={{ fontSize: 12, fontWeight: 500, color: st.color, whiteSpace: 'nowrap' }}>
                                       {label.labelStatus}
                                     </span>
@@ -653,11 +1502,429 @@ export default function LabelsPage() {
         onCreate={(data: NewLabelOrderForm) => {
           setNewOrderModalOpen(false);
           if (typeof window !== 'undefined') {
-            try { sessionStorage.setItem('label_order_created', JSON.stringify(data)); } catch (_) {}
+            try {
+              sessionStorage.setItem('label_order_created', JSON.stringify(data));
+            } catch (_) {}
           }
           router.push('/dashboard/supply-chain/labels/orders/new');
         }}
       />
+
+      {/* ── Completion toast ── */}
+      {completionToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{completionToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order complete.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setCompletionToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+<<<<<<< Updated upstream
+
+      {/* ── Receive toast (Archive) ── */}
+      {receivedToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 56,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 8px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{receivedToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order received.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setReceivedToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* ── Partial Order Archive modal ── */}
+      {archiveConfirmOrderId && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 4000,
+            padding: 24,
+          }}
+          onClick={() => setArchiveConfirmOrderId(null)}
+        >
+          <div
+            style={{
+              width: 380,
+              maxWidth: '90vw',
+              borderRadius: 12,
+              border: '1px solid #334155',
+              backgroundColor: '#111827',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+              padding: 24,
+              boxSizing: 'border-box',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setArchiveConfirmOrderId(null)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                backgroundColor: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#9CA3AF',
+                borderRadius: 6,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Content */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              {/* Warning icon */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 32,
+                  backgroundColor: '#F97316',
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 16, fontWeight: 700, color: '#111827', lineHeight: 1 }}>!</span>
+              </div>
+
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 18,
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  textAlign: 'center',
+                }}
+              >
+                Partial Order Archive
+              </h2>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 14,
+                  color: '#D1D5DB',
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                }}
+              >
+                Not all items are received. Archive anyway?
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => setArchiveConfirmOrderId(null)}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: '1px solid #4B5563',
+                  backgroundColor: '#111827',
+                  color: '#E5E7EB',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = archiveConfirmOrderId;
+                  const archivedDateFromState = orders.find((o) => o.id === targetId)?.date || null;
+                  setOrders((prev) => {
+                    const updated = prev.map((o) =>
+                      o.id === targetId ? { ...o, archive: true } : o,
+                    );
+                    try {
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('label_orders', JSON.stringify(updated));
+                        const archived = updated.find((o) => o.id === targetId);
+                        if (archived?.date) {
+                          window.sessionStorage.setItem('last_label_order_archived_date', archived.date);
+                        }
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', 'Archive');
+                        window.history.replaceState({}, '', url.toString());
+                      }
+                    } catch (_) {}
+                    return updated;
+                  });
+                  setArchiveConfirmOrderId(null);
+                  setActiveTab('Archive');
+                  if (archivedDateFromState) {
+                    setArchivedToastDate(archivedDateFromState);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  borderRadius: 6,
+                  border: 'none',
+                  backgroundColor: '#3B82F6',
+                  color: '#FFFFFF',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Archived toast (Archive) ── */}
+      {archivedToastDate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 96,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            padding: '8px 12px',
+            borderRadius: 12,
+            backgroundColor: '#1B3221',
+            color: '#ECFDF3',
+            boxShadow: '0 8px 8px rgba(0,0,0,0.15)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              backgroundColor: '#22C55E',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#022C22"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          <span>
+            <span style={{ fontWeight: 600 }}>{archivedToastDate}</span>
+            <span style={{ marginLeft: 4 }}>label order archived.</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setArchivedToastDate(null)}
+            style={{
+              marginLeft: 4,
+              background: 'transparent',
+              border: 'none',
+              color: '#BBF7D0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+=======
+>>>>>>> Stashed changes
     </div>
   );
 }

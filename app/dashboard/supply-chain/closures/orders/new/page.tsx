@@ -4,13 +4,15 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, Calendar, Upload, MoreVertical, X, ArrowDown, ArrowUp } from 'lucide-react';
+import { Search, Calendar, Upload, MoreVertical, X, ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
+import { api } from '@/lib/api';
 
 const PAGE_BG = '#0B111E';
 const HEADER_BORDER = '#334155';
 const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
+const ARCHIVED_CLOSURE_ORDERS_KEY = 'archivedClosureOrders';
 
 // Match image: packaging names and inventory
 const MOCK_PACKAGING_ROWS = [
@@ -160,6 +162,7 @@ export default function ClosureOrderNewPage() {
   const [receivePoProductIds, setReceivePoProductIds] = useState<string[]>([]);
   const [receivePoQuantities, setReceivePoQuantities] = useState<Record<string, string>>({});
   const [receivedIds, setReceivedIds] = useState<Set<string>>(new Set());
+  const [isReceiving, setIsReceiving] = useState(false);
   const productCount = addedIds.size;
 
   useEffect(() => {
@@ -1786,36 +1789,83 @@ export default function ClosureOrderNewPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const today = new Date();
-                    const dateStr = `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`;
-                    const updatedOrder = {
-                      id: resumeOrderId || String(Date.now()),
-                      date: dateStr,
-                      supplier: 'Rhino Container',
-                      status: 'Partially Received',
-                      addProducts: 'completed',
-                      submitPO: 'completed',
-                      receivePO: 'completed',
-                      archive: false,
-                    };
-                    saveOrderToStorage(updatedOrder);
-                    setCompleteOrderModalOpen(false);
-                    router.push('/dashboard/supply-chain/closures?tab=Orders');
+                  disabled={isReceiving}
+                  onClick={async () => {
+                    setIsReceiving(true);
+                    try {
+                      // Build items to receive from receivedIds
+                      const items = Array.from(receivedIds).map((id) => {
+                        const qtyStr = receivePoQuantities[id] || quantities[id] || '0';
+                        const qty = parseInt(qtyStr.replace(/,/g, ''), 10) || 0;
+                        return { id: parseInt(id, 10), quantity: qty };
+                      }).filter(item => item.quantity > 0);
+
+                      if (items.length > 0) {
+                        // Call API to add to inventory
+                        await api.receiveClosureInventory(items);
+                      }
+
+                      const today = new Date();
+                      const dateStr = `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`;
+                      const orderId = resumeOrderId || String(Date.now());
+                      
+                      // Archive the order
+                      const archivedOrder = {
+                        id: orderId,
+                        date: dateStr,
+                        supplier: 'Rhino Container',
+                        status: 'Received',
+                        addProducts: 'completed',
+                        submitPO: 'completed',
+                        receivePO: 'completed',
+                        archive: true,
+                        receivedAt: new Date().toISOString(),
+                        items: items,
+                      };
+                      
+                      // Save to archived orders
+                      const archived = JSON.parse(sessionStorage.getItem(ARCHIVED_CLOSURE_ORDERS_KEY) || '[]');
+                      archived.unshift(archivedOrder);
+                      sessionStorage.setItem(ARCHIVED_CLOSURE_ORDERS_KEY, JSON.stringify(archived));
+                      
+                      // Remove from active orders
+                      const existing = JSON.parse(localStorage.getItem('closure_orders') || '[]');
+                      const filtered = existing.filter((o: { id: string }) => o.id !== orderId);
+                      localStorage.setItem('closure_orders', JSON.stringify(filtered));
+
+                      setCompleteOrderModalOpen(false);
+                      router.push('/dashboard/supply-chain/closures?tab=Archive');
+                    } catch (err) {
+                      console.error('Failed to receive order:', err);
+                      alert('Failed to receive order. Please try again.');
+                    } finally {
+                      setIsReceiving(false);
+                    }
                   }}
                   style={{
                     flex: 1,
                     height: 32,
                     borderRadius: 6,
                     border: 'none',
-                    backgroundColor: '#007AFF',
+                    backgroundColor: isReceiving ? '#4B5563' : '#007AFF',
                     color: '#FFFFFF',
                     fontSize: 14,
                     fontWeight: 500,
-                    cursor: 'pointer',
+                    cursor: isReceiving ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
                   }}
                 >
-                  Confirm
+                  {isReceiving ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Receiving...
+                    </>
+                  ) : (
+                    'Confirm'
+                  )}
                 </button>
               </div>
             </div>

@@ -1,23 +1,284 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { X, FileText, Download } from 'lucide-react';
+import { X, FileText, Download, Calendar } from 'lucide-react';
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  addDays,
+  isSameMonth,
+  isSameDay,
+  addMonths,
+  subMonths,
+  isToday,
+  isBefore,
+  startOfDay,
+} from 'date-fns';
 
 // ─── Export Bottle Order modal ────────────────────────────────────────────────
 interface ExportBottleOrderModalProps {
   onClose: () => void;
   onComplete: () => void;
+  onExportCsv?: (estimatedDeliveryDate: string | null) => void;
+  orderName?: string;
 }
 
-export function ExportBottleOrderModal({ onClose, onComplete }: ExportBottleOrderModalProps) {
+const INPUT_BG = '#1F2937';
+const BORDER_COLOR = 'rgba(148,163,184,0.2)';
+const LABEL_COLOR = '#64748B';
+
+function EstimatedDeliveryDateField({
+  value,
+  onChange,
+  inputRef,
+  calendarOpen,
+  onCalendarToggle,
+  onCalendarClose,
+}: {
+  value: string | null;
+  onChange: (date: string) => void;
+  inputRef: React.RefObject<HTMLDivElement | null>;
+  calendarOpen: boolean;
+  onCalendarToggle: () => void;
+  onCalendarClose: () => void;
+}) {
+  const [viewMonth, setViewMonth] = useState(value ? new Date(value) : new Date());
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (calendarOpen && value) setViewMonth(new Date(value));
+  }, [calendarOpen, value]);
+
+  const displayValue = value ? format(new Date(value), 'MM/dd/yyyy') : '';
+
+  const handleSelect = useCallback(
+    (d: Date) => {
+      onChange(format(d, 'yyyy-MM-dd'));
+      onCalendarClose();
+    },
+    [onChange, onCalendarClose]
+  );
+
+  const monthStart = startOfMonth(viewMonth);
+  const monthEnd = endOfMonth(viewMonth);
+  const calendarStart = startOfWeek(monthStart);
+  const calendarEnd = endOfWeek(monthEnd);
+  const days: Date[] = [];
+  let d = calendarStart;
+  while (d <= calendarEnd) {
+    days.push(d);
+    d = addDays(d, 1);
+  }
+
+  const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const dayRows: Date[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    dayRows.push(days.slice(i, i + 7));
+  }
+
+  const rect = inputRef.current?.getBoundingClientRect();
+  const calendarContent = calendarOpen && rect && typeof document !== 'undefined' && (
+    <>
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 12001 }}
+        onClick={onCalendarClose}
+        aria-hidden
+      />
+      <div
+        style={{
+          position: 'fixed',
+          left: Math.min(rect.left, window.innerWidth - 280),
+          top: rect.bottom + 6,
+          zIndex: 13000,
+          background: '#111827',
+          border: '1px solid rgba(148,163,184,0.2)',
+          borderRadius: 8,
+          boxShadow: '0 12px 28px rgba(0,0,0,0.4)',
+          padding: 12,
+          minWidth: 260,
+          fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 10,
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setViewMonth((m) => subMonths(m, 1)); }}
+            style={{
+              width: 28,
+              height: 28,
+              border: 'none',
+              background: 'transparent',
+              color: '#94A3B8',
+              cursor: 'pointer',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            ←
+          </button>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#F1F5F9' }}>
+            {format(viewMonth, 'MMMM yyyy')}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setViewMonth((m) => addMonths(m, 1)); }}
+            style={{
+              width: 28,
+              height: 28,
+              border: 'none',
+              background: 'transparent',
+              color: '#94A3B8',
+              cursor: 'pointer',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            →
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 6 }}>
+          {weekDays.map((w) => (
+            <div
+              key={w}
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#64748B',
+                textAlign: 'center',
+                padding: '4px 0',
+              }}
+            >
+              {w}
+            </div>
+          ))}
+        </div>
+        {dayRows.map((row, ri) => (
+          <div
+            key={ri}
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}
+          >
+            {row.map((day) => {
+              const sameMonth = isSameMonth(day, viewMonth);
+              const isPast = isBefore(day, startOfDay(new Date()));
+              const selectable = sameMonth && !isPast;
+              const selected = value && isSameDay(day, new Date(value));
+              const today = isToday(day);
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); if (selectable) handleSelect(day); }}
+                  disabled={!selectable}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    border: 'none',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    background: selected ? '#1D7AFB' : today ? 'rgba(29,122,251,0.2)' : 'transparent',
+                    color: selected ? '#fff' : selectable ? '#F1F5F9' : '#475569',
+                    cursor: selectable ? 'pointer' : 'default',
+                    opacity: isPast ? 0.45 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {format(day, 'd')}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+      <label style={{ fontSize: 12, fontWeight: 500, color: LABEL_COLOR }}>
+        Estimated Delivery Date
+        <span style={{ color: '#EF4444', marginLeft: 2 }}>*</span>
+      </label>
+      <div
+        ref={inputRef as React.RefObject<HTMLDivElement>}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          height: 40,
+          padding: '0 12px',
+          background: INPUT_BG,
+          border: `1px solid ${BORDER_COLOR}`,
+          borderRadius: 8,
+          cursor: 'pointer',
+          position: 'relative',
+        }}
+        onClick={onCalendarToggle}
+      >
+        <Calendar size={16} color="#64748B" style={{ flexShrink: 0 }} />
+        <span
+          style={{
+            fontSize: 13,
+            color: value ? '#F1F5F9' : '#6B7280',
+            flex: 1,
+            textAlign: 'left',
+          }}
+        >
+          {displayValue || 'Enter Estimated Delivery Date...'}
+        </span>
+      </div>
+      {typeof document !== 'undefined' &&
+        calendarContent &&
+        createPortal(calendarContent, document.body)}
+    </div>
+  );
+}
+
+export function ExportBottleOrderModal({ onClose, onComplete, onExportCsv, orderName = '' }: ExportBottleOrderModalProps) {
+  const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const dateInputRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (calendarOpen) setCalendarOpen(false);
+        else onClose();
+      }
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, calendarOpen]);
 
-  const fileName = 'TPS_BottleOrder_2025-09-23.csv';
+  const handleCalendarToggle = useCallback(() => {
+    setCalendarOpen((o) => !o);
+  }, []);
+
+  const handleCalendarClose = useCallback(() => {
+    setCalendarOpen(false);
+  }, []);
+
+  const baseName = (orderName || 'TPS_BottleOrder').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_') || 'TPS_BottleOrder';
+  const dateForFile = estimatedDeliveryDate || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+  const fileName = `${baseName}_${dateForFile}.csv`;
+  const canComplete = !!estimatedDeliveryDate;
 
   return (
     <div
@@ -68,7 +329,7 @@ export function ExportBottleOrderModal({ onClose, onComplete }: ExportBottleOrde
           }}
         >
           <span style={{ fontSize: 15, fontWeight: 600, color: '#F1F5F9' }}>
-            Export Bottle Order
+            Export & Complete Bottle Order
           </span>
           <button
             type="button"
@@ -95,6 +356,14 @@ export function ExportBottleOrderModal({ onClose, onComplete }: ExportBottleOrde
 
         {/* Body */}
         <div style={{ padding: '20px 24px 24px' }}>
+          <EstimatedDeliveryDateField
+            value={estimatedDeliveryDate}
+            onChange={setEstimatedDeliveryDate}
+            inputRef={dateInputRef}
+            calendarOpen={calendarOpen}
+            onCalendarToggle={handleCalendarToggle}
+            onCalendarClose={handleCalendarClose}
+          />
           {/* File box */}
           <div
             style={{
@@ -165,6 +434,7 @@ export function ExportBottleOrderModal({ onClose, onComplete }: ExportBottleOrde
           <button
             type="button"
             className="eo-csv-btn"
+            onClick={() => onExportCsv?.(estimatedDeliveryDate)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -183,25 +453,26 @@ export function ExportBottleOrderModal({ onClose, onComplete }: ExportBottleOrde
             Export as CSV
           </button>
 
-          {/* Complete */}
+          {/* Complete Order */}
           <button
             type="button"
             className="eo-complete-btn"
             onClick={onComplete}
+            disabled={!canComplete}
             style={{
               height: 32,
               padding: '0 20px',
               borderRadius: 7,
               border: 'none',
-              background: '#1D7AFB',
+              background: canComplete ? '#1D7AFB' : 'rgba(29,122,251,0.4)',
               color: '#FFFFFF',
               fontSize: 13,
               fontWeight: 600,
-              cursor: 'pointer',
+              cursor: canComplete ? 'pointer' : 'not-allowed',
               transition: 'background 150ms',
             }}
           >
-            Complete
+            Complete Order
           </button>
         </div>
       </div>

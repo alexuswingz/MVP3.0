@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Search } from 'lucide-react';
@@ -37,6 +38,69 @@ export function BottlesHeader({
   isDarkMode,
   settingsDropdownContent,
 }: BottlesHeaderProps) {
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      setAnchorRect(null);
+      return;
+    }
+    const updateRect = () => {
+      if (settingsButtonRef?.current)
+        setAnchorRect(settingsButtonRef.current.getBoundingClientRect());
+    };
+    updateRect();
+    window.addEventListener('resize', updateRect);
+    return () => window.removeEventListener('resize', updateRect);
+  }, [settingsOpen, settingsButtonRef]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeOnScroll = () => onSettingsClick();
+    window.addEventListener('scroll', closeOnScroll, true);
+    return () => window.removeEventListener('scroll', closeOnScroll, true);
+  }, [settingsOpen, onSettingsClick]);
+
+  const DROPDOWN_W = 180;
+  const DROPDOWN_H = 92;
+  const PAD = 8;
+
+  const dropdownEl =
+    settingsOpen &&
+    anchorRect &&
+    typeof document !== 'undefined' &&
+    (() => {
+      let left = anchorRect.right - DROPDOWN_W;
+      if (left < PAD) left = PAD;
+      if (left + DROPDOWN_W > window.innerWidth - PAD)
+        left = window.innerWidth - DROPDOWN_W - PAD;
+      let top = anchorRect.bottom + 4;
+      if (top + DROPDOWN_H > window.innerHeight - PAD)
+        top = anchorRect.top - DROPDOWN_H - 4;
+      else if (top < PAD) top = PAD;
+      return (
+        <div
+          ref={settingsDropdownRef}
+          role="menu"
+          style={{
+            position: 'fixed',
+            left,
+            top,
+            zIndex: 10001,
+            minWidth: DROPDOWN_W,
+            borderRadius: 8,
+            border: `1px solid ${isDarkMode ? 'rgba(148,163,184,0.2)' : '#E5E7EB'}`,
+            backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            overflow: 'hidden',
+            padding: 4,
+          }}
+        >
+          {settingsDropdownContent}
+        </div>
+      );
+    })();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
@@ -165,19 +229,7 @@ export function BottlesHeader({
               height={24}
             />
           </button>
-          {settingsOpen && (
-            <div
-              ref={settingsDropdownRef}
-              role="menu"
-              className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border shadow-lg py-1"
-              style={{
-                backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
-                borderColor: isDarkMode ? '#334155' : '#E5E7EB',
-              }}
-            >
-              {settingsDropdownContent}
-            </div>
-          )}
+          {settingsOpen && dropdownEl && createPortal(dropdownEl, document.body)}
         </div>
       </div>
     </motion.div>

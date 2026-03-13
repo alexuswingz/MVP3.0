@@ -2,11 +2,31 @@
 
 import React from 'react';
 
-const LEGEND_ITEMS = [
-  { key: 'available', label: 'Available', color: '#4B5563' },
-  { key: 'allocated', label: 'Allocated', color: '#F97316' },
-  { key: 'inbound', label: 'Inbound', color: '#3B82F6' },
-  { key: 'added', label: 'Added', color: '#7DD3FC' },
+function stripeGradient(base: string, stripe: string, size = 8): string {
+  const half = size / 2;
+  return `repeating-linear-gradient(
+    -45deg,
+    ${base} 0px,
+    ${base} ${half}px,
+    ${stripe} ${half}px,
+    ${stripe} ${size}px
+  )`;
+}
+
+interface LegendItemConfig {
+  key: string;
+  label: string;
+  type: 'solid' | 'striped';
+  color?: string;
+  stripeBase?: string;
+  stripeColor?: string;
+}
+
+const LEGEND_ITEMS: LegendItemConfig[] = [
+  { key: 'available', label: 'Available', type: 'solid', color: '#4B5563' },
+  { key: 'allocated', label: 'Allocated', type: 'striped', stripeBase: '#E96500', stripeColor: 'rgba(15,23,42,0.6)' },
+  { key: 'inbound', label: 'Inbound', type: 'striped', stripeBase: '#2B7FE8', stripeColor: 'rgba(255,255,255,0.25)' },
+  { key: 'newOrder', label: 'New Order', type: 'solid', color: '#2563EB' },
 ];
 
 export function InventoryLegend() {
@@ -17,7 +37,7 @@ export function InventoryLegend() {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 24,
-        width: 353,
+        width: 'auto',
         height: 38,
         padding: '12px 16px',
         backgroundColor: '#1E293B',
@@ -42,8 +62,11 @@ export function InventoryLegend() {
               width: 10,
               height: 10,
               borderRadius: 2,
-              backgroundColor: item.color,
               flexShrink: 0,
+              ...(item.type === 'solid' 
+                ? { backgroundColor: item.color }
+                : { background: stripeGradient(item.stripeBase!, item.stripeColor!, 2.5) }
+              ),
             }}
           />
           <span

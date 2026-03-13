@@ -4,7 +4,12 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.core.cache import cache
-from django.db.models import Count, Q, Sum, Prefetch
+<<<<<<< Updated upstream
+from django.db import models as db_models, transaction
+=======
+from django.db import models as db_models
+>>>>>>> Stashed changes
+from django.db.models import Count, Q, Sum, Prefetch, F
 from django.db import connection
 from django.http import HttpResponse
 from datetime import date
@@ -15,14 +20,15 @@ import csv
 
 from config.pagination import ProductPagination
 from .models import (
-    Brand, Product, PackagingType, Closure, Formula,
+    Brand, Product, PackagingType, Bottle, Closure, Formula,
     DOISettings, ForecastCache, ProductExtended
 )
 from .serializers import (
     BrandSerializer, ProductListSerializer, ProductDetailSerializer,
     ProductCreateUpdateSerializer, PackagingTypeSerializer,
-    ClosureSerializer, FormulaSerializer, DOISettingsSerializer,
-    ForecastCacheSerializer
+    BottleListSerializer, BottleDetailSerializer,
+    ClosureSerializer, ClosureListSerializer, ClosureDetailSerializer,
+    FormulaSerializer, DOISettingsSerializer, ForecastCacheSerializer
 )
 from .services import ForecastService, DEFAULT_SETTINGS
 from .services.algorithms import (
@@ -272,15 +278,224 @@ class PackagingTypeViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-class ClosureViewSet(viewsets.ModelViewSet):
-    serializer_class = ClosureSerializer
+class BottleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Bottle database management.
+    Provides CRUD operations for bottle packaging types.
+    """
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['size_oz', 'shape', 'color', 'material', 'supplier', 'is_active']
+    search_fields = ['name', 'supplier', 'packaging_part_number', 'description']
+    ordering_fields = ['name', 'size_oz', 'warehouse_inventory', 'created_at']
+    ordering = ['name']
     
     def get_queryset(self):
-        return Closure.objects.filter(user=self.request.user, is_active=True)
+        return Bottle.objects.filter(user=self.request.user)
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return BottleListSerializer
+        return BottleDetailSerializer
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def inventory(self, request):
+        """Get bottle inventory summary"""
+        bottles = self.get_queryset().filter(is_active=True)
+        summary = {
+            'total_bottles': bottles.count(),
+            'low_inventory': bottles.filter(
+                warehouse_inventory__lt=F('max_warehouse_inventory') * 0.2
+            ).count(),
+            'total_warehouse_inventory': sum(b.warehouse_inventory or 0 for b in bottles),
+        }
+        return Response(summary)
+    
+    @action(detail=True, methods=['get'])
+    def products(self, request, pk=None):
+        """Get products using this bottle"""
+        bottle = self.get_object()
+        products = Product.objects.filter(
+            user=request.user,
+            extended__bottle=bottle
+        ).values('id', 'name', 'asin', 'sku', 'status')
+        return Response(list(products))
+
+    @action(detail=False, methods=['get'])
+    def suppliers(self, request):
+        """Get unique list of suppliers"""
+        suppliers = (
+            self.get_queryset()
+            .filter(is_active=True)
+            .exclude(supplier='')
+            .values_list('supplier', flat=True)
+            .distinct()
+            .order_by('supplier')
+        )
+        return Response(list(suppliers))
+
+    @action(detail=False, methods=['post'])
+    def receive_inventory(self, request):
+        """
+        Receive inventory for multiple bottles.
+        Adds the received quantities to warehouse_inventory.
+        
+        Expected payload:
+        {
+            "items": [
+                {"id": 1, "quantity": 500},
+                {"id": 2, "quantity": 300}
+            ]
+        }
+        """
+        items = request.data.get('items', [])
+        if not items:
+            return Response(
+                {'error': 'No items provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated_bottles = []
+        errors = []
+        
+        for item in items:
+            bottle_id = item.get('id')
+            quantity = item.get('quantity', 0)
+            
+            if not bottle_id:
+                errors.append({'error': 'Missing bottle id'})
+                continue
+                
+            try:
+                bottle = self.get_queryset().get(id=bottle_id)
+                old_inventory = bottle.warehouse_inventory or 0
+                bottle.warehouse_inventory = old_inventory + quantity
+                bottle.save(update_fields=['warehouse_inventory', 'updated_at'])
+                updated_bottles.append({
+                    'id': bottle.id,
+                    'name': bottle.name,
+                    'previous_inventory': old_inventory,
+                    'added': quantity,
+                    'new_inventory': bottle.warehouse_inventory,
+                })
+            except Bottle.DoesNotExist:
+                errors.append({'id': bottle_id, 'error': 'Bottle not found'})
+        
+        return Response({
+            'updated': updated_bottles,
+            'errors': errors,
+            'total_updated': len(updated_bottles),
+        })
+
+
+class ClosureViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Closure database management.
+    Provides CRUD operations for closure/cap types.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['category', 'shape', 'cap_size', 'supplier', 'is_active']
+    search_fields = ['name', 'supplier', 'packaging_part_number', 'description']
+    ordering_fields = ['name', 'cap_size', 'warehouse_inventory', 'created_at']
+    ordering = ['name']
+    
+    def get_queryset(self):
+        return Closure.objects.filter(user=self.request.user)
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ClosureListSerializer
+        return ClosureDetailSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def inventory(self, request):
+        """Get closure inventory summary"""
+        closures = self.get_queryset().filter(is_active=True)
+        summary = {
+            'total_closures': closures.count(),
+            'low_inventory': closures.filter(
+                warehouse_inventory__lt=F('max_warehouse_inventory') * 0.2
+            ).count(),
+            'total_warehouse_inventory': sum(c.warehouse_inventory or 0 for c in closures),
+        }
+        return Response(summary)
+    
+    @action(detail=True, methods=['get'])
+    def products(self, request, pk=None):
+        """Get products using this closure"""
+        closure = self.get_object()
+        products = Product.objects.filter(
+            user=request.user,
+            extended__closure=closure
+        ).values('id', 'name', 'asin', 'sku', 'status')
+        return Response(list(products))
+<<<<<<< Updated upstream
+
+    @action(detail=False, methods=['get'])
+    def suppliers(self, request):
+        """Get list of unique closure suppliers for the current user"""
+        suppliers = (
+            self.get_queryset()
+            .filter(is_active=True)
+            .exclude(supplier__isnull=True)
+            .exclude(supplier__exact='')
+            .values_list('supplier', flat=True)
+            .distinct()
+            .order_by('supplier')
+        )
+        return Response(list(suppliers))
+
+    @action(detail=False, methods=['post'])
+    def receive_inventory(self, request):
+        """
+        Receive inventory for multiple closures.
+        Expects: { "items": [{ "id": 1, "quantity": 100 }, ...] }
+        """
+        items = request.data.get('items', [])
+        if not items:
+            return Response(
+                {'error': 'No items provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        updated = []
+        errors = []
+        
+        with transaction.atomic():
+            for item in items:
+                closure_id = item.get('id')
+                quantity = item.get('quantity', 0)
+                
+                if not closure_id or quantity <= 0:
+                    errors.append({'id': closure_id, 'error': 'Invalid id or quantity'})
+                    continue
+                
+                try:
+                    closure = Closure.objects.get(id=closure_id, user=request.user)
+                    closure.warehouse_inventory = (closure.warehouse_inventory or 0) + quantity
+                    closure.save(update_fields=['warehouse_inventory'])
+                    updated.append({
+                        'id': closure.id,
+                        'name': closure.name,
+                        'new_inventory': closure.warehouse_inventory
+                    })
+                except Closure.DoesNotExist:
+                    errors.append({'id': closure_id, 'error': 'Closure not found'})
+        
+        return Response({
+            'updated': updated,
+            'errors': errors,
+            'total_updated': len(updated)
+        })
+=======
+>>>>>>> Stashed changes
 
 
 class FormulaViewSet(viewsets.ModelViewSet):

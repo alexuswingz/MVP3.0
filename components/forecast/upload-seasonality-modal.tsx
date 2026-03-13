@@ -148,6 +148,21 @@ export function UploadSeasonalityModal({
     }
   }, [isOpen, initialShowPreview]);
 
+  // When opening directly in preview mode (e.g. from NGOOS after data was already uploaded),
+  // restore the last uploaded file name for this product from localStorage so the title/name
+  // stays visible even though we no longer have a File object.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!productId) return;
+    if (!initialShowPreview) return;
+    if (file) return;
+
+    const storedName = window.localStorage.getItem(`seasonalityFileName:${productId}`);
+    if (storedName) {
+      setToastFileName(storedName);
+    }
+  }, [productId, initialShowPreview, file]);
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -189,6 +204,13 @@ export function UploadSeasonalityModal({
       console.log('Confirming seasonality data for product:', productId, file);
       setToastFileName(file.name);
       setShowToast(true);
+      if (typeof window !== 'undefined' && productId) {
+        try {
+          window.localStorage.setItem(`seasonalityFileName:${productId}`, file.name);
+        } catch {
+          // Ignore storage errors
+        }
+      }
       onUploadSuccess?.(file.name);
       onSeasonalityUploaded?.(productId);
       setFile(null);
@@ -321,9 +343,13 @@ export function UploadSeasonalityModal({
                 }}
               >
                 <span style={{ fontSize: 14, fontWeight: 600, color: '#E2E8F0' }}>
-                {initialShowPreview ? 'Seasonality Curve' : 'Preview'}
-              </span>
-                {file?.name && <span style={{ fontSize: 12, color: '#64748B' }}>{file.name}</span>}
+                  {initialShowPreview ? 'Seasonality Curve' : 'Preview'}
+                </span>
+                {(file?.name || toastFileName) && (
+                  <span style={{ fontSize: 12, color: '#64748B' }}>
+                    {file?.name ?? toastFileName}
+                  </span>
+                )}
               </div>
 
               {/* Chart / Graph Area */}

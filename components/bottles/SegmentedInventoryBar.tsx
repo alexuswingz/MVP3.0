@@ -7,6 +7,27 @@ export interface SegmentedInventoryBarProps {
   fillPercent?: number;
   width?: number | string;
   height?: number;
+  /** Available inventory (warehouse inventory) */
+  available?: number;
+  /** Allocated inventory (committed to shipments) */
+  allocated?: number;
+  /** Inbound inventory (ordered but not arrived) */
+  inbound?: number;
+  /** New order quantity being added */
+  newOrder?: number;
+<<<<<<< Updated upstream
+=======
+  /** 'filling' = animate New Order segment growing (Add), 'retracting' = animate shrinking (Added/remove) */
+  newOrderAnimation?: 'filling' | 'retracting' | null;
+>>>>>>> Stashed changes
+  /** Maximum capacity */
+  capacity?: number;
+  /** Whether storage capacity is full */
+  isFull?: boolean;
+  /** Allocated shipment breakdown for popover */
+  allocatedShipments?: { date: string; value: number }[];
+  /** Inbound shipment breakdown for popover */
+  inboundShipments?: { date: string; value: number }[];
 }
 
 function stripeGradient(base: string, stripe: string, size = 8): string {
@@ -21,7 +42,7 @@ function stripeGradient(base: string, stripe: string, size = 8): string {
 }
 
 // ─── Stripe marker ────────────────────────────────────────────────────────────
-function StripeMarker({ type }: { type: 'available' | 'allocated' | 'inbound' | 'capacity' }) {
+function StripeMarker({ type }: { type: 'available' | 'allocated' | 'inbound' | 'newOrder' | 'capacity' }) {
   const baseStyle: React.CSSProperties = {
     width: 10,
     height: 10,
@@ -51,6 +72,25 @@ function StripeMarker({ type }: { type: 'available' | 'allocated' | 'inbound' | 
       />
     );
   }
+  if (type === 'newOrder') {
+    return (
+      <div
+        style={{
+          ...baseStyle,
+<<<<<<< Updated upstream
+          backgroundColor: '#2563EB',
+          border: '1px solid rgba(37,99,235,0.5)',
+=======
+          backgroundColor: '#0275FC',
+          border: '1px solid rgba(2,117,252,0.5)',
+>>>>>>> Stashed changes
+        }}
+      />
+    );
+  }
+  if (type === 'available') {
+    return <div style={{ ...baseStyle, backgroundColor: '#4B5563' }} />;
+  }
   return <div style={{ ...baseStyle, backgroundColor: '#2E3A4E' }} />;
 }
 
@@ -68,18 +108,32 @@ function Divider() {
 }
 
 // ─── Popover ──────────────────────────────────────────────────────────────────
-function InventoryBarPopover() {
-  const allocatedShipments = [
-    { date: '2025.11.18', value: '720' },
-    { date: '2025.11.20', value: '360' },
-    { date: '2025.11.21', value: '100' },
-  ];
-  const inboundShipments = [{ date: '2025.11.22', value: '1,080' }];
+interface InventoryBarPopoverProps {
+  available?: number;
+  allocated?: number;
+  inbound?: number;
+  newOrder?: number;
+  capacity?: number;
+  allocatedShipments?: { date: string; value: number }[];
+  inboundShipments?: { date: string; value: number }[];
+}
 
+function InventoryBarPopover({ 
+  available = 0, 
+  allocated = 0, 
+  inbound = 0, 
+<<<<<<< Updated upstream
+  newOrder = 0,
+=======
+>>>>>>> Stashed changes
+  capacity = 0,
+  allocatedShipments = [],
+  inboundShipments = [],
+}: InventoryBarPopoverProps) {
   return (
     <div
       style={{
-        width: 264,
+        width: 280,
         borderRadius: 8,
         border: '1px solid rgba(148,163,184,0.14)',
         background: '#0F172A',
@@ -94,6 +148,7 @@ function InventoryBarPopover() {
           padding: '9px 12px 8px',
           borderBottom: '1px solid rgba(148,163,184,0.10)',
           background: 'rgba(255,255,255,0.025)',
+          textAlign: 'left',
         }}
       >
         <span
@@ -102,7 +157,7 @@ function InventoryBarPopover() {
             fontWeight: 600,
             color: '#CBD5E1',
             letterSpacing: '0.07em',
-            textTransform: 'uppercase',
+            textTransform: 'capitalize',
           }}
         >
           Inventory Summary
@@ -116,7 +171,7 @@ function InventoryBarPopover() {
         <MainRow
           marker={<StripeMarker type="available" />}
           label="Available"
-          value="2,160"
+          value={available.toLocaleString()}
           valueColor="#E5E7EB"
         />
 
@@ -126,11 +181,11 @@ function InventoryBarPopover() {
         <MainRow
           marker={<StripeMarker type="allocated" />}
           label="Allocated"
-          value="-1,180"
+          value={allocated > 0 ? `-${allocated.toLocaleString()}` : '0'}
           valueColor="#F97316"
         />
-        {allocatedShipments.map((s) => (
-          <ShipmentRow key={s.date} date={s.date} value={s.value} />
+        {allocatedShipments.length > 0 && allocatedShipments.map((shipment, idx) => (
+          <ShipmentRow key={idx} date={shipment.date} value={shipment.value.toLocaleString()} />
         ))}
 
         <Divider />
@@ -146,10 +201,9 @@ function InventoryBarPopover() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <StripeMarker type="inbound" />
-            <div>
-              <div style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.2 }}>Inbound</div>
-              <div style={{ fontSize: 10, color: '#475569', lineHeight: 1.2 }}>Not yet arrived</div>
-            </div>
+            <span style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.2 }}>
+              Inbound <span style={{ color: '#475569', fontWeight: 400 }}>(Not yet arrived)</span>
+            </span>
           </div>
           <span
             style={{
@@ -159,12 +213,25 @@ function InventoryBarPopover() {
               paddingTop: 1,
             }}
           >
-            +1,080
+            +{inbound.toLocaleString()}
           </span>
         </div>
-        {inboundShipments.map((s) => (
-          <ShipmentRow key={s.date} date={s.date} value={s.value} />
+        {inboundShipments.length > 0 && inboundShipments.map((shipment, idx) => (
+          <ShipmentRow key={idx} date={shipment.date} value={shipment.value.toLocaleString()} />
         ))}
+
+        {/* New Order (if any) */}
+        {newOrder > 0 && (
+          <>
+            <Divider />
+            <MainRow
+              marker={<StripeMarker type="newOrder" />}
+              label="New Order"
+              value={`+${newOrder.toLocaleString()}`}
+              valueColor="#3B82F6"
+            />
+          </>
+        )}
 
         <Divider />
 
@@ -172,7 +239,7 @@ function InventoryBarPopover() {
         <MainRow
           marker={<StripeMarker type="capacity" />}
           label="Capacity"
-          value="4,000"
+          value={capacity.toLocaleString()}
           valueColor="#E5E7EB"
         />
       </div>
@@ -231,15 +298,43 @@ export function SegmentedInventoryBar({
   fillPercent = 0,
   width = 395,
   height = 19,
+  available = 0,
+  allocated = 0,
+  inbound = 0,
+  newOrder = 0,
+<<<<<<< Updated upstream
+=======
+  newOrderAnimation = null,
+>>>>>>> Stashed changes
+  capacity = 0,
+  isFull = false,
+  allocatedShipments = [],
+  inboundShipments = [],
 }: SegmentedInventoryBarProps) {
   const fill = Math.min(100, Math.max(0, fillPercent));
+  
+  // Calculate segment widths based on capacity
+  const total = capacity > 0 ? capacity : (available + allocated + inbound + newOrder) || 1;
+  const availableWidth = Math.max(5, (available / total) * 100);
+  const allocatedWidth = allocated > 0 ? Math.max(5, (allocated / total) * 100) : 0;
+  const inboundWidth = inbound > 0 ? Math.max(5, (inbound / total) * 100) : 0;
+<<<<<<< Updated upstream
+  const newOrderWidth = newOrder > 0 ? Math.max(5, (newOrder / total) * 100) : 0;
+  const remainingWidth = Math.max(0, 100 - availableWidth - allocatedWidth - inboundWidth - newOrderWidth);
+=======
+  const remainingCapacity = Math.max(0, total - available - allocated - inbound);
+  const fillPercentOfRemaining =
+    newOrder > 0 ? 100 : 0;
+>>>>>>> Stashed changes
 
-  const [hoveredSegment, setHoveredSegment] = useState<'allocated' | 'inbound' | null>(null);
+  const [hoveredSegment, setHoveredSegment] = useState<'available' | 'allocated' | 'inbound' | 'newOrder' | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const availableRef = useRef<HTMLDivElement>(null);
   const allocatedRef = useRef<HTMLDivElement>(null);
   const inboundRef = useRef<HTMLDivElement>(null);
+  const newOrderRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearHideTimer = useCallback(() => {
@@ -254,20 +349,20 @@ export function SegmentedInventoryBar({
     hideTimer.current = setTimeout(() => setHoveredSegment(null), 80);
   }, [clearHideTimer]);
 
-  const computeFixedPos = useCallback((segment: 'allocated' | 'inbound') => {
-    const ref = segment === 'allocated' ? allocatedRef : inboundRef;
+  const computeFixedPos = useCallback((segment: 'available' | 'allocated' | 'inbound' | 'newOrder') => {
+    const refMap = { available: availableRef, allocated: allocatedRef, inbound: inboundRef, newOrder: newOrderRef };
+    const ref = refMap[segment];
     if (!ref.current || !wrapperRef.current) return { top: 0, left: 0 };
     const wrapperRect = wrapperRef.current.getBoundingClientRect();
     const segRect = ref.current.getBoundingClientRect();
     const segCenter = segRect.left + segRect.width / 2;
     const top = wrapperRect.bottom + 7;
-    // center popover on segment, clamp within viewport (8px margins)
-    const left = Math.min(Math.max(segCenter - 132, 8), window.innerWidth - 264 - 8);
+    const left = Math.min(Math.max(segCenter - 140, 8), window.innerWidth - 280 - 8);
     return { top, left };
   }, []);
 
   const handleSegmentEnter = useCallback(
-    (segment: 'allocated' | 'inbound') => {
+    (segment: 'available' | 'allocated' | 'inbound' | 'newOrder') => {
       clearHideTimer();
       setPopoverPos(computeFixedPos(segment));
       setHoveredSegment(segment);
@@ -292,8 +387,19 @@ export function SegmentedInventoryBar({
       ref={wrapperRef}
       style={{ position: 'relative', display: 'inline-block', width }}
     >
+      <style>{`
+        @keyframes segNewOrderFill {
+          from { transform: scaleX(0); }
+          to { transform: scaleX(1); }
+        }
+        @keyframes segNewOrderRetract {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
       {/* ── Bar ────────────────────────────────────────────────────────────── */}
       <div
+        onMouseLeave={scheduleHide}
         style={{
           width: '100%',
           height,
@@ -302,68 +408,132 @@ export function SegmentedInventoryBar({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'stretch',
+          border: isFull ? '1px solid #EF4444' : 'none',
+          boxSizing: 'border-box',
         }}
       >
-        {/* Segment 1: dark muted blue-gray (available) */}
+        {/* Segment 1: dark muted blue-gray (available) - red when full */}
         <div
+          ref={availableRef}
+          onMouseEnter={() => handleSegmentEnter('available')}
+          onMouseLeave={scheduleHide}
           style={{
-            width: 70,
+            width: `${availableWidth}%`,
+            minWidth: available > 0 ? 10 : 0,
             flexShrink: 0,
             height: '100%',
-            backgroundColor: '#363d4f',
+            backgroundColor: isFull ? '#7F1D1D' : '#363d4f',
+            cursor: 'default',
           }}
         />
 
         {/* Segment 2: orange striped (allocated) — hoverable */}
-        <div
-          ref={allocatedRef}
-          onMouseEnter={() => handleSegmentEnter('allocated')}
-          onMouseLeave={scheduleHide}
-          style={{
-            width: 60,
-            flexShrink: 0,
-            height: '100%',
-            background: stripeGradient('#E96500', 'rgba(30,41,59,0.5)', 2.5),
-            cursor: 'default',
-          }}
-        />
+        {allocated > 0 && (
+          <div
+            ref={allocatedRef}
+            onMouseEnter={() => handleSegmentEnter('allocated')}
+            onMouseLeave={scheduleHide}
+            style={{
+              width: `${allocatedWidth}%`,
+              minWidth: 10,
+              flexShrink: 0,
+              height: '100%',
+              background: stripeGradient('#E96500', 'rgba(30,41,59,0.5)', 2.5),
+              cursor: 'default',
+            }}
+          />
+        )}
 
         {/* Segment 3: bright blue striped (inbound) — hoverable */}
-        <div
-          ref={inboundRef}
-          onMouseEnter={() => handleSegmentEnter('inbound')}
-          onMouseLeave={scheduleHide}
-          style={{
-            width: 30,
-            flexShrink: 0,
-            height: '100%',
-            background: stripeGradient('#2B7FE8', 'rgba(255,255,255,0.35)', 2.5),
-            cursor: 'default',
-          }}
-        />
+        {inbound > 0 && (
+          <div
+            ref={inboundRef}
+            onMouseEnter={() => handleSegmentEnter('inbound')}
+            onMouseLeave={scheduleHide}
+            style={{
+              width: `${inboundWidth}%`,
+              minWidth: 10,
+              flexShrink: 0,
+              height: '100%',
+              background: stripeGradient('#2B7FE8', 'rgba(255,255,255,0.35)', 2.5),
+              cursor: 'default',
+            }}
+          />
+        )}
 
-        {/* Segment 4: light blue track */}
+<<<<<<< Updated upstream
+        {/* Segment 4: solid blue (new order) */}
+        {newOrder > 0 && (
+          <div
+            ref={newOrderRef}
+            onMouseEnter={() => handleSegmentEnter('newOrder')}
+            onMouseLeave={scheduleHide}
+            style={{
+              width: `${newOrderWidth}%`,
+              minWidth: 10,
+              flexShrink: 0,
+              height: '100%',
+              backgroundColor: '#2563EB',
+              transition: 'width 0.3s ease-out',
+              cursor: 'default',
+            }}
+          />
+        )}
+
+        {/* Segment 5: light blue track (remaining capacity) - show as full red when at capacity */}
         <div
+=======
+        {/* Segment 4: remaining capacity (right) — light blue track; #0275FC fills within it */}
+        <div
+          ref={newOrderRef}
+          onMouseEnter={() => handleSegmentEnter('newOrder')}
+          onMouseLeave={scheduleHide}
+>>>>>>> Stashed changes
           style={{
             flex: 1,
+            minWidth: 20,
             height: '100%',
             position: 'relative',
             overflow: 'hidden',
-            backgroundColor: '#B8D4E8',
+            backgroundColor: isFull ? '#991B1B' : '#B8D4E8',
+<<<<<<< Updated upstream
+          }}
+        />
+=======
+            cursor: 'default',
           }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: `${fill}%`,
-              backgroundColor: '#2563EB',
-              transition: 'width 1.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          />
+          {(newOrder > 0 || newOrderAnimation === 'retracting' || newOrderAnimation === 'filling') && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                width: `${fillPercentOfRemaining}%`,
+                height: '100%',
+                overflow: 'hidden',
+                transition: 'width 0.4s ease-out',
+              }}
+            >
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  transformOrigin: 'left',
+                  backgroundColor: '#0275FC',
+                  animation:
+                    newOrderAnimation === 'filling'
+                      ? 'segNewOrderFill 0.5s ease-out forwards'
+                      : newOrderAnimation === 'retracting'
+                        ? 'segNewOrderRetract 0.4s ease-in forwards'
+                        : 'none',
+                  transform: !newOrderAnimation ? 'scaleX(1)' : undefined,
+                }}
+              />
+            </div>
+          )}
         </div>
+>>>>>>> Stashed changes
       </div>
 
       {/* ── Popover — fixed so it escapes overflow:hidden table containers ── */}
@@ -381,7 +551,15 @@ export function SegmentedInventoryBar({
           pointerEvents: visible ? 'auto' : 'none',
         }}
       >
-        <InventoryBarPopover />
+        <InventoryBarPopover 
+          available={available}
+          allocated={allocated}
+          inbound={inbound}
+          newOrder={newOrder}
+          capacity={capacity}
+          allocatedShipments={allocatedShipments}
+          inboundShipments={inboundShipments}
+        />
       </div>
     </div>
   );

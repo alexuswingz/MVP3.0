@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const SUPPLIER_OPTIONS = ['Richmark Label', 'Multi-Color Corporation', 'Fort Dearborn', 'CCL Industries'];
+const SUPPLIER_OPTIONS = ['Richmark Label'];
 
 export interface NewLabelOrderForm {
   orderNumber: string;
@@ -23,26 +23,12 @@ export function NewLabelOrderModal({
   onCreate,
 }: NewLabelOrderModalProps) {
   const [orderNumber, setOrderNumber] = useState('');
-  const [supplier, setSupplier] = useState('Richmark Label');
-  const [supplierOpen, setSupplierOpen] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const supplierRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
-        setSupplierOpen(false);
-      }
-    };
-    if (supplierOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [supplierOpen]);
+  const supplier = SUPPLIER_OPTIONS[0];
 
   useEffect(() => {
     if (!isOpen) {
       setOrderNumber('');
-      setSupplier('Richmark Label');
-      setSupplierOpen(false);
       setFocusedField(null);
     }
   }, [isOpen]);
@@ -210,115 +196,22 @@ export function NewLabelOrderModal({
             >
               Supplier<span style={{ color: '#EF4444' }}>*</span>
             </label>
-            <div ref={supplierRef} style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSupplierOpen((v) => !v);
-                  setFocusedField(supplierOpen ? null : 'supplier');
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '11px 14px',
-                  border: `1px solid ${focusedField === 'supplier' || supplierOpen ? focusBorder : borderColor}`,
-                  borderRadius: 7,
-                  backgroundColor: inputBg,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  color: supplier ? textColor : placeholderColor,
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  transition: 'border-color 0.15s',
-                  textAlign: 'left',
-                }}
-              >
-                <span>{supplier || 'Select Supplier'}</span>
-                <svg
-                  style={{
-                    width: 16,
-                    height: 16,
-                    color: placeholderColor,
-                    flexShrink: 0,
-                    transform: supplierOpen ? 'rotate(180deg)' : undefined,
-                    transition: 'transform 0.15s',
-                  }}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path d="M19 9L12 16L5 9" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-
-              {supplierOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    marginTop: 4,
-                    backgroundColor: '#1A2235',
-                    border: '1px solid #334155',
-                    borderRadius: 7,
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
-                    overflow: 'hidden',
-                    zIndex: 100,
-                  }}
-                >
-                  {SUPPLIER_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        setSupplier(option);
-                        setSupplierOpen(false);
-                        setFocusedField(null);
-                      }}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        textAlign: 'left',
-                        padding: '10px 14px',
-                        fontSize: 14,
-                        color: textColor,
-                        backgroundColor: supplier === option ? '#374151' : 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.1s',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (supplier !== option) e.currentTarget.style.backgroundColor = '#374151';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (supplier !== option) e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      {supplier === option ? (
-                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, color: '#3B82F6' }}>
-                          <path
-                            d="M20 6L9 17L4 12"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : (
-                        <span style={{ width: 14, flexShrink: 0 }} />
-                      )}
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <input
+              type="text"
+              value={supplier}
+              readOnly
+              style={{
+                width: '100%',
+                padding: '11px 14px',
+                border: `1px solid ${borderColor}`,
+                borderRadius: 7,
+                backgroundColor: inputBg,
+                fontSize: 14,
+                color: textColor,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
           </div>
         </div>
 

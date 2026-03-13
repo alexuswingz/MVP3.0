@@ -5,4 +5,5 @@ export type { BottlesSummaryStats } from './bottles-summary-cards';
 export { BottlesTable } from './bottles-table';
 export type { BottleRow } from './bottles-table';
 export { NewBottleOrderModal } from './new-bottle-order-modal';
+export { CreateNewBottleModal } from './create-new-bottle-modal';
 export { AddBottlesOrderTable } from './AddBottlesOrderTable';

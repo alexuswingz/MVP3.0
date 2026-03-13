@@ -4,13 +4,15 @@ import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } f
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Calendar, X } from 'lucide-react';
+import { MoreVertical, Calendar, X, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SegmentedInventoryBar } from './SegmentedInventoryBar';
-import { InventoryLegend } from './InventoryLegend';
 import { InventoryTimelineModal, type TimelineBottle } from './InventoryTimelineModal';
-import { CompleteOrderModal, ExportBottleOrderModal } from './CompleteOrderModal';
+import { ExportBottleOrderModal } from './CompleteOrderModal';
 import type { BottleRow } from './bottles-table';
+import { api } from '@/lib/api';
+
+const ARCHIVED_ORDERS_KEY = 'archivedBottleOrders';
 
 export interface BottleDraftPayload {
   addedIds: string[];
@@ -37,28 +39,42 @@ const ROW_BG = '#1A2235';
 const BORDER_COLOR = '#374151';
 const HEADER_MUTED = '#6B7280';
 
-const STORAGE_LEGEND_ITEMS = [
-  { key: 'available', label: 'Available', color: '#4B5563' },
-  { key: 'allocated', label: 'Allocated', color: '#E96500' },
-  { key: 'inbound', label: 'Inbound', color: '#2B7FE8' },
-  { key: 'neworder', label: 'New Order', color: '#7DD3FC' },
-];
+function stripeGradient(base: string, stripe: string, size = 8): string {
+  const half = size / 2;
+  return `repeating-linear-gradient(
+    -45deg,
+    ${base} 0px,
+    ${base} ${half}px,
+    ${stripe} ${half}px,
+    ${stripe} ${size}px
+  )`;
+}
 
-function StorageCapacityHeaderLegend() {
+function InventoryLegendInline() {
+  const items = [
+    { key: 'available', label: 'Available', type: 'solid' as const, color: '#4B5563' },
+    { key: 'allocated', label: 'Allocated', type: 'striped' as const, stripeBase: '#E96500', stripeColor: 'rgba(15,23,42,0.6)' },
+    { key: 'inbound', label: 'Inbound', type: 'striped' as const, stripeBase: '#2B7FE8', stripeColor: 'rgba(255,255,255,0.25)' },
+    { key: 'newOrder', label: 'New Order', type: 'solid' as const, color: '#2563EB' },
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      {STORAGE_LEGEND_ITEMS.map((item) => (
-        <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {items.map((item) => (
+        <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <div
             style={{
               width: 10,
               height: 10,
               borderRadius: 2,
-              backgroundColor: item.color,
               flexShrink: 0,
+              ...(item.type === 'solid'
+                ? { backgroundColor: item.color }
+                : { background: stripeGradient(item.stripeBase!, item.stripeColor!, 2.5) }
+              ),
             }}
           />
-          <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 400, color: '#9CA3AF', whiteSpace: 'nowrap', textTransform: 'none' }}>
             {item.label}
           </span>
         </div>
@@ -103,7 +119,6 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const [timelineBottle, setTimelineBottle] = useState<TimelineBottle | null>(null);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [addedIds, setAddedIds] = useState<Set<string>>(() =>
     initialAddedIds && initialAddedIds.length > 0 ? new Set(initialAddedIds) : new Set()
@@ -254,16 +269,55 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
 
   const addedEntries = filteredBottles.filter((b) => addedIds.has(b.id));
   const totalProducts = addedEntries.length;
-  const totalUnits = addedEntries.reduce(
-    (acc, b) =>
-      acc +
-      (parseInt(String(qtyValues[b.id] ?? '0').replace(/,/g, ''), 10) || 0),
-    0
-  );
-  const totalBoxes = Math.ceil(totalUnits / 24);
-  const totalPalettes = totalProducts * 0.5;
+  
+  // Calculate totals using real bottle data
+  const { totalUnits, totalBoxes, totalPallets } = React.useMemo(() => {
+    let units = 0;
+    let boxes = 0;
+    let pallets = 0;
+    
+    addedEntries.forEach((b) => {
+      const qty = parseInt(String(qtyValues[b.id] ?? '0').replace(/,/g, ''), 10) || 0;
+      units += qty;
+      
+      // Use bottle's unitsPerCase if available, default to 24
+      const unitsPerCase = b.unitsPerCase ?? 24;
+      const bottleBoxes = unitsPerCase > 0 ? Math.ceil(qty / unitsPerCase) : 0;
+      boxes += bottleBoxes;
+      
+      // Use bottle's casesPerPallet if available, default to 48
+      const casesPerPallet = b.casesPerPallet ?? 48;
+      const bottlePallets = casesPerPallet > 0 ? bottleBoxes / casesPerPallet : 0;
+      pallets += bottlePallets;
+    });
+    
+    return {
+      totalUnits: units,
+      totalBoxes: boxes,
+      totalPallets: pallets,
+    };
+  }, [addedEntries, qtyValues]);
 
   const BORDER = BORDER_COLOR;
+
+  const handleExportCsv = React.useCallback((estimatedDeliveryDate: string | null) => {
+    const dateStr = estimatedDeliveryDate || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+    const baseName = (orderName || 'TPS_BottleOrder').replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_') || 'TPS_BottleOrder';
+    const rows: string[][] = [['Packaging Name', 'Inventory', 'Quantity', 'Estimated Delivery Date']];
+    addedEntries.forEach((b) => {
+      const qty = parseInt(String(qtyValues[b.id] ?? '0').replace(/,/g, ''), 10) || 0;
+      const inv = b.warehouseInventory + (b.supplierInventory ?? 0);
+      rows.push([b.name, String(inv), String(qty), dateStr]);
+    });
+    const csv = rows.map((r) => r.map((cell) => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${baseName}_${dateStr}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [addedEntries, qtyValues, orderName]);
 
   // Shared finalization logic — called from both "Complete Order" and "Export → Complete" paths
   const handleFinalizeOrder = React.useCallback(() => {
@@ -369,11 +423,11 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                 </th>
                 <th
                   className="text-center text-xs font-semibold uppercase tracking-wider"
-                  style={{ padding: '22px 12px 22px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480, verticalAlign: 'middle' }}
+                  style={{ padding: '12px 12px 12px 0px', whiteSpace: 'nowrap', color: HEADER_MUTED, boxSizing: 'border-box', width: 480, minWidth: 480 }}
                 >
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <span>STORAGE CAPACITY</span>
-                    <StorageCapacityHeaderLegend />
+                    <InventoryLegendInline />
                   </div>
                 </th>
                 <th
@@ -438,6 +492,13 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                       ? barFillPhase === 'go' ? 100 : 0
                       : isAdded ? 100 : 0;
                   const showAsAdded = isAdded || isRemoving;
+                  
+                  // Check if storage capacity is full
+                  const maxCapacity = bottle.maxWarehouseInventory ?? (totalInventory + 10000);
+                  const currentQty = parseInt(String(qtyDisplay).replace(/,/g, ''), 10) || 0;
+                  const projectedInventory = bottle.warehouseInventory + currentQty;
+                  const isCapacityFull = projectedInventory >= maxCapacity;
+                  const remainingCapacity = Math.max(0, maxCapacity - bottle.warehouseInventory);
 
                   return (
                     <React.Fragment key={bottle.id}>
@@ -571,55 +632,88 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                               gap: 4,
                             }}
                           >
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={qtyDisplay}
-                              onChange={(e) => {
-                                const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
-                                setQtyValues((prev) => ({ ...prev, [bottle.id]: v }));
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              style={{
-                                width: 115,
-                                height: 34,
-                                padding: '8px 6px',
-                                gap: 4,
-                                fontSize: 12,
-                                color: '#E5E7EB',
-                                backgroundColor: '#2C3544',
-                                border: 'none',
-                                borderRadius: 8,
-                                outline: 'none',
-                                boxSizing: 'border-box',
-                                textAlign: 'center',
-                                opacity: 1,
-                              }}
-                            />
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={qtyDisplay}
+                                disabled={isCapacityFull && !isAdded}
+                                onChange={(e) => {
+                                  const v = e.target.value.replace(/,/g, '').replace(/\D/g, '');
+                                  const newQty = parseInt(v, 10) || 0;
+                                  // Clamp to remaining capacity if not already added
+                                  if (!isAdded && newQty > remainingCapacity) {
+                                    setQtyValues((prev) => ({ ...prev, [bottle.id]: String(remainingCapacity) }));
+                                  } else {
+                                    setQtyValues((prev) => ({ ...prev, [bottle.id]: v }));
+                                  }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                title={isCapacityFull && !isAdded ? 'Storage capacity is full' : undefined}
+                                style={{
+                                  width: 115,
+                                  height: 34,
+                                  padding: '8px 6px',
+                                  gap: 4,
+                                  fontSize: 12,
+                                  color: isCapacityFull && !isAdded ? '#6B7280' : '#E5E7EB',
+                                  backgroundColor: isCapacityFull && !isAdded ? '#1F2937' : '#2C3544',
+                                  border: isCapacityFull && !isAdded ? '1px solid #374151' : 'none',
+                                  borderRadius: 8,
+                                  outline: 'none',
+                                  boxSizing: 'border-box',
+                                  textAlign: 'center',
+                                  opacity: isCapacityFull && !isAdded ? 0.6 : 1,
+                                  cursor: isCapacityFull && !isAdded ? 'not-allowed' : 'text',
+                                }}
+                              />
+                              {isCapacityFull && !isAdded && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    top: -20,
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    fontSize: 9,
+                                    color: '#EF4444',
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  Capacity Full
+                                </div>
+                              )}
+                            </div>
                             <button
                               type="button"
+                              disabled={isCapacityFull && !isAdded}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isCapacityFull && !isAdded) return;
                                 handleAddClick(bottle, index);
                               }}
+                              title={isCapacityFull && !isAdded ? 'Storage capacity is full' : undefined}
                               style={{
                                 height: 26,
                                 padding: '0 10px',
                                 borderRadius: 6,
                                 border: 'none',
-                                backgroundColor: showAsAdded ? '#10B981' : '#2563EB',
-                                color: '#FFFFFF',
+                                backgroundColor: isCapacityFull && !isAdded 
+                                  ? '#374151' 
+                                  : showAsAdded ? '#10B981' : '#2563EB',
+                                color: isCapacityFull && !isAdded ? '#6B7280' : '#FFFFFF',
                                 fontSize: 12,
                                 fontWeight: 500,
-                                cursor: 'pointer',
+                                cursor: isCapacityFull && !isAdded ? 'not-allowed' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 gap: 4,
+                                opacity: isCapacityFull && !isAdded ? 0.6 : 1,
                               }}
                             >
                               {!showAsAdded && <span style={{ fontSize: 14, lineHeight: 1 }}>+</span>}
-                              {showAsAdded ? 'Added' : 'Add'}
+                              {isCapacityFull && !isAdded ? 'Full' : showAsAdded ? 'Added' : 'Add'}
                             </button>
                           </div>
                         </td>
@@ -634,12 +728,33 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                             minWidth: 480,
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12, flexDirection: 'column', gap: 2 }}>
                             <SegmentedInventoryBar
                               fillPercent={fillPercent}
                               width={452}
                               height={19}
+                              available={bottle.warehouseInventory}
+                              allocated={bottle.allocatedInventory || 0}
+                              inbound={bottle.supplierInventory || 0}
+                              newOrder={displayAdded}
+<<<<<<< Updated upstream
+=======
+                              newOrderAnimation={
+                                isRemoving && removePhase[bottle.id] === 'go'
+                                  ? 'retracting'
+                                  : isAnimating && barFillPhase === 'go'
+                                    ? 'filling'
+                                    : null
+                              }
+>>>>>>> Stashed changes
+                              capacity={maxCapacity}
+                              isFull={isCapacityFull}
                             />
+                            {isCapacityFull && !isAdded && (
+                              <span style={{ fontSize: 9, color: '#EF4444', fontWeight: 500 }}>
+                                Storage at max capacity ({maxCapacity.toLocaleString()} units)
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td
@@ -665,10 +780,13 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setTimelineBottle({
-                                    id: bottle.id,
+                                    id: String(bottle.id),
                                     name: bottle.name,
-                                    capacity: 4000,
-                                    todayInventory: bottle.warehouseInventory + bottle.supplierInventory,
+                                    capacity: bottle.maxWarehouseInventory ?? (bottle.warehouseInventory + (bottle.supplierInventory || 0) + 5000),
+                                    todayInventory: bottle.warehouseInventory,
+                                    supplierInventory: bottle.supplierInventory,
+                                    inboundQuantity: displayAdded,
+                                    allocatedQuantity: bottle.allocatedInventory || 0,
                                   });
                                 }}
                               >
@@ -735,21 +853,6 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
         </div>
       </div>
 
-      {/* Complete Order confirmation modal */}
-      {showCompleteModal && (
-        <CompleteOrderModal
-          onClose={() => setShowCompleteModal(false)}
-          onConfirm={() => {
-            setShowCompleteModal(false);
-            handleFinalizeOrder();
-          }}
-          onExport={() => {
-            setShowCompleteModal(false);
-            setShowExportModal(true);
-          }}
-        />
-      )}
-
       {/* Export Bottle Order modal */}
       {showExportModal && (
         <ExportBottleOrderModal
@@ -758,6 +861,8 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
             setShowExportModal(false);
             handleFinalizeOrder();
           }}
+          onExportCsv={handleExportCsv}
+          orderName={orderName}
         />
       )}
 
@@ -768,18 +873,6 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
           onClose={() => setTimelineBottle(null)}
         />
       )}
-
-      {/* Floating legend - near footer, bottom-right */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 130,
-          right: 24,
-          zIndex: 999,
-        }}
-      >
-        <InventoryLegend />
-      </div>
 
       {/* Floating footer bar - centered */}
       <div
@@ -815,7 +908,7 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
           {cardOrder.map((cardId, orderIdx) => {
             const cards = [
               { label: 'Products', value: String(totalProducts) },
-              { label: 'Pallets',  value: totalPalettes.toFixed(1) },
+              { label: 'Pallets',  value: totalPallets.toFixed(1) },
               { label: 'Boxes',    value: String(totalBoxes) },
             ];
             const card = cards[cardId];
@@ -896,7 +989,7 @@ export const AddBottlesOrderTable = forwardRef<AddBottlesOrderTableRef | null, A
           <button
             type="button"
             disabled={totalProducts === 0}
-            onClick={() => totalProducts > 0 && setShowCompleteModal(true)}
+            onClick={() => totalProducts > 0 && setShowExportModal(true)}
             style={{
               height: 32,
               padding: '0 16px',
@@ -1443,14 +1536,17 @@ function BottleAmountChangedModal({
 export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
   const router = useRouter();
   const [received, setReceived] = React.useState<Set<number>>(new Set());
+  const [selected, setSelected] = React.useState<Set<number>>(new Set());
   const [cardOrder, setCardOrder] = React.useState([0, 1, 2]);
   const [showReceiveModal, setShowReceiveModal] = React.useState(false);
   const [showPartialModal, setShowPartialModal] = React.useState(false);
   const [showBottleAmountChangedModal, setShowBottleAmountChangedModal] = React.useState(false);
   const [openEditIdx, setOpenEditIdx] = React.useState<number | null>(null);
-  const [editingRowIndex, setEditingRowIndex] = React.useState<number | null>(null);
-  const [editedQuantityInput, setEditedQuantityInput] = React.useState('');
+  const [editingRowIndices, setEditingRowIndices] = React.useState<number[]>([]);
+  const [editedQuantities, setEditedQuantities] = React.useState<Record<number, string>>({});
   const [quantityOverrides, setQuantityOverrides] = React.useState<Record<number, number>>({});
+  const [isReceiving, setIsReceiving] = React.useState(false);
+  const [receiveError, setReceiveError] = React.useState<string | null>(null);
   const dragCardIdx = React.useRef<number | null>(null);
   const editingRowRef = React.useRef<HTMLTableRowElement | null>(null);
 
@@ -1458,14 +1554,20 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
     quantityOverrides[index] ?? items[index]?.qty ?? 0;
 
   const commitEdit = React.useCallback(() => {
-    if (editingRowIndex === null) return;
-    const raw = editedQuantityInput.replace(/,/g, '').trim();
-    const num = Number(raw);
-    const value = Number.isFinite(num) && num >= 0 ? num : getDisplayQuantity(editingRowIndex);
-    setQuantityOverrides((prev) => ({ ...prev, [editingRowIndex]: value }));
-    setEditingRowIndex(null);
-    setEditedQuantityInput('');
-  }, [editingRowIndex, editedQuantityInput, items, quantityOverrides]);
+    if (editingRowIndices.length === 0) return;
+    setQuantityOverrides((prev) => {
+      const next = { ...prev };
+      editingRowIndices.forEach((i) => {
+        const raw = (editedQuantities[i] ?? String(getDisplayQuantity(i))).replace(/,/g, '').trim();
+        const num = Number(raw);
+        const value = Number.isFinite(num) && num >= 0 ? num : getDisplayQuantity(i);
+        next[i] = value;
+      });
+      return next;
+    });
+    setEditingRowIndices([]);
+    setEditedQuantities({});
+  }, [editingRowIndices, editedQuantities]);
 
   React.useEffect(() => {
     if (openEditIdx === null) return;
@@ -1479,18 +1581,34 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [openEditIdx]);
 
-  React.useEffect(() => {
-    if (editingRowIndex === null) return;
-    const onMouseDown = (e: MouseEvent) => {
-      const el = e.target as Node | null;
-      if (el && editingRowRef.current?.contains(el)) return;
-      commitEdit();
-    };
-    document.addEventListener('mousedown', onMouseDown, true);
-    return () => document.removeEventListener('mousedown', onMouseDown, true);
-  }, [editingRowIndex, commitEdit]);
+  const handleStartEdit = React.useCallback((clickedIndex: number) => {
+    const indices = selected.size === 0
+      ? [clickedIndex]
+      : selected.size === 1
+        ? Array.from(selected)
+        : Array.from(selected).sort((a, b) => a - b);
+    const initial: Record<number, string> = {};
+    indices.forEach((i) => { initial[i] = String(getDisplayQuantity(i)); });
+    setEditingRowIndices(indices);
+    setEditedQuantities(initial);
+    setOpenEditIdx(null);
+  }, [selected]);
 
-  const handleConfirmReceipt = React.useCallback(() => {
+<<<<<<< Updated upstream
+=======
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, _index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitEdit();
+    }
+  };
+
+  const handleEditQuantityChange = (index: number, value: string) => {
+    setEditedQuantities((prev) => ({ ...prev, [index]: value }));
+  };
+
+>>>>>>> Stashed changes
+  const handleConfirmReceipt = React.useCallback(async () => {
     const doneCount = received.size;
     const totalCount = items.length;
     const isFull = doneCount >= totalCount && totalCount > 0;
@@ -1498,43 +1616,111 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
       (item, i) => (quantityOverrides[i] ?? item.qty) !== (item.qty ?? 0)
     );
 
+    setIsReceiving(true);
+    setReceiveError(null);
+
     try {
+      // Prepare items to receive - only include items that are marked as received
+      const itemsToReceive = items
+        .map((item, idx) => {
+          if (!received.has(idx)) return null;
+          const qty = quantityOverrides[idx] ?? item.qty ?? 0;
+          return {
+            id: parseInt(String(item.id), 10),
+            quantity: qty,
+          };
+        })
+        .filter((item): item is { id: number; quantity: number } => item !== null);
+
+      // Call API to update bottle inventory
+      if (itemsToReceive.length > 0) {
+        await api.receiveBottleInventory(itemsToReceive);
+      }
+
+      // Get the order from completedOrders
       const orders = JSON.parse(sessionStorage.getItem('completedOrders') ?? '[]') as {
         orderName: string;
         completedAt: string;
+        supplier?: string;
         receivePOStatus?: 'none' | 'partial' | 'full';
         receivedCount?: number;
         totalCount?: number;
         edited?: boolean;
+        receivedAt?: string;
         items: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }[];
       }[];
 
-      const updated = orders.map((o) => {
-        if (o.orderName !== orderName) return o;
-        const updatedItems = o.items.map((it: { id: string; name: string; qty: number; warehouseInventory: number; supplierInventory: number }, idx: number) => {
-          const override = quantityOverrides[idx];
-          if (override !== undefined) {
-            return { ...it, qty: override };
-          }
-          return it;
-        });
-        return {
-          ...o,
-          items: updatedItems,
-          receivePOStatus: isFull ? 'full' : 'partial',
+      // Find the order being received
+      const orderToArchive = orders.find((o) => o.orderName === orderName);
+      
+      if (orderToArchive) {
+        // Update the order with receive info
+        const updatedOrder = {
+          ...orderToArchive,
+          items: orderToArchive.items.map((it, idx) => {
+            const override = quantityOverrides[idx];
+            if (override !== undefined) {
+              return { ...it, qty: override };
+            }
+            return it;
+          }),
+          receivePOStatus: isFull ? 'full' as const : 'partial' as const,
           receivedCount: doneCount,
           totalCount,
           edited: hasQuantityEdits,
           receivedAt: new Date().toISOString(),
         };
-      });
-      sessionStorage.setItem('completedOrders', JSON.stringify(updated));
-      sessionStorage.setItem('bottleOrderToast', JSON.stringify({ orderName }));
-    } catch (_) {}
 
-    setShowReceiveModal(false);
-    router.push('/dashboard/bottles?tab=Orders');
-  }, [items, orderName, quantityOverrides, received.size, router]);
+<<<<<<< Updated upstream
+        // Remove from completedOrders
+        const remainingOrders = orders.filter((o) => o.orderName !== orderName);
+        sessionStorage.setItem('completedOrders', JSON.stringify(remainingOrders));
+
+        // Add to archived orders
+        const archivedOrders = JSON.parse(sessionStorage.getItem(ARCHIVED_ORDERS_KEY) ?? '[]');
+        archivedOrders.push(updatedOrder);
+        sessionStorage.setItem(ARCHIVED_ORDERS_KEY, JSON.stringify(archivedOrders));
+=======
+        const remainingOrders = orders.filter((o) => o.orderName !== orderName);
+
+        if (hasQuantityEdits) {
+          // Edited orders stay in Orders tab: update in completedOrders and keep there
+          const updatedCompleted = remainingOrders.concat(updatedOrder);
+          sessionStorage.setItem('completedOrders', JSON.stringify(updatedCompleted));
+        } else {
+          // Non-edited orders go to Archive: remove from completedOrders, add to archived
+          sessionStorage.setItem('completedOrders', JSON.stringify(remainingOrders));
+          const archivedOrders = JSON.parse(sessionStorage.getItem(ARCHIVED_ORDERS_KEY) ?? '[]');
+          archivedOrders.push(updatedOrder);
+          sessionStorage.setItem(ARCHIVED_ORDERS_KEY, JSON.stringify(archivedOrders));
+        }
+>>>>>>> Stashed changes
+      }
+
+      sessionStorage.setItem('bottleOrderToast', JSON.stringify({ 
+        orderName, 
+<<<<<<< Updated upstream
+        message: 'Order received and archived successfully' 
+=======
+        message: hasQuantityEdits ? 'Order received' : 'Order received and archived successfully' 
+>>>>>>> Stashed changes
+      }));
+
+      setShowReceiveModal(false);
+      setShowPartialModal(false);
+      setShowBottleAmountChangedModal(false);
+<<<<<<< Updated upstream
+      router.push('/dashboard/bottles?tab=Archive');
+=======
+      router.push(hasQuantityEdits ? '/dashboard/bottles?tab=Orders' : '/dashboard/bottles?tab=Archive');
+>>>>>>> Stashed changes
+    } catch (err) {
+      console.error('Failed to receive inventory:', err);
+      setReceiveError(err instanceof Error ? err.message : 'Failed to update inventory');
+    } finally {
+      setIsReceiving(false);
+    }
+  }, [items, orderName, quantityOverrides, received, router]);
 
   const toggleReceived = (i: number) => {
     setReceived((prev) => {
@@ -1544,9 +1730,22 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
     });
   };
 
-  const allReceived = items.length > 0 && received.size === items.length;
+  const handleReceiveSelected = () => {
+    if (selected.size === 0) return;
+    setReceived((prev) => new Set(Array.from(prev).concat(Array.from(selected))));
+  };
+
+  const toggleSelected = (i: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const allSelected = items.length > 0 && selected.size === items.length;
   const toggleAll = () =>
-    setReceived(allReceived ? new Set() : new Set(items.map((_, i) => i)));
+    setSelected(allSelected ? new Set() : new Set(items.map((_, i) => i)));
 
   const receivedItems = items.filter((_, i) => received.has(i));
   const totalDone = receivedItems.length;
@@ -1589,7 +1788,7 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
             <tr style={{ height: 40 }}>
               <th style={{ padding: '22px 12px 22px 16px', width: 40, verticalAlign: 'middle', boxSizing: 'border-box' }}>
                 <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={allReceived} onChange={toggleAll} style={getCheckboxStyle(allReceived)} />
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} style={getCheckboxStyle(allSelected)} />
                 </label>
               </th>
               <th style={{ padding: '22px 12px', width: 80, verticalAlign: 'middle', boxSizing: 'border-box' }} />
@@ -1610,10 +1809,10 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                 QUANTITY
               </th>
               <th className="text-center text-xs font-semibold uppercase tracking-wider"
-                style={{ padding: '22px 12px 22px 0px', color: HEADER_MUTED, whiteSpace: 'nowrap', width: 480, minWidth: 480, boxSizing: 'border-box', verticalAlign: 'middle' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                style={{ padding: '12px 12px 12px 0px', color: HEADER_MUTED, whiteSpace: 'nowrap', width: 480, minWidth: 480, boxSizing: 'border-box', verticalAlign: 'middle' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <span>STORAGE CAPACITY</span>
-                  <StorageCapacityHeaderLegend />
+                  <InventoryLegendInline />
                 </div>
               </th>
             </tr>
@@ -1626,12 +1825,11 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
           <tbody>
             {items.map((item, index) => {
               const isReceived = received.has(index);
-              const isEditing = editingRowIndex === index;
+              const isEditing = editingRowIndices.includes(index);
               const displayQty = getDisplayQuantity(index);
               const originalQty = quantityOverrides[index] ?? item.qty ?? 0;
-              const editedNum = isEditing
-                ? (() => { const n = Number(String(editedQuantityInput).replace(/,/g, '')); return Number.isFinite(n) ? n : originalQty; })()
-                : originalQty;
+              const editedStr = editedQuantities[index] ?? String(displayQty);
+              const editedNum = (() => { const n = Number(editedStr.replace(/,/g, '')); return Number.isFinite(n) ? n : originalQty; })();
               const delta = isEditing ? editedNum - originalQty : 0;
 
               return (
@@ -1644,25 +1842,31 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                     </tr>
                   )}
                   <tr
-                    ref={isEditing ? editingRowRef : undefined}
+                    ref={isEditing && editingRowIndices[0] === index ? editingRowRef : undefined}
                     style={{ backgroundColor: ROW_BG, height: 60 }}
-                    onClick={() => !isEditing && toggleReceived(index)}
+                    onClick={() => !isEditing && toggleSelected(index)}
                     className="cursor-pointer transition-colors"
                     onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1A2636'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ROW_BG; }}
                   >
                     <td style={{ padding: '8px 12px 8px 16px', verticalAlign: 'middle', backgroundColor: 'inherit', width: 20 }}>
                       <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={isReceived} onChange={() => toggleReceived(index)}
-                          style={getCheckboxStyle(isReceived)} onClick={(e) => e.stopPropagation()} />
+                        <input type="checkbox" checked={selected.has(index)} onChange={() => toggleSelected(index)}
+                          style={getCheckboxStyle(selected.has(index))} onClick={(e) => e.stopPropagation()} />
                       </label>
                     </td>
                     <td style={{ padding: '8px 12px', verticalAlign: 'middle', backgroundColor: 'inherit' }} onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
-                        <DoneBadge isEditing />
-                      ) : editingRowIndex !== null ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); commitEdit(); }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        >
+                          <DoneBadge isEditing />
+                        </button>
+                      ) : editingRowIndices.length > 0 ? (
                         isReceived ? (
-                          <button type="button" onClick={() => toggleReceived(index)}
+                          <button type="button" onClick={(e) => { e.stopPropagation(); toggleReceived(index); }}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
                             <DoneBadge />
                           </button>
@@ -1670,8 +1874,18 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                           <span style={{ ...ACTION_BADGE_STYLE, visibility: 'hidden' }}>Receive</span>
                         )
                       ) : (
-                        <button type="button" onClick={() => toggleReceived(index)}
-                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isReceived) {
+                              toggleReceived(index);
+                            } else {
+                              handleReceiveSelected();
+                            }
+                          }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                        >
                           {isReceived ? <DoneBadge /> : <ReceiveBadge />}
                         </button>
                       )}
@@ -1694,10 +1908,10 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, width: 137, justifyContent: 'flex-start' }}>
                           <input
                             type="text"
-                            value={editedQuantityInput}
-                            onChange={(e) => setEditedQuantityInput(e.target.value)}
-                            onBlur={commitEdit}
-                            autoFocus
+                            value={editedQuantities[index] ?? String(displayQty)}
+                            onChange={(e) => handleEditQuantityChange(index, e.target.value)}
+                            onKeyDown={(e) => handleEditKeyDown(e, index)}
+                            autoFocus={editingRowIndices[0] === index}
                             style={{
                               width: 88,
                               height: 30,
@@ -1789,7 +2003,16 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                         data-receive-edit-area
                         style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 12, flexWrap: 'nowrap' }}
                       >
-                        <SegmentedInventoryBar fillPercent={100} width={452} height={19} />
+                        <SegmentedInventoryBar
+                          fillPercent={100}
+                          width={452}
+                          height={19}
+                          available={item.warehouseInventory}
+                          allocated={0}
+                          inbound={item.supplierInventory}
+                          newOrder={displayQty}
+                          capacity={item.warehouseInventory + item.supplierInventory + displayQty + 5000}
+                        />
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1846,9 +2069,7 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingRowIndex(index);
-                              setEditedQuantityInput(String(getDisplayQuantity(index)));
-                              setOpenEditIdx(null);
+                              handleStartEdit(index);
                             }}
                           >
                             <svg
@@ -1997,9 +2218,9 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
             {/* Receive Order — primary */}
             <button
               type="button"
-              disabled={totalDone === 0}
+              disabled={totalDone === 0 || isReceiving}
               onClick={() => {
-                if (totalDone === 0) return;
+                if (totalDone === 0 || isReceiving) return;
                 const changedCount = items.reduce((n, item, i) => {
                   const orig = item.qty ?? 0;
                   const display = quantityOverrides[i] ?? orig;
@@ -2016,15 +2237,26 @@ export function ReceivePOTable({ items, orderName }: ReceivePOTableProps) {
               style={{
                 height: 32, padding: '0 16px', borderRadius: 8,
                 fontSize: 12, fontWeight: 600,
-                color: totalDone === 0 ? 'rgba(255,255,255,0.3)' : '#FFFFFF',
-                backgroundColor: totalDone === 0 ? 'rgba(59,130,246,0.25)' : '#3B82F6',
+                color: (totalDone === 0 || isReceiving) ? 'rgba(255,255,255,0.3)' : '#FFFFFF',
+                backgroundColor: (totalDone === 0 || isReceiving) ? 'rgba(59,130,246,0.25)' : '#3B82F6',
                 border: 'none',
-                cursor: totalDone === 0 ? 'not-allowed' : 'pointer',
+                cursor: (totalDone === 0 || isReceiving) ? 'not-allowed' : 'pointer',
                 transition: 'background-color 200ms, color 200ms',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
             >
-              Receive Order
+              {isReceiving && (
+                <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              )}
+              {isReceiving ? 'Receiving...' : 'Receive Order'}
             </button>
+            {receiveError && (
+              <span style={{ fontSize: 11, color: '#EF4444', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {receiveError}
+              </span>
+            )}
             <button
               type="button"
               aria-label="More options"

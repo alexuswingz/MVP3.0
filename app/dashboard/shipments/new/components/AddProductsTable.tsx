@@ -266,6 +266,7 @@ export function AddProductsTable({
   const [hoveredStat, setHoveredStat] = useState<FooterStatKey | null>(null);
   const [dragOverStat, setDragOverStat] = useState<FooterStatKey | null>(null);
   const dragStartIndexRef = useRef<number | null>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
 
   // Column filter state (Shipments table mode)
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
@@ -518,7 +519,7 @@ export function AddProductsTable({
     return typeof v === 'number' ? v.toLocaleString() : String(v);
   };
 
-  const getTdStyle = (col: ColDef & { left?: number }): React.CSSProperties => {
+  const getTdStyle = (col: ColDef & { left?: number }, isHovered: boolean): React.CSSProperties => {
     const base: React.CSSProperties = {
       borderBottom: ROW_BORDER,
       padding: col.key === 'checkbox' ? '0 0.75rem' : '0.5rem 0.75rem',
@@ -527,7 +528,7 @@ export function AddProductsTable({
       maxWidth: col.width,
       height: 58,
       verticalAlign: 'middle',
-      backgroundColor: ROW_BG,
+      backgroundColor: isHovered ? '#1A2636' : ROW_BG,
       boxSizing: 'border-box',
       textAlign: col.key === 'checkbox' ? 'center' : col.key === 'brand' || col.key === 'product' ? 'left' : 'center',
       fontSize: col.key === 'checkbox' ? undefined : '0.875rem',
@@ -1095,16 +1096,8 @@ export function AddProductsTable({
 
   return (
     <>
-      {/* CSS for table row hover effects and scrollbar */}
+      {/* CSS for scrollbar */}
       <style>{`
-        /* Table row hover effect */
-        .table-row:hover {
-          background-color: #1A2235 !important;
-        }
-        /* Sticky cells need background color update on hover */
-        .table-row:hover td[style*="position: sticky"] {
-          background-color: #1A2235 !important;
-        }
         /* Hide scrollbar by default, show on hover - Webkit browsers (Chrome, Safari, Edge) */
         .add-products-table-container::-webkit-scrollbar {
           width: 8px !important;
@@ -1294,9 +1287,13 @@ export function AddProductsTable({
                       maxHeight: 58,
                       backgroundColor: ROW_BG,
                     }}
+                    onMouseEnter={() => setHoveredRowId(String(row.id))}
+                    onMouseLeave={() =>
+                      setHoveredRowId((prev) => (prev === String(row.id) ? null : prev))
+                    }
                   >
                     {visibleColumns.map((col) => (
-                      <td key={col.key} style={getTdStyle(col)}>
+                      <td key={col.key} style={getTdStyle(col, hoveredRowId === String(row.id))}>
                         {renderCellContent(col, row, originalIndex >= 0 ? originalIndex : 0)}
                       </td>
                     ))}
